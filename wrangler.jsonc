@@ -11,6 +11,8 @@
   "d1_databases": [
     {
       "binding": "DB",
+      "database_name": "easyposter-studio-db",
+      "database_id": "a9bb1a3f-8a9a-4c2f-a61e-a62518827534",
       "migrations_dir": "migrations"
     }
   ],

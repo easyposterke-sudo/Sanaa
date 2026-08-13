@@ -107,10 +107,11 @@ Cloudflare Workers Builds can deploy directly from the GitHub repository:
 5. Set the deploy command to `npm run cloudflare:deploy`.
 6. Name the Worker `easyposter-studio` to match `wrangler.jsonc`.
 
-The first deployment automatically provisions one D1 database and two R2
-buckets from the binding-only declarations in `wrangler.jsonc`. The deploy
-script then applies every checked-in D1 migration. Resource IDs are deliberately
-not committed, so this repository remains portable between Cloudflare accounts.
+The D1 binding is pinned to the existing `easyposter-studio-db` database so
+fresh Git builds reuse it instead of attempting to provision a duplicate. The
+first successful deployment automatically provisions the two R2 buckets from
+their binding-only declarations. The deploy script then applies every
+checked-in D1 migration.
 
 After the first deployment, add `OPENAI_API_KEY` under the Worker's
 **Settings > Variables & Secrets** as an encrypted runtime secret, then trigger
@@ -124,10 +125,10 @@ header.
 
 ## Cloudflare storage bindings
 
-The repository declares these portable bindings:
+The repository declares these bindings:
 
 ```text
-D1 binding: DB
+D1 binding: DB -> easyposter-studio-db
 R2 binding: PROJECTS
 R2 binding: ASSETS
 ```

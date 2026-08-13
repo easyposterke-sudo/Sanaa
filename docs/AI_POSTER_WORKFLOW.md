@@ -70,18 +70,18 @@ Never put a real key in `wrangler.jsonc`, source code, or a committed file.
 
 ## Cloudflare setup
 
-The repository uses binding-only D1/R2 declarations so modern Wrangler can
-provision the required resources on the first deployment. For a manual CLI
-deployment after creating the Cloudflare account:
+The repository binds `DB` to the existing `easyposter-studio-db` database and
+uses binding-only R2 declarations so modern Wrangler can provision the two
+buckets on the first successful deployment. For a manual CLI deployment:
 
 ```text
 npx wrangler login
 npm run deploy
 ```
 
-The deploy script builds the application, provisions the `DB`, `PROJECTS`, and
+The deploy script builds the application, provisions the `PROJECTS` and
 `ASSETS` bindings when needed, deploys the Worker, and applies the D1
-migrations. Then add the OpenAI secret interactively and deploy again:
+migrations to `DB`. Then add the OpenAI secret interactively and deploy again:
 
 ```text
 npx wrangler secret put OPENAI_API_KEY
