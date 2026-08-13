@@ -46,11 +46,22 @@ export function syncLayersFromMerged(merged: EditorState): {
     };
   }
   const aid = merged.activeTextLayerId ?? layers[0].id;
+  const activeLayer = layers.find((layer) => layer.id === aid);
+  const linkedTypographyGroupId =
+    activeLayer && !isShapeLayer(activeLayer) ? activeLayer.linkedTypographyGroupId : undefined;
   return {
     textLayers: layers.map((l) => {
       const updated =
         l.id !== aid
-          ? l
+          ? linkedTypographyGroupId &&
+            !isShapeLayer(l) &&
+            l.linkedTypographyGroupId === linkedTypographyGroupId
+            ? {
+                ...l,
+                text: merged.text,
+                selectedCustomFontId: merged.selectedCustomFontId,
+              }
+            : l
           : isShapeLayer(l)
             ? { ...l, ...styleFieldsFromRoot(merged) }
             : { ...l, ...textLayerContentFromRoot(merged) };

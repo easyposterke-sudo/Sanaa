@@ -1,8 +1,17 @@
 import { z } from 'zod';
 
 export const POSTER_PLAN_SCHEMA_VERSION = 1 as const;
-export const POSTER_PLAN_PROMPT_VERSION = 'poster-planner-v1' as const;
-export const POSTER_RECIPE_CATALOG_VERSION = 'easyposter-recipes-v1' as const;
+export const POSTER_PLAN_PROMPT_VERSION = 'poster-planner-v2' as const;
+export const POSTER_RECIPE_CATALOG_VERSION = 'easyposter-recipes-v2' as const;
+
+export const POSTER_HEADLINE_RECIPES = [
+  'metal_green_ivory',
+  'metal_gold_dark',
+  'clean_bold',
+  'two_layer_face_shell_v1',
+] as const;
+
+export type PosterHeadlineRecipe = (typeof POSTER_HEADLINE_RECIPES)[number];
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -70,7 +79,7 @@ export const PosterDesignPlanSchema = z
     recipes: z
       .object({
         background: z.enum(['green_atmosphere', 'deep_gradient', 'soft_neutral']),
-        headline: z.enum(['metal_green_ivory', 'metal_gold_dark', 'clean_bold']),
+        headline: z.enum(POSTER_HEADLINE_RECIPES),
         banner: z.enum(['rounded_chevron', 'simple_panel', 'none']),
         portraits: z.enum(['four_center_host', 'balanced_row', 'single_focus']),
         footer: z.enum(['two_band', 'single_band', 'minimal']),
@@ -162,7 +171,7 @@ export const POSTER_DESIGN_PLAN_JSON_SCHEMA = {
     },
     recipes: strictObject({
       background: { type: 'string', enum: ['green_atmosphere', 'deep_gradient', 'soft_neutral'] },
-      headline: { type: 'string', enum: ['metal_green_ivory', 'metal_gold_dark', 'clean_bold'] },
+      headline: { type: 'string', enum: [...POSTER_HEADLINE_RECIPES] },
       banner: { type: 'string', enum: ['rounded_chevron', 'simple_panel', 'none'] },
       portraits: { type: 'string', enum: ['four_center_host', 'balanced_row', 'single_focus'] },
       footer: { type: 'string', enum: ['two_band', 'single_band', 'minimal'] },

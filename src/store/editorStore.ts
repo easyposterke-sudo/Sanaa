@@ -467,6 +467,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           : {
               ...activeLayer,
               id: newId,
+              linkedTypographyGroupId: undefined,
               positionZ: activeLayer.positionZ + 0.2,
               scale: activeLayer.scale,
             }
@@ -528,6 +529,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const dup: EditorSceneLayer = assignTextureRepeatDefaults({
         ...activeLayer,
         id: newId,
+        ...(!isShapeLayer(activeLayer) ? { linkedTypographyGroupId: undefined } : {}),
         positionX: activeLayer.positionX + 0.3,
         positionZ: activeLayer.positionZ + 0.15,
       });

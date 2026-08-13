@@ -269,6 +269,8 @@ export type TextLayer3D = TextLayerTransform & {
   id: string;
   /** Absent or `'text'` = text layer (default for saved projects). */
   layerType?: 'text';
+  /** Text/font edits are mirrored across text layers sharing this stable group id. */
+  linkedTypographyGroupId?: string;
 } & EditorPerLayerFields;
 
 /** Extruded 2D shape with the same material/extrusion stack as text layers. */

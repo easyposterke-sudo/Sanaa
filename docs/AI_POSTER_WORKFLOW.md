@@ -109,8 +109,8 @@ The non-secret settings live in `wrangler.jsonc`:
 | `OPENAI_MODEL` | `gpt-5.6-luna` | Cost-sensitive vision planner |
 | `MAX_AI_REQUEST_BYTES` | 3 MiB | Bound on compressed reference request |
 | `MAX_AI_GENERATIONS_PER_DAY` | 20 | Per-owner paid-call limit |
-| `AI_PROMPT_VERSION` | `poster-planner-v1` | Cache invalidation for prompt changes |
-| `AI_RECIPE_CATALOG_VERSION` | `easyposter-recipes-v1` | Cache invalidation for recipes |
+| `AI_PROMPT_VERSION` | `poster-planner-v2` | Cache invalidation for prompt changes |
+| `AI_RECIPE_CATALOG_VERSION` | `easyposter-recipes-v2` | Cache invalidation for recipes |
 
 ## Current limits and next recipes
 
@@ -125,3 +125,29 @@ The non-secret settings live in `wrangler.jsonc`:
 - Process recordings remain recipe-development data. Distill several approved
   sessions into a tested TypeScript recipe, then expose only its short ID and
   parameter contract to the planner.
+
+## Learned two-layer 3D headline recipe
+
+`two-layer-face-shell-v1` is the first recording-derived headline recipe. It
+uses two registered WebGL text meshes: a deep, rounded rear shell and a shallow
+front face. The construction, material coupling, lighting, camera, and layer
+order are locked; the safe inputs are text, font, face color, shell/extrusion
+color, environment, internal scene transform, and poster placement.
+
+The 3D editor exposes the recipe in **Learned 3D style** for manual testing.
+Applying it rebuilds both meshes atomically so they cannot begin with different
+text or fonts. The AI planner can select the same versioned recipe when its
+reference analysis finds a raised face over a contrasting deep shell. AI-created
+poster layers use a lightweight two-layer SVG preview immediately and retain the
+full WebGL configuration for editing and high-quality re-export.
+
+Poster position and scale remain ordinary editable poster-layer transforms.
+Future approved recordings should vary text length, actual font asset, face and
+shell colors, and accepted placement while keeping the locked construction
+values unchanged. A recipe version must be bumped before changing a locked
+geometry, material, lighting, camera, or layer-order value.
+
+The current seed is intentionally bounded to 80 characters and 48â€“160 font
+size because its camera/framing came from the supplied recording. Add accepted
+short, long, narrow-font, and wide-font examples before widening that envelope
+or adding automatic geometry-based camera fitting.

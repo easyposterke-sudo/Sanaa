@@ -17,6 +17,15 @@ interface ThreeTextModalProps {
   onEditComplete: (image: string, config: Poster3DTextElement['config']) => void;
 }
 
+function readRasterDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error('Could not read the exported 3D image dimensions.'));
+    image.src = dataUrl;
+  });
+}
+
 export function ThreeTextModal({
   mode,
   onClose,
@@ -91,7 +100,29 @@ export function ThreeTextModal({
         onSendToPoster(dataUrl, config);
       } else {
         const editId = mode.editId;
-        updateElement(editId, { image: dataUrl, config, userPosterImageId: undefined });
+        const existing = usePosterStore.getState().elements.find((element) => element.id === editId);
+        let scaleUpdate: Pick<Poster3DTextElement, 'scaleX' | 'scaleY'> | undefined;
+        if (
+          existing?.type === '3d-text' &&
+          existing.previewWidth &&
+          existing.previewHeight
+        ) {
+          const dimensions = await readRasterDimensions(dataUrl);
+          const width = Math.max(1, dimensions.width);
+          const height = Math.max(1, dimensions.height);
+          scaleUpdate = {
+            scaleX: (existing.previewWidth * existing.scaleX) / width,
+            scaleY: (existing.previewHeight * existing.scaleY) / height,
+          };
+        }
+        updateElement(editId, {
+          image: dataUrl,
+          config,
+          ...scaleUpdate,
+          previewWidth: undefined,
+          previewHeight: undefined,
+          userPosterImageId: undefined,
+        });
         onEditComplete(dataUrl, config);
       }
       await attachRecordingDataUrlExportIfEligible(

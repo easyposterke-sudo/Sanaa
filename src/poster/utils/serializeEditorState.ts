@@ -17,7 +17,7 @@ export function serializeEditorState(): Partial<EditorState> {
     'frontColor', 'frontOpacity', 'extrusionColor', 'extrusionOnly', 'metalness', 'roughness',
     'bevelSize', 'bevelSegments', 'bevelThickness', 'curveSegments',
     'extrusionDepth', 'lightIntensity', 'frontClearcoat', 'frontClearcoatRoughness',
-    'frontMetalness', 'frontRoughness', 'frontEnvMapIntensity',
+    'frontMetalness', 'frontRoughness', 'frontEnvMapIntensity', 'extrusionEnvMapIntensity',
     'frontTextureEnabled', 'frontTextureId', 'textureIntensity',
     'textureRepeatX', 'textureRepeatY', 'textureRoughnessIntensity',
     'frontNormalStrength', 'extrusionGlass', 'inflate', 'selectedCustomFontId',

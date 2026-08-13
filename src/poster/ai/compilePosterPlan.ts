@@ -23,6 +23,12 @@ import type {
   PosterShapeElement,
   PosterTextElement,
 } from '../types';
+import {
+  TWO_LAYER_3D_TEXT_RECIPE_ID,
+  compileTwoLayer3DTextState,
+  fitTwoLayer3DTextPlacement,
+  renderTwoLayer3DTextPreview,
+} from './twoLayer3DTextSkill';
 
 export interface PreparedPortraitAsset {
   personKey: string;
@@ -410,26 +416,55 @@ function createHeadlineElement(
   plan: PosterDesignPlan,
 ): Omit<Poster3DTextElement, 'zIndex'> {
   const state = headlineEditorState(text.toUpperCase(), plan);
-  const svg = renderMetallicText(state);
+  const svg =
+    plan.recipes.headline === 'two_layer_face_shell_v1'
+      ? renderTwoLayer3DTextPreview(state)
+      : renderMetallicText(state);
   const size = readSvgSize(svg);
+  const placement =
+    plan.recipes.headline === 'two_layer_face_shell_v1'
+      ? fitTwoLayer3DTextPlacement({
+          sourceWidth: size.width,
+          sourceHeight: size.height,
+          box,
+          fit: 'contain',
+        })
+      : {
+          left: box.left,
+          top: box.top,
+          scaleX: box.width / size.width,
+          scaleY: box.height / size.height,
+          angle: 0,
+          opacity: 1,
+        };
   return {
     id,
     layerName,
     type: '3d-text',
     image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
     config: state,
-    left: box.left,
-    top: box.top,
-    scaleX: box.width / size.width,
-    scaleY: box.height / size.height,
-    angle: 0,
-    opacity: 1,
+    previewWidth: size.width,
+    previewHeight: size.height,
+    ...placement,
     shadow: { color: '#00000099', blur: 3, offsetX: 5, offsetY: 7 },
   };
 }
 
 function headlineEditorState(text: string, plan: PosterDesignPlan): EditorState {
   const p = plan.palette;
+  if (plan.recipes.headline === 'two_layer_face_shell_v1') {
+    return compileTwoLayer3DTextState({
+      recipeId: TWO_LAYER_3D_TEXT_RECIPE_ID,
+      text,
+      fontFamily: headlineFont(plan),
+      fontSize: 120,
+      fontWeight: plan.typography.headline === 'georgia_bold' ? '400' : '900',
+      letterSpacing: 3,
+      faceColor: p.face,
+      extrusionColor: p.accentDark,
+      environmentId: 'golden',
+    });
+  }
   const gold = plan.recipes.headline === 'metal_gold_dark';
   const clean = plan.recipes.headline === 'clean_bold';
   const front = gold ? '#f5dda2' : p.face;
@@ -831,11 +866,11 @@ function binding(
 function headlineFont(plan: PosterDesignPlan): string {
   switch (plan.typography.headline) {
     case 'impact':
-      return 'Impact, Arial Black, sans-serif';
+      return 'Impact, sans-serif';
     case 'georgia_bold':
       return 'Georgia, serif';
     default:
-      return 'Arial Black, Arial, sans-serif';
+      return 'Arial Black, sans-serif';
   }
 }
 
