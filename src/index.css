@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Zinc palette — warm neutrals (light mode, African earth tones) */
+  --zinc-50:  252 249 244;
+  --zinc-100: 245 240 232;
+  --zinc-200: 232 225 214;
+  --zinc-300: 214 205 192;
+  --zinc-400: 168 156 140;
+  --zinc-500: 122 112  98;
+  --zinc-600:  92  82  68;
+  --zinc-700:  72  62  48;
+  --zinc-800:  48  40  28;
+  --zinc-900:  32  26  18;
+  --zinc-950:  16  12   8;
+}
+
+/*
+ * Dark theme — warm-earth African palette inspired by the Kenyan flag.
+ *
+ * Surfaces (600–950) use deep warm blacks reminiscent of ebony and acacia wood.
+ * Text shades (50–500) use warm ivories and tans for a rich, premium feel.
+ */
+.dark {
+  --zinc-50:  248 244 238;
+  --zinc-100: 237 230 218;
+  --zinc-200: 214 204 186;
+  --zinc-300: 184 168 144;
+  --zinc-400: 144 126 102;
+  --zinc-500: 110  92  70;
+  --zinc-600:  82  72  52;
+  --zinc-700:  61  52  38;
+  --zinc-800:  42  36  25;
+  --zinc-900:  28  24  18;
+  --zinc-950:  13  11   8;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}

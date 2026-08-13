@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "easyposter-studio",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PROJECTS"
+    },
+    {
+      "binding": "ASSETS"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  },
+  "vars": {
+    "APP_ENV": "production",
+    "MAX_PROJECT_BYTES": "15728640",
+    "MAX_AI_REQUEST_BYTES": "3145728",
+    "MAX_AI_GENERATIONS_PER_DAY": "20",
+    "OPENAI_MODEL": "gpt-5.6-luna",
+    "AI_PROMPT_VERSION": "poster-planner-v1",
+    "AI_RECIPE_CATALOG_VERSION": "easyposter-recipes-v1"
+  }
+}

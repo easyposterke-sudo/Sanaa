@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars for local Worker development.
+# Never commit a real API key.
+APP_ENV=development
+OPENAI_API_KEY=

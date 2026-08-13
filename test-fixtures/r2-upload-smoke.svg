@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#153c29" />
+      <stop offset="1" stop-color="#e7b64e" />
+    </linearGradient>
+  </defs>
+  <rect width="640" height="400" rx="36" fill="url(#background)" />
+  <circle cx="480" cy="116" r="72" fill="#f4f0e8" opacity=".9" />
+  <text x="56" y="210" fill="#fff" font-family="Arial, sans-serif" font-size="70" font-weight="800">
+    R2 ASSET
+  </text>
+  <text x="60" y="264" fill="#eaf7ef" font-family="Arial, sans-serif" font-size="24">
+    Cloud upload smoke test
+  </text>
+</svg>
