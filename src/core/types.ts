@@ -52,6 +52,38 @@ export interface HdriPreset {
 
 export type EnvironmentId = string;
 
+/** JSON-safe perspective-camera pose used by the 3D preview and recordings. */
+export interface CameraPose {
+  position: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+  /** Vertical field of view in degrees. */
+  fov: number;
+  /** PerspectiveCamera zoom multiplier. OrbitControls normally changes position instead. */
+  zoom: number;
+}
+
+/** Render context paired with a camera pose for reproducible recording evidence. */
+export interface WebGLCameraEvidence {
+  projection: 'perspective';
+  position: [number, number, number];
+  target: [number, number, number];
+  up: [number, number, number];
+  fov: number;
+  near: number;
+  far: number;
+  zoom: number;
+  viewport: { width: number; height: number; pixelRatio: number };
+  toneMapping: string;
+  exposure: number;
+}
+
+/** Imperative API exposed after a WebGL preview has finished mounting. */
+export interface WebGLRenderAPI {
+  toDataURL: (scale?: number) => string;
+  getCameraPose: () => CameraPose;
+  getCameraEvidence: () => WebGLCameraEvidence;
+}
+
 export interface EditorState {
   text: TextSettings;
   extrusion: ExtrusionSettings;
@@ -78,6 +110,8 @@ export interface EditorState {
   environmentId?: EnvironmentId;
   /** WebGL environments loaded from backend. */
   hdrPresets?: HdriPreset[];
+  /** Camera/orbit state. Optional for backwards compatibility with older projects. */
+  cameraPose?: CameraPose;
   /** WebGL preset: front face color (e.g. #ffffff). */
   frontColor?: string;
   /** WebGL preset: front face opacity 0–1 (1 = opaque). */

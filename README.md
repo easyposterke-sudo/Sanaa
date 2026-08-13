@@ -20,8 +20,9 @@ The previous proof-of-concept source is preserved under
   editable 3D recipe
 - Undo/redo, canvas sizing and zoom, local uploads, and poster export
 - Project JSON download/import for editable round trips
-- Semantic process recording across poster and 3D changes, with coalescing,
-  training JSON download/import, and deterministic replay
+- Semantic process recording across poster and 3D changes, with reference and
+  intent context, accepted-final review, camera/dependency capture, linked
+  export evidence, integrity hashes, coalescing, and deterministic replay
 - Reference-poster analysis with strict semantic plans, D1 caching and quotas,
   and deterministic editable poster compilation
 - Cloudflare Worker, D1, and R2 APIs for projects, recordings, assets, and AI
@@ -56,11 +57,15 @@ migrations before testing the paid/cached planner path.
 ## Record a design process
 
 1. Open the **Process recorder** at the bottom of the left sidebar.
-2. Optionally enter a session name, then select **Start recording**.
-3. Work normally in the poster and 3D editors.
-4. Select **Stop recording**.
-5. Use **Replay** to verify the process or **Download JSON** to export training
-   data. A downloaded recording can be loaded with **Import recording JSON**.
+2. Optionally open **Add reference & intent** to choose the technique, attach a
+   reference poster, and describe what the session should teach.
+3. Enter an optional session name, then select **Start recording**.
+4. Work normally in the poster and 3D editors. Camera moves are recorded when
+   orbit interaction finishes.
+5. Export the poster/3D render (or use **Send to poster**) to attach exact visual
+   evidence automatically, then select **Stop recording**.
+6. Review the result, check **This is the accepted final result**, and use
+   **Download JSON**. You can also replay it or import an older recording.
 
 The recorder stores semantic design operations rather than raw pointer
 coordinates. See [docs/RECORDING_FORMAT.md](docs/RECORDING_FORMAT.md).

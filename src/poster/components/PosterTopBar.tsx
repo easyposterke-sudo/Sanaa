@@ -8,6 +8,8 @@ import {
   getPosterExportPlan,
   type ExportProgress,
 } from '../utils/exportPoster';
+import { attachRecordingExportIfEligible } from '../../recording/recordingEvidence';
+import { useDesignRecorderStore } from '../../recording/recordingStore';
 // Cloud save is handled by PosterLayout (Save button).
 
 interface PosterTopBarProps {
@@ -79,7 +81,8 @@ export function PosterTopBar({
     try {
       const fabricCanvas = getFabricCanvasRef();
       if (!fabricCanvas) throw new Error('The poster canvas is not ready yet.');
-      await exportPosterPng({
+      const surfaceState = getProject();
+      const result = await exportPosterPng({
         fabricCanvas,
         canvasWidth,
         canvasHeight,
@@ -87,6 +90,19 @@ export function PosterTopBar({
         scale,
         onProgress: setExportProgress,
       });
+      await attachRecordingExportIfEligible(
+        result.blob,
+        {
+          surface: 'poster',
+          source: 'poster-export',
+          fileName: result.filename,
+          width: result.width,
+          height: result.height,
+          scale: result.scale,
+        },
+        surfaceState,
+        useDesignRecorderStore.getState
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The poster could not be exported.';
       console.error('Poster export failed:', error);
@@ -95,7 +111,7 @@ export function PosterTopBar({
       setExporting(false);
       setExportProgress(null);
     }
-  }, [canvasWidth, canvasHeight, canvasBackground]);
+  }, [canvasWidth, canvasHeight, canvasBackground, getProject]);
 
   const exportOptions = [
     { scale: 2, label: 'Standard', description: 'Good for web and social media' },

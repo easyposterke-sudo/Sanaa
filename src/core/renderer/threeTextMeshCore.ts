@@ -5,6 +5,7 @@ import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { createMeshesFromMultiMaterialMesh } from 'three/addons/utils/SceneUtils.js';
 import type { OpenTypeFont } from '../font/opentypeToThree';
+import type { CameraPose, WebGLRenderAPI } from '../types';
 import { generateShapesFromText } from '../font/opentypeToThree';
 import {
   loadFrontTextures,
@@ -43,7 +44,7 @@ const FONT_FAMILY_TO_TYPEFACE: Record<string, string> = {
   '"Tangerine", cursive': 'gentilis_regular',
 };
 
-function getTypefaceUrl(fontFamily: string): string {
+export function getTypefaceUrl(fontFamily: string): string {
   const name = FONT_FAMILY_TO_TYPEFACE[fontFamily] ?? 'helvetiker_regular';
   return `${THREE_FONT_BASE}/${name}.typeface.json`;
 }
@@ -214,7 +215,11 @@ export interface ThreeTextRendererProps {
   /** Solid tint from diffuse alpha (drops baked-in decal colors). */
   frontDecalTintEnabled?: boolean;
   frontDecalTintColor?: string;
-  onReady?: (api: { toDataURL: (scale?: number) => string }) => void;
+  /** Restored orbit pose; changes are applied without rebuilding the mesh. */
+  cameraPose?: CameraPose;
+  /** Called once per completed orbit/zoom interaction. */
+  onCameraPoseChange?: (pose: CameraPose) => void;
+  onReady?: (api: WebGLRenderAPI) => void;
 }
 
 const fontCache = new Map<string, Font>();

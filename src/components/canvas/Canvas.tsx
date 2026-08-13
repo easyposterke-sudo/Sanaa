@@ -7,6 +7,7 @@ import { renderMetallicText } from '../../core/renderer/metallicTextRenderer';
 import { ThreeTextRenderer } from '../../core/renderer/ThreeTextRenderer';
 import { MultiLayerThreeCanvas } from '../../core/renderer/MultiLayerThreeCanvas';
 import { getCustomFont } from '../../core/font/customFontCache';
+import type { CameraPose, WebGLRenderAPI } from '../../core/types';
 
 export const Canvas = memo(function Canvas({
   forceMultiLayer = false,
@@ -67,6 +68,7 @@ export const Canvas = memo(function Canvas({
       extrusionLighting: s.extrusionLighting,
       environmentId: s.environmentId,
       hdrPresets: s.hdrPresets,
+      cameraPose: s.cameraPose,
       inflate: s.inflate,
       selectedCustomFontId: s.selectedCustomFontId,
       frontDecalEnabled: s.frontDecalEnabled,
@@ -102,11 +104,15 @@ export const Canvas = memo(function Canvas({
   }, [useWebGL, setWebGLExportAPI]);
 
   const handleWebGLReady = useCallback(
-    (api: { toDataURL: (scale?: number) => string }) => {
+    (api: WebGLRenderAPI) => {
       setWebGLExportAPI(api);
     },
     [setWebGLExportAPI]
   );
+
+  const handleCameraPoseChange = useCallback((pose: CameraPose) => {
+    useEditorStore.getState().setCameraPose(pose);
+  }, []);
 
   const svgState = useMemo(
     () => ({
@@ -226,6 +232,8 @@ export const Canvas = memo(function Canvas({
             shadowOpacity={(state.shadowBlur ?? 0) > 0 ? (state.shadowOpacity ?? 0.3) : 0}
             inflate={state.inflate ?? 0}
             customFont={customFont}
+            cameraPose={state.cameraPose}
+            onCameraPoseChange={handleCameraPoseChange}
             onReady={handleWebGLReady}
           />
           )}

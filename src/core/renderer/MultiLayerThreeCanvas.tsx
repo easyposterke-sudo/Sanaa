@@ -16,6 +16,9 @@ import {
 import { buildThreeShapeMeshGroup } from './threeShapeMeshCore';
 import { meshPropsFromTextLayer, meshPropsFromShapeLayer, environmentPathFromState } from './meshPropsFromTextLayer';
 import { getCustomFont } from '../font/customFontCache';
+import { cameraPosesEqual } from '../cameraPose';
+import type { CameraPose, WebGLRenderAPI } from '../types';
+import { applyCameraPose, readCameraEvidence, readCameraPose } from './cameraPoseThree';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -184,7 +187,7 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
   /** >1 allows closer min distance and farther max distance (e.g. 1.5 = +50% zoom range for poster modal). */
   orbitZoomScale = 1,
 }: {
-  onReady?: (api: { toDataURL: (scale?: number) => string }) => void;
+  onReady?: (api: WebGLRenderAPI) => void;
   orbitZoomScale?: number;
 }) {
   /** Mount WebGL here only — never put React children inside; `innerHTML` clears this node. */
@@ -200,7 +203,7 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
   const controlsRef = useRef<OrbitControls | null>(null);
   const rafRef = useRef<number>(0);
   const resizeHandlerRef = useRef<(() => void) | null>(null);
-  const orbitStateRef = useRef<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const orbitStateRef = useRef<CameraPose | null>(null);
   const raycasterRef = useRef<THREE.Raycaster | null>(null);
   const pointerNdcRef = useRef<THREE.Vector2 | null>(null);
   const dragStateRef = useRef<{
@@ -218,6 +221,7 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
     extrusionLighting,
     environmentId,
     hdrPresets,
+    cameraPose,
     extrusionLightAzimuth,
     extrusionLightElevation,
     extrusionLightAmbient,
@@ -229,6 +233,7 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
       extrusionLighting: s.extrusionLighting,
       environmentId: s.environmentId,
       hdrPresets: s.hdrPresets,
+      cameraPose: s.cameraPose,
       extrusionLightAzimuth: s.extrusionLighting?.azimuth ?? 270,
       extrusionLightElevation: s.extrusionLighting?.elevation ?? 45,
       extrusionLightAmbient: s.extrusionLighting?.ambient ?? 0.35,
@@ -237,6 +242,8 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
 
   const setActiveLayerId = useEditorStore((s) => s.setActiveTextLayerId);
   const updateActiveLayerTransform = useEditorStore((s) => s.updateActiveLayerTransform);
+  const setCameraPose = useEditorStore((s) => s.setCameraPose);
+  const cameraPoseRef = useRef(cameraPose);
 
   const environmentPath = environmentPathFromState(environmentId, hdrPresets);
 
@@ -292,6 +299,20 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
   }, []);
 
   useEffect(() => {
+    cameraPoseRef.current = cameraPose;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls || !cameraPose) return;
+    if (cameraPosesEqual(readCameraPose(camera, controls.target), cameraPose)) return;
+    const applied = applyCameraPose(camera, controls.target, cameraPose);
+    orbitStateRef.current = applied;
+    controls.update();
+    if (sceneRef.current && rendererRef.current) {
+      rendererRef.current.render(sceneRef.current, camera);
+    }
+  }, [cameraPose]);
+
+  useEffect(() => {
     if (!glHostRef.current) return;
     const glHost = glHostRef.current;
     const width = glHost.clientWidth || 800;
@@ -329,14 +350,40 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
     controls.minDistance = 4 / zoomMul;
     controls.maxDistance = 80 * zoomMul;
     controls.zoomSpeed = zoomMul;
-    controls.target.set(0, 0, 0);
-    if (orbitStateRef.current) {
-      camera.position.copy(orbitStateRef.current.position);
-      controls.target.copy(orbitStateRef.current.target);
-      camera.lookAt(controls.target);
-    }
+    applyCameraPose(camera, controls.target, orbitStateRef.current ?? cameraPoseRef.current);
     controls.update();
     controlsRef.current = controls;
+    let cameraCaptureTimer: ReturnType<typeof setTimeout> | null = null;
+    let cameraInteractionEnded = false;
+    const commitCameraPose = () => {
+      cameraCaptureTimer = null;
+      cameraInteractionEnded = false;
+      const pose = readCameraPose(camera, controls.target);
+      orbitStateRef.current = pose;
+      setCameraPose(pose);
+    };
+    const scheduleCameraCapture = () => {
+      if (cameraCaptureTimer !== null) clearTimeout(cameraCaptureTimer);
+      cameraCaptureTimer = setTimeout(commitCameraPose, 120);
+    };
+    const handleControlsStart = () => {
+      cameraInteractionEnded = false;
+      if (cameraCaptureTimer !== null) {
+        clearTimeout(cameraCaptureTimer);
+        cameraCaptureTimer = null;
+      }
+    };
+    const handleControlsChange = () => {
+      // OrbitControls keeps moving briefly after `end` while damping settles.
+      if (cameraInteractionEnded) scheduleCameraCapture();
+    };
+    const handleControlsEnd = () => {
+      cameraInteractionEnded = true;
+      scheduleCameraCapture();
+    };
+    controls.addEventListener('start', handleControlsStart);
+    controls.addEventListener('change', handleControlsChange);
+    controls.addEventListener('end', handleControlsEnd);
 
     // Shared picking helpers
     raycasterRef.current = new THREE.Raycaster();
@@ -401,6 +448,8 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
     camera.layers.enable(1);
 
     onReady?.({
+      getCameraPose: () => readCameraPose(camera, controls.target),
+      getCameraEvidence: () => readCameraEvidence(camera, controls.target, renderer),
       toDataURL: (scale?: number) => {
         const r = rendererRef.current;
         const sc = sceneRef.current;
@@ -612,15 +661,12 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
       const cam = cameraRef.current;
       const ctrl = controlsRef.current;
       if (cam && ctrl) {
-        if (!orbitStateRef.current) {
-          orbitStateRef.current = {
-            position: new THREE.Vector3(),
-            target: new THREE.Vector3(),
-          };
-        }
-        orbitStateRef.current.position.copy(cam.position);
-        orbitStateRef.current.target.copy(ctrl.target);
+        orbitStateRef.current = readCameraPose(cam, ctrl.target);
       }
+      if (cameraCaptureTimer !== null) clearTimeout(cameraCaptureTimer);
+      controls.removeEventListener('start', handleControlsStart);
+      controls.removeEventListener('change', handleControlsChange);
+      controls.removeEventListener('end', handleControlsEnd);
       dom.removeEventListener('pointerdown', pointerDown);
       dom.removeEventListener('pointermove', pointerMove);
       dom.removeEventListener('pointerup', pointerUpOrLeave);
@@ -633,7 +679,7 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
       }
       disposeAll();
     };
-  }, [disposeAll, onReady, orbitZoomScale]);
+  }, [disposeAll, onReady, orbitZoomScale, setCameraPose]);
 
   const layersGeometrySig = useEditorStore((s) => layerGeometryFingerprint(s.textLayers ?? []));
   const debouncedLayersGeometrySig = useDebounce(layersGeometrySig, GEOMETRY_REBUILD_DEBOUNCE_MS);

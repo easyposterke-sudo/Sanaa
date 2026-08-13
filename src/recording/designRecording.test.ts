@@ -4,13 +4,16 @@ import { usePosterStore } from '../poster/store/posterStore';
 import type { PosterProject, PosterTextElement } from '../poster/types';
 import {
   DESIGN_RECORDING_SCHEMA_VERSION,
+  LEGACY_DESIGN_RECORDING_SCHEMA_VERSION,
   applyPosterCommand,
   applyThreeCommand,
   coalesceRecordingCommands,
+  createRecordingIntegrity,
   createPosterCommand,
   createThreeCommand,
   parseDesignRecording,
   replayRecordingToFinalState,
+  verifyRecordingIntegrity,
   type DesignRecordingSession,
   type RecordingCommandMeta,
 } from './designRecording';
@@ -62,8 +65,10 @@ beforeEach(() => {
     lastSession: null,
     isReplaying: false,
     replayProgress: null,
+    evidenceStatus: 'idle',
     error: null,
   });
+  useDesignRecorderStore.getState().clearDraft();
   usePosterStore.getState().loadProject(project());
 });
 
@@ -111,6 +116,59 @@ describe('poster semantic commands', () => {
       ? applyPosterCommand(initial, merged)
       : null).toEqual(final);
   });
+
+  it('keeps coalescing a continuous transform without injecting an empty canvas patch', () => {
+    const initial = project([textElement('text-1')]);
+    const firstState = project([textElement('text-1', { scaleX: 0.9, scaleY: 0.9 })]);
+    const secondState = project([textElement('text-1', { scaleX: 0.75, scaleY: 0.75 })]);
+    const final = project([textElement('text-1', { scaleX: 0.6, scaleY: 0.6 })]);
+    const first = createPosterCommand(initial, firstState, META)!;
+    const second = createPosterCommand(firstState, secondState, {
+      ...META,
+      id: 'cmd-2',
+      sequence: 1,
+      elapsedMs: 350,
+    })!;
+    const third = createPosterCommand(secondState, final, {
+      ...META,
+      id: 'cmd-3',
+      sequence: 2,
+      elapsedMs: 620,
+    })!;
+
+    const firstMerge = coalesceRecordingCommands(first, second);
+    expect(firstMerge?.type === 'poster.mutation' && firstMerge.mutation.canvas).toBeUndefined();
+    const finalMerge = firstMerge ? coalesceRecordingCommands(firstMerge, third) : null;
+
+    expect(finalMerge?.sequence).toBe(0);
+    expect(finalMerge?.type === 'poster.mutation' && finalMerge.mutation.canvas).toBeUndefined();
+    expect(
+      finalMerge?.type === 'poster.mutation'
+        ? applyPosterCommand(initial, finalMerge)
+        : null
+    ).toEqual(final);
+  });
+
+  it('still coalesces real canvas changes and keeps the latest background', () => {
+    const initial = project();
+    const middle = { ...project(), canvasBackground: { type: 'solid', color: '#ff0000' } as const };
+    const final = { ...project(), canvasBackground: { type: 'solid', color: '#0000ff' } as const };
+    const first = createPosterCommand(initial, middle, META)!;
+    const second = createPosterCommand(middle, final, {
+      ...META,
+      id: 'cmd-2',
+      sequence: 1,
+      elapsedMs: 400,
+    })!;
+    const merged = coalesceRecordingCommands(first, second);
+
+    expect(merged?.type === 'poster.mutation' && merged.mutation.canvas?.background).toEqual(
+      final.canvasBackground
+    );
+    expect(merged?.type === 'poster.mutation' ? applyPosterCommand(initial, merged) : null).toEqual(
+      final
+    );
+  });
 });
 
 describe('3D semantic commands', () => {
@@ -132,7 +190,7 @@ describe('3D semantic commands', () => {
 });
 
 describe('recording sessions', () => {
-  it('captures changes from both active stores', () => {
+  it('captures changes from both active stores', async () => {
     useDesignRecorderStore.getState().startRecording('Combined workflow');
     usePosterStore.getState().addElement({
       ...textElement('ignored-generated-id'),
@@ -140,7 +198,7 @@ describe('recording sessions', () => {
       zIndex: undefined,
     } as never);
     useEditorStore.getState().setText({ content: 'Recorded 3D text' });
-    const completed = useDesignRecorderStore.getState().stopRecording();
+    const completed = await useDesignRecorderStore.getState().stopRecording();
 
     expect(completed?.commands.some((command) => command.surface === 'poster')).toBe(true);
     expect(completed?.commands.some((command) => command.surface === 'three')).toBe(true);
@@ -173,6 +231,8 @@ describe('recording sessions', () => {
         app: 'EasyPoster',
         format: 'semantic-design-commands',
         commandCount: 2,
+        appVersion: '0.1.0',
+        rendererVersion: 'test-renderer',
       },
     };
 
@@ -197,6 +257,8 @@ describe('recording sessions', () => {
           app: 'EasyPoster',
           format: 'semantic-design-commands',
           commandCount: 12,
+          appVersion: '0.1.0',
+          rendererVersion: 'test-renderer',
         },
       })
     ).toThrow(/command count/i);
@@ -223,9 +285,90 @@ describe('recording sessions', () => {
         app: 'EasyPoster',
         format: 'semantic-design-commands',
         commandCount: 0,
+        appVersion: '0.1.0',
+        rendererVersion: 'test-renderer',
       },
     };
 
-    expect(parseWorkerRecordingSession(input).schemaVersion).toBe(2);
+    expect(parseWorkerRecordingSession(input).schemaVersion).toBe(3);
+  });
+
+  it('migrates schema v2 recordings in memory without changing replay data', () => {
+    const legacy = {
+      schemaVersion: LEGACY_DESIGN_RECORDING_SCHEMA_VERSION,
+      id: 'legacy-recording',
+      projectId: 'legacy-project',
+      name: 'Legacy session',
+      startedAt: '2026-07-30T10:00:00.000Z',
+      initialState: { poster: project(), three: getEditorRecordingSnapshot() },
+      commands: [],
+      finalState: { poster: project(), three: getEditorRecordingSnapshot() },
+      metadata: {
+        app: 'EasyPoster' as const,
+        format: 'semantic-design-commands' as const,
+        commandCount: 0,
+      },
+    };
+
+    const parsed = parseDesignRecording(legacy);
+    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.metadata.appVersion).toBe('unknown');
+    expect(parsed.initialState).toEqual(legacy.initialState);
+    expect(parsed.commands).toEqual(legacy.commands);
+  });
+
+  it('creates hashes that detect a changed training archive', async () => {
+    const snapshot = { poster: project(), three: getEditorRecordingSnapshot() };
+    const session: DesignRecordingSession = {
+      schemaVersion: DESIGN_RECORDING_SCHEMA_VERSION,
+      id: 'integrity-test',
+      projectId: 'integrity-project',
+      name: 'Integrity test',
+      startedAt: '2026-07-30T10:00:00.000Z',
+      endedAt: '2026-07-30T10:00:01.000Z',
+      initialState: snapshot,
+      commands: [],
+      finalState: snapshot,
+      metadata: {
+        app: 'EasyPoster',
+        format: 'semantic-design-commands',
+        commandCount: 0,
+        appVersion: '0.1.0',
+        rendererVersion: 'test-renderer',
+      },
+    };
+    session.integrity = await createRecordingIntegrity(session);
+
+    expect(await verifyRecordingIntegrity(session)).toBe(true);
+    expect(await verifyRecordingIntegrity({ ...session, name: 'Tampered' })).toBe(false);
+  });
+
+  it('verifies integrity before importing a downloaded recording', async () => {
+    const snapshot = { poster: project(), three: getEditorRecordingSnapshot() };
+    const session: DesignRecordingSession = {
+      schemaVersion: DESIGN_RECORDING_SCHEMA_VERSION,
+      id: 'import-integrity-test',
+      projectId: 'import-integrity-project',
+      name: 'Verified import',
+      startedAt: '2026-07-30T10:00:00.000Z',
+      initialState: snapshot,
+      commands: [],
+      finalState: snapshot,
+      metadata: {
+        app: 'EasyPoster',
+        format: 'semantic-design-commands',
+        commandCount: 0,
+        appVersion: '0.1.0',
+        rendererVersion: 'test-renderer',
+      },
+    };
+    session.integrity = await createRecordingIntegrity(session);
+
+    await expect(useDesignRecorderStore.getState().importRecording(session)).resolves.toMatchObject({
+      id: session.id,
+    });
+    await expect(
+      useDesignRecorderStore.getState().importRecording({ ...session, name: 'Changed import' })
+    ).rejects.toThrow(/integrity verification failed/i);
   });
 });

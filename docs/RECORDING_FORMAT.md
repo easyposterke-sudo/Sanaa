@@ -1,98 +1,105 @@
 # EasyPoster semantic recording format
 
-EasyPoster recording JSON is designed for replay, analysis, and future
-skill-training pipelines. It records design intent and resulting values rather
-than raw mouse coordinates.
+EasyPoster recording JSON is designed for exact replay, human review, and a
+future skill-building pipeline. It records semantic design changes rather than
+raw mouse coordinates. Schema v3 adds the evidence needed to decide whether a
+recording is a trustworthy training example; schema v2 imports are migrated in
+memory without changing their replay data.
 
-## Session envelope
+## Session envelope (v3)
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "id": "recording-...",
   "projectId": "project-...",
-  "name": "Church event poster",
-  "startedAt": "2026-07-30T10:00:00.000Z",
-  "endedAt": "2026-07-30T10:04:12.000Z",
-  "initialState": {
-    "poster": {},
-    "three": {}
-  },
+  "name": "Purple and gold 3D headline",
+  "startedAt": "2026-08-13T10:44:17.860Z",
+  "endedAt": "2026-08-13T10:48:39.901Z",
+  "initialState": { "poster": {}, "three": {} },
   "commands": [],
-  "finalState": {
-    "poster": {},
-    "three": {}
-  },
+  "finalState": { "poster": {}, "three": {} },
   "metadata": {
     "app": "EasyPoster",
     "format": "semantic-design-commands",
-    "commandCount": 24
+    "commandCount": 24,
+    "appVersion": "0.1.0",
+    "rendererVersion": "easyposter-three-webgl-v1"
+  },
+  "training": {
+    "intent": {
+      "skillType": "3d-text",
+      "summary": "Create a dark-purple face with a polished gold extrusion",
+      "tags": ["headline", "gold", "beveled"]
+    },
+    "acceptance": { "status": "accepted", "reviewedAt": "..." },
+    "referenceImageIds": ["dep-reference-..."]
+  },
+  "dependencies": [],
+  "evidence": {
+    "initialCamera": {},
+    "finalCamera": {},
+    "exports": []
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "canonicalization": "easyposter-canonical-json-v1",
+    "commandsSha256": "...",
+    "finalStateSha256": "...",
+    "sessionSha256": "..."
   }
 }
 ```
 
-The initial and final states make every session independently verifiable. The
-ordered command list explains how the final result was created.
+The replay core is still `initialState + commands = finalState`. Training
+context is additive, so it cannot alter the deterministic command sequence.
 
-## Commands
+## Training context and evidence
 
-Every command includes:
+- `training.intent` says which technique the session demonstrates and why.
+- `training.acceptance` distinguishes exploration/drafts from an approved
+  result. A recording is never assumed to be accepted merely because it ended.
+- Reference images are canvas-reencoded as bounded WebP previews, stripping
+  EXIF metadata before they enter the JSON archive.
+- `dependencies` records the reference, fonts, textures, environment maps, and
+  render previews needed to understand or reproduce the result.
+- 3D camera pose is both part of editable state and captured with render
+  evidence, including target, field of view, clipping planes, viewport,
+  tone-mapping, and exposure.
+- Export evidence hashes the exact exported bytes and links them to the hash of
+  the poster or 3D state that produced them. An export becomes stale if that
+  surface changes afterward.
+- Integrity digests use recursively key-sorted JSON with array order preserved.
+  The session digest omits the `integrity` object to avoid self-reference.
 
-- Stable command ID and sequence number
-- ISO timestamp and milliseconds since recording began
-- Surface: `poster` or `three`
-- Category and human-readable label
-- A minimal mutation containing only changed values
+The embedded images are previews, not the original source files. Larger or
+licensed production assets should be stored in R2 and referenced by stable URI
+and SHA-256 digest.
 
-Poster mutations can update the canvas, add or remove elements, patch one or
-more elements, and change layer order. Three.js mutations can patch scene
-settings, add/remove/update layers, and change 3D layer order.
+Screen video is deliberately not embedded in v3. It is much larger and less
+precise than the semantic commands; an optional video can later be stored in R2
+as supplementary diagnostic evidence without becoming the training source of
+truth.
 
-Example:
+## Commands and coalescing
 
-```json
-{
-  "id": "cmd-...",
-  "sequence": 4,
-  "occurredAt": "2026-07-30T10:00:18.120Z",
-  "elapsedMs": 18120,
-  "surface": "poster",
-  "category": "typography",
-  "label": "Edit poster typography",
-  "type": "poster.mutation",
-  "mutation": {
-    "updated": [
-      {
-        "id": "el_...",
-        "elementType": "text",
-        "patch": {
-          "fontFamily": "Montserrat",
-          "fontSize": 96,
-          "charSpacing": 80
-        },
-        "changedFields": ["fontFamily", "fontSize", "charSpacing"]
-      }
-    ]
-  }
-}
-```
+Every command contains a stable ID and sequence, ISO timestamp and elapsed
+milliseconds, surface (`poster` or `three`), category, readable label, and a
+minimal mutation. Poster commands patch canvas/layers; 3D commands patch scene,
+layer, material, lighting, texture, and camera state.
 
-## Coalescing
+Successive changes to the same target within 900 ms are merged: the first
+identity is retained and the latest value wins. This turns slider input and a
+continuous drag into one replayable action. Real canvas changes remain separate
+from layer transforms, and empty canvas patches are never synthesized.
 
-Successive updates to the same surface, category, and target within 900 ms are
-merged. The first command identity is retained and the latest values win. This
-is what converts slider input and drag gestures into compact training actions.
+## Validation and compatibility
 
-## Replay
+Browser import validates schema bounds, command count, contiguous sequence,
+unique IDs, monotonic time, dependency references, camera planes, and exact
+replay against `finalState`. Cryptographic verification remains asynchronous so
+normal replay APIs stay synchronous.
 
-Replay restores `initialState`, applies commands in sequence, and updates the
-visible poster or 3D editor after each command. Recording capture is suppressed
-during playback. The computed result can be compared with `finalState` for
-dataset validation.
-
-## Assets
-
-Embedded poster data URLs are portable inside recording JSON. Browser `blob:`
-URLs used by some custom 3D texture uploads are session-local; production
-training archives should upload those assets to R2 and replace them with stable
-asset references before long-term retention.
+Cloudflare accepts legacy v1, full-editor v2, and training v3 archives. The
+browser migrates v2 to v3 in memory with unknown app/renderer versions; it does
+not invent references, acceptance, evidence, or hashes.

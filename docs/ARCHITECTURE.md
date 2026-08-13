@@ -42,17 +42,20 @@ The active routes are:
 The recorder subscribes to the durable boundaries of both active Zustand
 stores. Poster transactions are converted into canvas, layer, transform,
 typography, path, and image commands. Three.js transactions are converted into
-layer, typography, transform, material, lighting, environment, texture, and
-decal commands.
+layer, typography, transform, material, lighting, environment, texture, decal,
+and camera commands.
 
 Rapid changes to the same target are consolidated within a short window. This
 turns a drag or slider gesture into one meaningful command instead of recording
 every pointer position. Each session contains exact initial state, ordered
 commands, final state, timestamps, categories, and stable element/layer IDs.
-Replay suppresses capture and applies the commands deterministically.
+Replay suppresses capture and applies the commands deterministically. Reference
+previews, intent, review status, renderer dependencies, exact export hashes,
+camera evidence, and archive-integrity hashes form an additive training layer.
 
-Schema version 2 represents the full editor. The Worker recording validator
-accepts both the prototype version 1 and full-editor version 2 envelopes.
+Schema version 3 is the training/provenance envelope. Browser import migrates
+version 2 in memory without changing replay data. The Worker validator accepts
+prototype version 1, full-editor version 2, and training version 3 envelopes.
 
 ## Reference-to-poster boundary
 

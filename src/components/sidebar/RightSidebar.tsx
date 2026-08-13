@@ -2,7 +2,7 @@ import { memo, useState, useEffect, useRef, useCallback, type CSSProperties } fr
 import { useLocation } from 'react-router-dom';
 import opentype from 'opentype.js';
 import { ColorPickerPopover } from '../ColorPickerPopover';
-import { useEditorStore } from '../../store/editorStore';
+import { getEditorRecordingSnapshot, useEditorStore } from '../../store/editorStore';
 import { useIntentionalSliderDrag } from '../../hooks/useIntentionalSliderDrag';
 import type { ShapeLayerKind } from '../../core/types';
 import { DEFAULT_RING_HOLE_RATIO } from '../../core/types';
@@ -21,6 +21,11 @@ import { generateNormalMapPngBlob } from '../../core/textures/normalMapGenerator
 import { apiUrl } from '../../lib/apiUrl';
 import { apiFetch, fetchWithTimeout } from '../../lib/api';
 import { useAuthStore } from '../../auth/authStore';
+import {
+  attachRecordingExportIfEligible,
+  reencodeDataUrlImage,
+} from '../../recording/recordingEvidence';
+import { useDesignRecorderStore } from '../../recording/recordingStore';
 
 const BUILT_IN_HDR_PRESETS = [
   { id: 'silver', label: 'Silver studio', path: '/hdr/silver.hdr' },
@@ -660,6 +665,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
   const EXPORT_SCALE = 3;
   const handleExportWebP = async () => {
     const WEBP_QUALITY = 0.95;
+    const recordingState = getEditorRecordingSnapshot();
     try {
       if (renderEngine === 'webgl' && webglExportAPI) {
         const dataUrl = webglExportAPI.toDataURL(EXPORT_SCALE);
@@ -686,6 +692,21 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
         a.download = 'metallic-text.webp';
         a.click();
         URL.revokeObjectURL(url);
+        await attachRecordingExportIfEligible(
+          blob,
+          {
+            surface: 'three',
+            source: 'three-export',
+            fileName: 'metallic-text.webp',
+            width: canvas.width,
+            height: canvas.height,
+            scale: EXPORT_SCALE,
+            quality: WEBP_QUALITY,
+            transparent: true,
+          },
+          recordingState,
+          useDesignRecorderStore.getState
+        );
         return;
       }
       const svg = renderMetallicText(state);
@@ -696,6 +717,19 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
       a.download = 'metallic-text.webp';
       a.click();
       URL.revokeObjectURL(url);
+      await attachRecordingExportIfEligible(
+        blob,
+        {
+          surface: 'three',
+          source: 'three-export',
+          fileName: 'metallic-text.webp',
+          scale: EXPORT_SCALE,
+          quality: WEBP_QUALITY,
+          transparent: true,
+        },
+        recordingState,
+        useDesignRecorderStore.getState
+      );
     } catch (err) {
       console.error('Export WebP failed:', err);
     }
@@ -703,17 +737,34 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
 
   const handleExportPNG = async () => {
     setExportingPng(true);
+    const recordingState = getEditorRecordingSnapshot();
     try {
       if (renderEngine === 'webgl' && webglExportAPI) {
         const dataUrl = webglExportAPI.toDataURL(EXPORT_SCALE);
-        const res = await fetchWithTimeout(dataUrl);
-        const blob = await res.blob();
+        const { blob, width, height } = await reencodeDataUrlImage(
+          dataUrl,
+          'image/png'
+        );
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = 'metallic-text.png';
         a.click();
         URL.revokeObjectURL(url);
+        await attachRecordingExportIfEligible(
+          blob,
+          {
+            surface: 'three',
+            source: 'three-export',
+            fileName: 'metallic-text.png',
+            width,
+            height,
+            scale: EXPORT_SCALE,
+            transparent: true,
+          },
+          recordingState,
+          useDesignRecorderStore.getState
+        );
       } else {
         const svg = renderMetallicText(state);
         const blob = await exportPNG(svg, 2);
@@ -723,6 +774,18 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
         a.download = 'metallic-text.png';
         a.click();
         URL.revokeObjectURL(url);
+        await attachRecordingExportIfEligible(
+          blob,
+          {
+            surface: 'three',
+            source: 'three-export',
+            fileName: 'metallic-text.png',
+            scale: 2,
+            transparent: true,
+          },
+          recordingState,
+          useDesignRecorderStore.getState
+        );
       }
     } catch (err) {
       console.error('Export PNG failed:', err);

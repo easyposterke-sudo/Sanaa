@@ -13,7 +13,7 @@ export function serializeEditorState(): Partial<EditorState> {
     'text', 'extrusion', 'lighting', 'extrusionLighting', 'filters',
     'gradientStops', 'gradientType', 'extrusionGradientStops',
     'shadowBlur', 'shadowOffsetX', 'shadowOffsetY', 'shadowOpacity',
-    'reflectionStrength', 'gradientAngle', 'renderEngine', 'environmentId',
+    'reflectionStrength', 'gradientAngle', 'renderEngine', 'environmentId', 'cameraPose',
     'frontColor', 'frontOpacity', 'extrusionColor', 'extrusionOnly', 'metalness', 'roughness',
     'bevelSize', 'bevelSegments', 'bevelThickness', 'curveSegments',
     'extrusionDepth', 'lightIntensity', 'frontClearcoat', 'frontClearcoatRoughness',

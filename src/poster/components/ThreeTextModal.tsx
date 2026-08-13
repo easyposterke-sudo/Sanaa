@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useEditorStore } from '../../store/editorStore';
+import { getEditorRecordingSnapshot, useEditorStore } from '../../store/editorStore';
 import { usePosterStore } from '../store/posterStore';
 import { Canvas } from '../../components/canvas/Canvas';
 import { RightSidebar } from '../../components/sidebar/RightSidebar';
@@ -7,6 +7,8 @@ import { LeftSidebar } from '../../components/sidebar/LeftSidebar';
 import { serializeEditorState } from '../utils/serializeEditorState';
 import { loadFontsForPosterElements } from '../loadPosterFonts';
 import type { Poster3DTextElement } from '../types';
+import { attachRecordingDataUrlExportIfEligible } from '../../recording/recordingEvidence';
+import { useDesignRecorderStore } from '../../recording/recordingStore';
 
 interface ThreeTextModalProps {
   mode: 'add' | { editId: string };
@@ -83,6 +85,7 @@ export function ThreeTextModal({
         setSendError('Could not export the 3D image. Please try again.');
         return;
       }
+      const recordingState = getEditorRecordingSnapshot();
       const config = serializeEditorState();
       if (mode === 'add') {
         onSendToPoster(dataUrl, config);
@@ -91,6 +94,19 @@ export function ThreeTextModal({
         updateElement(editId, { image: dataUrl, config, userPosterImageId: undefined });
         onEditComplete(dataUrl, config);
       }
+      await attachRecordingDataUrlExportIfEligible(
+        dataUrl,
+        {
+          surface: 'three',
+          source: 'send-to-poster',
+          fileName: 'metallic-text-to-poster.webp',
+          scale: HI_RES_SCALE,
+          quality: 0.85,
+          transparent: true,
+        },
+        recordingState,
+        useDesignRecorderStore.getState
+      );
     } catch {
       setSendError('Failed to send 3D text to poster. Please try again.');
     } finally {

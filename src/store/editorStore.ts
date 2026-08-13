@@ -10,6 +10,8 @@ import type {
   LightingSettings,
   FilterSettings,
   ExtrusionLightingSettings,
+  CameraPose,
+  WebGLRenderAPI,
 } from '../core/types';
 import { MAX_TEXT_LAYERS, isShapeLayer } from '../core/types';
 import {
@@ -18,6 +20,11 @@ import {
   DEFAULT_EXTRUSION_LIGHTING,
   DEFAULT_FILTERS,
 } from '../core/types';
+import {
+  DEFAULT_CAMERA_POSE,
+  cameraPosesEqual,
+  normalizeCameraPose,
+} from '../core/cameraPose';
 import {
   assignTextureRepeatDefaults,
   extractStyleFields,
@@ -34,9 +41,7 @@ import {
   textLayerFromRoot,
 } from '../core/textLayerHelpers';
 
-export type WebGLExportAPI = {
-  toDataURL: (scale?: number) => string;
-};
+export type WebGLExportAPI = WebGLRenderAPI;
 
 /** Single style: White Gold Extrusion (WebGL). Used as initial state and on reset. */
 const WHITE_GOLD_STATE: Partial<EditorState> = {
@@ -94,6 +99,7 @@ const BASE_FLAT: EditorState = {
   renderEngine: WHITE_GOLD_STATE.renderEngine ?? 'webgl',
   environmentId: 'silver',
   hdrPresets: undefined,
+  cameraPose: DEFAULT_CAMERA_POSE,
   frontColor: WHITE_GOLD_STATE.frontColor,
   frontOpacity: 1,
   extrusionColor: WHITE_GOLD_STATE.extrusionColor,
@@ -130,6 +136,7 @@ interface EditorStore extends EditorState {
   setFilters: (filters: Partial<FilterSettings>) => void;
   setState: (state: EditorStatePatch) => void;
   setWebGLExportAPI: (api: WebGLExportAPI | null) => void;
+  setCameraPose: (pose: CameraPose) => void;
   reset: () => void;
   addTextLayer: () => void;
   addShapeLayer: (spec?: ShapeLayerSpec) => void;
@@ -169,6 +176,7 @@ function toSerializableEditorState(state: EditorState): EditorState {
       renderEngine: state.renderEngine,
       environmentId: state.environmentId,
       hdrPresets: state.hdrPresets,
+      cameraPose: state.cameraPose,
       frontColor: state.frontColor,
       frontOpacity: state.frontOpacity,
       extrusionColor: state.extrusionColor,
@@ -331,6 +339,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         renderEngine: base.renderEngine ?? state.renderEngine,
         environmentId: base.environmentId ?? state.environmentId,
         hdrPresets: base.hdrPresets ?? state.hdrPresets,
+        cameraPose: base.cameraPose
+          ? normalizeCameraPose(base.cameraPose)
+          : state.cameraPose,
         frontColor: base.frontColor ?? state.frontColor,
         frontOpacity: base.frontOpacity !== undefined ? base.frontOpacity : state.frontOpacity,
         extrusionColor: base.extrusionColor ?? state.extrusionColor,
@@ -408,6 +419,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }),
 
   setWebGLExportAPI: (api) => set({ webglExportAPI: api }),
+
+  setCameraPose: (pose) =>
+    set((state) => {
+      const next = normalizeCameraPose(pose);
+      if (cameraPosesEqual(state.cameraPose, next)) return state;
+      return withHistory(state, { cameraPose: next });
+    }),
 
   loadPoster3DConfig: (config) =>
     set((state) => {

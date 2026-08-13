@@ -12,6 +12,9 @@ import {
   FRONT_NORMAL_SCALE,
 } from './threeTextMeshCore';
 import { blendMapWithIntensity, blendRoughnessMapWithIntensity } from '../textures/frontTextureCache';
+import { cameraPosesEqual } from '../cameraPose';
+import type { CameraPose } from '../types';
+import { applyCameraPose, readCameraEvidence, readCameraPose } from './cameraPoseThree';
 
 export type { ThreeTextRendererProps };
 
@@ -77,6 +80,8 @@ export const ThreeTextRenderer = memo(function ThreeTextRenderer({
   frontDecalTintEnabled = false,
   frontDecalTintColor = '#ffffff',
   customFont,
+  cameraPose,
+  onCameraPoseChange,
   onReady,
 }: ThreeTextRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,7 +97,9 @@ export const ThreeTextRenderer = memo(function ThreeTextRenderer({
   const rafRef = useRef<number>(0);
   const resizeHandlerRef = useRef<(() => void) | null>(null);
   /** Persist orbit across scene rebuilds (e.g. edge roundness / texture changes). */
-  const orbitStateRef = useRef<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const orbitStateRef = useRef<CameraPose | null>(null);
+  const cameraPoseRef = useRef(cameraPose);
+  const onCameraPoseChangeRef = useRef(onCameraPoseChange);
   /** Raw loaded textures for in-place material updates (avoids re-fetch). */
   const loadedTexturesRef = useRef<{
     map?: THREE.Texture;
@@ -110,6 +117,22 @@ export const ThreeTextRenderer = memo(function ThreeTextRenderer({
       rendererRef.current.render(sceneRef.current, cameraRef.current);
     }
   }, []);
+
+  useEffect(() => {
+    onCameraPoseChangeRef.current = onCameraPoseChange;
+  }, [onCameraPoseChange]);
+
+  useEffect(() => {
+    cameraPoseRef.current = cameraPose;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls || !cameraPose) return;
+    if (cameraPosesEqual(readCameraPose(camera, controls.target), cameraPose)) return;
+    const applied = applyCameraPose(camera, controls.target, cameraPose);
+    orbitStateRef.current = applied;
+    controls.update();
+    renderNow();
+  }, [cameraPose, renderNow]);
 
   useEffect(() => {
     setFontLoaded(false);
@@ -220,16 +243,17 @@ export const ThreeTextRenderer = memo(function ThreeTextRenderer({
     controls.enablePan = false;
     controls.minDistance = 4;
     controls.maxDistance = 80;
-    controls.target.set(0, 0, 0);
-    if (orbitStateRef.current) {
-      camera.position.copy(orbitStateRef.current.position);
-      controls.target.copy(orbitStateRef.current.target);
-      camera.lookAt(controls.target);
-    }
+    applyCameraPose(camera, controls.target, orbitStateRef.current ?? cameraPoseRef.current);
     controls.update();
     controlsRef.current = controls;
     const renderScene = () => renderer.render(scene, camera);
+    const handleControlsEnd = () => {
+      const pose = readCameraPose(camera, controls.target);
+      orbitStateRef.current = pose;
+      onCameraPoseChangeRef.current?.(pose);
+    };
     controls.addEventListener('change', renderScene);
+    controls.addEventListener('end', handleControlsEnd);
 
     let cancelled = false;
     const ac = new AbortController();
@@ -361,6 +385,8 @@ export const ThreeTextRenderer = memo(function ThreeTextRenderer({
       extrusionAmbientRef.current = extrusionAmbient;
 
       onReady?.({
+        getCameraPose: () => readCameraPose(camera, controls.target),
+        getCameraEvidence: () => readCameraEvidence(camera, controls.target, renderer),
         toDataURL: (scale?: number) => {
           const r = rendererRef.current;
           if (!r) return '';
@@ -410,14 +436,7 @@ export const ThreeTextRenderer = memo(function ThreeTextRenderer({
       const cam = cameraRef.current;
       const ctrl = controlsRef.current;
       if (cam && ctrl) {
-        if (!orbitStateRef.current) {
-          orbitStateRef.current = {
-            position: new THREE.Vector3(),
-            target: new THREE.Vector3(),
-          };
-        }
-        orbitStateRef.current.position.copy(cam.position);
-        orbitStateRef.current.target.copy(ctrl.target);
+        orbitStateRef.current = readCameraPose(cam, ctrl.target);
       }
       if (resizeHandlerRef.current) {
         window.removeEventListener('resize', resizeHandlerRef.current);
@@ -428,6 +447,7 @@ export const ThreeTextRenderer = memo(function ThreeTextRenderer({
         if (extrusionAmbientRef.current) sceneRef.current.remove(extrusionAmbientRef.current);
       }
       controls.removeEventListener('change', renderScene);
+      controls.removeEventListener('end', handleControlsEnd);
       dirLightRef.current = null;
       ambientLightRef.current = null;
       extrusionDirLightRef.current = null;

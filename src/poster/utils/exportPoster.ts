@@ -15,6 +15,15 @@ export type PosterExportPlan = {
   reason?: string;
 };
 
+export type PosterExportResult = {
+  blob: Blob;
+  filename: string;
+  width: number;
+  height: number;
+  scale: number;
+  mediaType: string;
+};
+
 type FabricExportCanvas = {
   toCanvasElement: (multiplier?: number) => HTMLCanvasElement;
 };
@@ -109,7 +118,7 @@ export async function exportPosterPng(options: {
   scale: number;
   filename?: string;
   onProgress?: (progress: ExportProgress) => void;
-}): Promise<void> {
+}): Promise<PosterExportResult> {
   const {
     fabricCanvas,
     canvasWidth,
@@ -153,6 +162,14 @@ export async function exportPosterPng(options: {
     const blob = await canvasToPngBlob(output);
     onProgress?.('downloading');
     downloadBlob(blob, filename);
+    return {
+      blob,
+      filename,
+      width: plan.width,
+      height: plan.height,
+      scale,
+      mediaType: blob.type || 'image/png',
+    };
   } catch (error) {
     if (error instanceof DOMException && error.name === 'SecurityError') {
       throw new Error(
