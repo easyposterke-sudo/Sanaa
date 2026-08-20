@@ -8,7 +8,16 @@ import {
   createFallbackPosterPlan,
   type PosterPlanRequest,
 } from '../shared/ai/posterPlan';
+import {
+  POSTER_RECONSTRUCTION_PROMPT_VERSION,
+  POSTER_RECONSTRUCTION_SCHEMA_VERSION,
+  PosterReconstructionPlanSchema,
+  PosterReconstructionRequestSchema,
+  createFallbackReconstructionPlan,
+  type PosterReconstructionRequest,
+} from '../shared/ai/posterReconstruction';
 import { OpenAiPlannerError, planPosterWithOpenAI } from './ai/openAiPosterPlanner';
+import { reconstructPosterWithOpenAI } from './ai/openAiPosterReconstructor';
 import { parsePosterDocument } from './domain/document';
 import { parseRecordingSession } from './domain/recording';
 
@@ -250,6 +259,178 @@ app.post('/api/ai/poster-plan', async (context) => {
       console.warn(
         JSON.stringify({
           message: 'OpenAI poster planning failed',
+          code: error.code,
+          status: error.status,
+          requestId,
+        }),
+      );
+      return context.json(
+        { error: error.message, code: error.code, requestId },
+        error.status as 422 | 429 | 502 | 503 | 504,
+      );
+    }
+    throw error;
+  }
+});
+
+app.post('/api/ai/poster-reconstruction', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const contentType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return context.json(
+      { error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+
+  const raw = await readBoundedText(context.req.raw, maxAiRequestBytes(context.env));
+  const parsed = PosterReconstructionRequestSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) {
+    return context.json(
+      { error: 'The poster reference is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const request = parsed.data;
+  const image = parseReferenceImage(request.reference.dataUrl);
+  if (!image) {
+    return context.json(
+      { error: 'Use a PNG, JPEG, or WebP reference image.', code: 'INVALID_REFERENCE_IMAGE', requestId },
+      400,
+    );
+  }
+
+  const developmentMode = String(context.env.APP_ENV) === 'development';
+  const apiKey = context.env.OPENAI_API_KEY?.trim();
+  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-5.6-luna';
+  if (!apiKey) {
+    if (!developmentMode) {
+      return context.json(
+        {
+          error: 'AI template reconstruction is not configured yet.',
+          code: 'AI_NOT_CONFIGURED',
+          requestId,
+        },
+        503,
+      );
+    }
+    return context.json({
+      plan: createFallbackReconstructionPlan(),
+      source: 'fallback',
+      model: null,
+      requestId,
+    });
+  }
+
+  const imageDigest = await sha256Hex(image.bytes);
+  const cacheKey = await buildPosterReconstructionCacheKey(request, imageDigest, model);
+  let cached: AiPosterPlanRow | null;
+  try {
+    cached = await context.env.DB.prepare(
+      `SELECT spec_json, model
+       FROM ai_poster_plans
+       WHERE owner_id = ? AND cache_key = ?`,
+    )
+      .bind(context.get('ownerId'), cacheKey)
+      .first<AiPosterPlanRow>();
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: 'AI reconstruction cache unavailable',
+        error: error instanceof Error ? error.message : String(error),
+        requestId,
+      }),
+    );
+    return context.json(
+      {
+        error: 'The AI cache is unavailable. Apply the latest D1 migration.',
+        code: 'AI_CACHE_UNAVAILABLE',
+        requestId,
+      },
+      503,
+    );
+  }
+
+  if (cached) {
+    const cachedPlan = PosterReconstructionPlanSchema.safeParse(JSON.parse(cached.spec_json));
+    if (cachedPlan.success) {
+      await context.env.DB.prepare(
+        `UPDATE ai_poster_plans SET last_used_at = ?
+         WHERE owner_id = ? AND cache_key = ?`,
+      )
+        .bind(new Date().toISOString(), context.get('ownerId'), cacheKey)
+        .run();
+      return context.json({
+        plan: cachedPlan.data,
+        source: 'cache',
+        model: cached.model,
+        requestId,
+      });
+    }
+  }
+
+  const quota = maxAiGenerationsPerDay(context.env);
+  const now = new Date();
+  const usageDate = now.toISOString().slice(0, 10);
+  const reserved = await context.env.DB.prepare(
+    `INSERT INTO ai_usage_daily (owner_id, usage_date, generation_count, updated_at)
+     VALUES (?, ?, 1, ?)
+     ON CONFLICT(owner_id, usage_date) DO UPDATE SET
+       generation_count = ai_usage_daily.generation_count + 1,
+       updated_at = excluded.updated_at
+     WHERE ai_usage_daily.generation_count < ?
+     RETURNING generation_count`,
+  )
+    .bind(context.get('ownerId'), usageDate, now.toISOString(), quota)
+    .first<{ generation_count: number }>();
+  if (!reserved) {
+    return context.json(
+      {
+        error: `The daily AI poster limit of ${quota} has been reached.`,
+        code: 'AI_DAILY_LIMIT',
+        requestId,
+      },
+      429,
+    );
+  }
+
+  try {
+    const result = await reconstructPosterWithOpenAI({ apiKey, model, request });
+    const createdAt = new Date().toISOString();
+    await context.env.DB.prepare(
+      `INSERT INTO ai_poster_plans (
+         id, owner_id, cache_key, schema_version, prompt_version, model,
+         spec_json, input_tokens, output_tokens, openai_request_id, created_at, last_used_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(owner_id, cache_key) DO UPDATE SET
+         spec_json = excluded.spec_json,
+         input_tokens = excluded.input_tokens,
+         output_tokens = excluded.output_tokens,
+         openai_request_id = excluded.openai_request_id,
+         last_used_at = excluded.last_used_at`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        context.get('ownerId'),
+        cacheKey,
+        POSTER_RECONSTRUCTION_SCHEMA_VERSION,
+        POSTER_RECONSTRUCTION_PROMPT_VERSION,
+        model,
+        JSON.stringify(result.plan),
+        result.inputTokens,
+        result.outputTokens,
+        result.openAiRequestId,
+        createdAt,
+        createdAt,
+      )
+      .run();
+    return context.json({ plan: result.plan, source: 'openai', model, requestId });
+  } catch (error) {
+    if (error instanceof OpenAiPlannerError) {
+      console.warn(
+        JSON.stringify({
+          message: 'OpenAI poster reconstruction failed',
           code: error.code,
           status: error.status,
           requestId,
@@ -727,6 +908,24 @@ async function buildPosterPlanCacheKey(
     schemaVersion: POSTER_PLAN_SCHEMA_VERSION,
     promptVersion: env.AI_PROMPT_VERSION || POSTER_PLAN_PROMPT_VERSION,
     recipeCatalogVersion: env.AI_RECIPE_CATALOG_VERSION || POSTER_RECIPE_CATALOG_VERSION,
+  });
+  return sha256Hex(new TextEncoder().encode(canonical));
+}
+
+async function buildPosterReconstructionCacheKey(
+  request: PosterReconstructionRequest,
+  imageDigest: string,
+  model: string,
+): Promise<string> {
+  const canonical = JSON.stringify({
+    purpose: 'poster-reconstruction',
+    imageDigest,
+    width: request.reference.width,
+    height: request.reference.height,
+    quality: request.quality,
+    model,
+    schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION,
+    promptVersion: POSTER_RECONSTRUCTION_PROMPT_VERSION,
   });
   return sha256Hex(new TextEncoder().encode(canonical));
 }

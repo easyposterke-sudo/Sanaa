@@ -85,12 +85,14 @@ interface PosterLeftSidebarProps {
   readOnly?: boolean;
   onOpen3DModal?: (mode: 'add') => void;
   onOpenAIWizard?: () => void;
+  onOpenTemplateCreator?: () => void;
 }
 
 export function PosterLeftSidebar({
   readOnly = false,
   onOpen3DModal,
   onOpenAIWizard,
+  onOpenTemplateCreator,
 }: PosterLeftSidebarProps) {
   const navigate = useNavigate();
   const addElement = usePosterStore((s) => s.addElement);
@@ -222,6 +224,23 @@ export function PosterLeftSidebar({
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {onOpenTemplateCreator && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">
+            Template Creator
+          </h3>
+          <p className="mt-1 text-[11px] leading-relaxed text-violet-700 dark:text-violet-400">
+            Turn a flat poster into an editable draft, polish it once, then save reusable fields.
+          </p>
+          <button
+            type="button"
+            onClick={guard(onOpenTemplateCreator)}
+            className="mt-3 w-full rounded-lg bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
+          >
+            Create template from poster
+          </button>
+        </div>
+      )}
       {onOpenAIWizard && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">

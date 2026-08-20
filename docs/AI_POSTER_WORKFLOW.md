@@ -1,5 +1,29 @@
 # AI reference-to-poster workflow
 
+## Template Creator
+
+The poster editor also includes **Template Creator**, a separate general-purpose
+reconstruction path for bootstrapping reusable templates from flattened PNG,
+JPEG, or WebP posters.
+
+1. The browser prepares a high-detail working reference and sends it to
+   `POST /api/ai/poster-reconstruction`.
+2. The Worker requests a strict reconstruction manifest containing editable
+   text, basic geometry, cropped image regions, approximate fonts, canvas
+   colors, z-order, confidence, and suggested field labels.
+3. Trusted browser code compiles the manifest into ordinary EasyPoster/Fabric
+   layers. No model-produced SVG, paths, URLs, or executable code is accepted.
+4. A low-opacity, locked copy of the reference is added as a tracing guide and
+   must be replaced or deleted before the template is published.
+5. The editor enters its existing template-labeling mode automatically. Likely
+   titles, dates, names, venues, logos, and portrait slots arrive pre-labeled;
+   the creator can correct the draft and then save it to the cloud library.
+
+This first version intentionally keeps complex photos, logos, and decorations
+as rectangular raster crops. It is an editable starting point, not lossless
+layer recovery from pixels. A future segmentation pass can replace those crops
+with alpha-masked regions without changing the reconstruction contract.
+
 EasyPoster now has a template-first reference workflow. The AI never generates
 the final bitmap or arbitrary editor code. It returns a small, validated design
 plan; trusted TypeScript recipes compile that plan into editable Fabric.js and

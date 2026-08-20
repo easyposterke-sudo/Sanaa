@@ -1,10 +1,11 @@
 interface TemplateAuthoringBannerProps {
   fieldCount: number;
+  notice?: string;
   onCancel: () => void;
   onSaveTemplate: () => void;
 }
 
-export function TemplateAuthoringBanner({ fieldCount, onCancel, onSaveTemplate }: TemplateAuthoringBannerProps) {
+export function TemplateAuthoringBanner({ fieldCount, notice, onCancel, onSaveTemplate }: TemplateAuthoringBannerProps) {
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/40">
       <div className="min-w-0 flex-1">
@@ -19,6 +20,11 @@ export function TemplateAuthoringBanner({ fieldCount, onCancel, onSaveTemplate }
             ? 'No fields yet — select a text or image layer to add one.'
             : `${fieldCount} field${fieldCount === 1 ? '' : 's'} defined.`}
         </p>
+        {notice && (
+          <p className="mt-1 text-xs text-amber-900/80 dark:text-amber-200/90">
+            <strong>AI draft:</strong> {notice}
+          </p>
+        )}
       </div>
       <div className="flex shrink-0 gap-2">
         <button

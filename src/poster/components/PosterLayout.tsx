@@ -13,7 +13,9 @@ import { TemplateAuthoringBanner } from './TemplateAuthoringBanner';
 import { TemplateElementLabelModal } from './TemplateElementLabelModal';
 import { SavePosterTemplateModal } from './SavePosterTemplateModal';
 import { AIPosterWizard } from './AIPosterWizard';
+import { TemplateCreatorWizard } from './TemplateCreatorWizard';
 import type { CompiledPosterPlan } from '../ai/compilePosterPlan';
+import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
 import { usePosterStore } from '../store/posterStore';
 import { useAuthStore } from '../../auth/authStore';
 import { getFabricCanvasRef } from '../canvasRef';
@@ -70,6 +72,7 @@ type TemplateAuthoringState = {
   category: PosterTemplateCategory;
   description?: string;
   fields: PosterTemplateFieldBinding[];
+  notice?: string;
   /** When true, save must use PATCH (update) not POST (create). Set when loading from gallery Edit. */
   editSource?: 'cloud';
 };
@@ -79,6 +82,7 @@ export function PosterLayout() {
   const navigate = useNavigate();
   const [threeTextModal, setThreeTextModal] = useState<'add' | { editId: string } | null>(null);
   const [aiWizardOpen, setAiWizardOpen] = useState(false);
+  const [templateCreatorOpen, setTemplateCreatorOpen] = useState(false);
   const [showCanvasSizeModal, setShowCanvasSizeModal] = useState(false);
   const [templateAuthoring, setTemplateAuthoring] = useState<TemplateAuthoringState | null>(null);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
@@ -739,6 +743,32 @@ export function PosterLayout() {
     [loadProject],
   );
 
+  const applyTemplateCreatorDraft = useCallback(
+    (compiled: CompiledPosterReconstruction) => {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('poster_edit_my_project_id');
+        sessionStorage.removeItem('poster_edit_my_project_updated_at');
+      }
+      lastCloudSaveRef.current = null;
+      coldAutosaveBaselineRef.current = null;
+      setLabelTargetId(null);
+      skipAutoOpenForIdRef.current = null;
+      setShowCanvasSizeModal(false);
+      loadProject(compiled.project, { fieldBindings: compiled.fieldBindings });
+      setTemplateAuthoring({
+        templateId: `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: compiled.suggestedTemplateName,
+        category: compiled.category,
+        description: compiled.description,
+        fields: compiled.fieldBindings,
+        notice: compiled.warnings.slice(0, 3).join(' '),
+      });
+      setCloudDirty(true);
+      if (!window.matchMedia('(min-width: 1024px)').matches) setLeftOpen(false);
+    },
+    [loadProject],
+  );
+
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden overscroll-none bg-zinc-100 dark:bg-zinc-950">
       {autosaveError && (
@@ -774,6 +804,7 @@ export function PosterLayout() {
       {templateAuthoring && (
         <TemplateAuthoringBanner
           fieldCount={templateAuthoring.fields.length}
+          notice={templateAuthoring.notice}
           onCancel={cancelTemplateAuthoring}
           onSaveTemplate={() => {
             if (labelTargetId) skipAutoOpenForIdRef.current = labelTargetId;
@@ -869,6 +900,7 @@ export function PosterLayout() {
             readOnly={readOnly}
             onOpen3DModal={(m) => setThreeTextModal(m)}
             onOpenAIWizard={() => setAiWizardOpen(true)}
+            onOpenTemplateCreator={() => setTemplateCreatorOpen(true)}
           />
         </aside>
 
@@ -911,6 +943,11 @@ export function PosterLayout() {
         open={aiWizardOpen}
         onClose={() => setAiWizardOpen(false)}
         onApply={(compiled) => applyAIPoster(compiled)}
+      />
+      <TemplateCreatorWizard
+        open={templateCreatorOpen}
+        onClose={() => setTemplateCreatorOpen(false)}
+        onApply={(compiled) => applyTemplateCreatorDraft(compiled)}
       />
     </div>
   );

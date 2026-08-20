@@ -9,6 +9,11 @@ export async function prepareReferencePoster(file: File): Promise<PreparedPoster
   return resizePosterImage(file, { maxLongEdge: 1024, quality: 0.78 });
 }
 
+/** Higher-detail working copy used both for AI reconstruction and as the editable tracing guide. */
+export async function prepareTemplateReference(file: File): Promise<PreparedPosterImage> {
+  return resizePosterImage(file, { maxLongEdge: 1536, quality: 0.84 });
+}
+
 export async function preparePortrait(file: File): Promise<PreparedPosterImage> {
   return resizePosterImage(file, { maxLongEdge: 1600, quality: 0.88 });
 }
