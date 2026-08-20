@@ -9,6 +9,8 @@ import type {
   Poster3DTextElement,
   PosterElement,
   PosterImageElement,
+  PosterPathElement,
+  PosterPathPoint,
   PosterProject,
   PosterShapeElement,
   PosterTextElement,
@@ -153,6 +155,8 @@ export async function compilePosterReconstruction(input: {
         mask: 'none',
         edge: 'none',
       } satisfies PosterImageElement;
+    } else if (item.kind === 'path') {
+      element = compilePathElement(item, box, canvasHeight, base, warnings);
     } else {
       element = compileShapeElement(item, box, canvasHeight, base);
     }
@@ -195,6 +199,73 @@ export async function compilePosterReconstruction(input: {
     category: plan.category,
     description: plan.summary,
     warnings: [...new Set(warnings)],
+  };
+}
+
+function compilePathElement(
+  item: ReconstructionElement,
+  box: PixelBox,
+  canvasHeight: number,
+  base: Pick<
+    PosterPathElement,
+    'id' | 'layerName' | 'left' | 'top' | 'scaleX' | 'scaleY' | 'angle' | 'opacity' | 'zIndex'
+  >,
+  warnings: string[],
+): PosterPathElement {
+  const minimumPoints = item.pathClosed ? 3 : 2;
+  const sourcePoints = item.pathPoints.length >= minimumPoints
+    ? item.pathPoints
+    : [
+        { x: 0, y: 0, smooth: false },
+        { x: 1, y: 0, smooth: false },
+        { x: 1, y: 1, smooth: false },
+        { x: 0, y: 1, smooth: false },
+      ];
+  if (item.pathPoints.length < minimumPoints) {
+    warnings.push(`“${item.label}” did not contain enough path anchors, so a rectangular path was used.`);
+  }
+
+  const strokeWidth = item.stroke ? item.strokeWidthRatio * canvasHeight : 0;
+  const inset = Math.min(strokeWidth / 2, box.width * 0.24, box.height * 0.24);
+  const anchors = sourcePoints.map((point) => ({
+    x: clamp(point.x * box.width, inset, Math.max(inset, box.width - inset)),
+    y: clamp(point.y * box.height, inset, Math.max(inset, box.height - inset)),
+    smooth: point.smooth,
+  }));
+  const pathPoints: PosterPathPoint[] = anchors.map((anchor, index) => {
+    if (!anchor.smooth) return { x: anchor.x, y: anchor.y };
+    const previous = anchors[index - 1] ?? (item.pathClosed ? anchors.at(-1) : undefined);
+    const next = anchors[index + 1] ?? (item.pathClosed ? anchors[0] : undefined);
+    if (!previous || !next) return { x: anchor.x, y: anchor.y };
+    const directionX = next.x - previous.x;
+    const directionY = next.y - previous.y;
+    const directionLength = Math.hypot(directionX, directionY);
+    if (directionLength < 0.001) return { x: anchor.x, y: anchor.y };
+    const incomingDistance = Math.hypot(anchor.x - previous.x, anchor.y - previous.y);
+    const outgoingDistance = Math.hypot(next.x - anchor.x, next.y - anchor.y);
+    const handleLength = Math.min(incomingDistance, outgoingDistance) * item.pathTension;
+    const unitX = directionX / directionLength;
+    const unitY = directionY / directionLength;
+    return {
+      x: anchor.x,
+      y: anchor.y,
+      inX: anchor.x - unitX * handleLength,
+      inY: anchor.y - unitY * handleLength,
+      outX: anchor.x + unitX * handleLength,
+      outY: anchor.y + unitY * handleLength,
+    };
+  });
+
+  return {
+    ...base,
+    layerName: `AI path: ${item.label}`,
+    type: 'path',
+    fill: item.fill ?? 'transparent',
+    stroke: item.stroke ?? undefined,
+    strokeWidth,
+    pathPoints,
+    closed: item.pathClosed,
+    fillRule: 'nonzero',
   };
 }
 

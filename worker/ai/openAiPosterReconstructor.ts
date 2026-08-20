@@ -148,7 +148,11 @@ Reconstruction rules:
 - The only supported dimensional treatment is two_layer_3d. For it, set fill to the visible front-face color (usually white or off-white) and extrusionColor to the dominant shell/side color sampled from the poster. Do not describe or invent any other 3D preset.
 - If a dimensional headline is arranged as separate lines or independently resizable blocks, emit separate text elements for those blocks (for example MEN'S and CONFERENCE) and give each its own exact box.
 - Use two_layer_3d only for prominent display headlines with no more than 80 characters per block. Keep supporting copy, names, dates, roles, and body text flat unless they unmistakably use the same deep extrusion.
-- Use rect, circle, ellipse, or line for simple geometry. Use image_region for portraits, photos, logos, semantic icons, and complex artwork.
+- Use rect, circle, ellipse, or line for simple geometry. Use path for a single-color irregular panel, wave, swoosh, ribbon, or curved boundary that can be represented by at most 8 anchors. Use image_region for portraits, photos, logos, semantic icons, and complex artwork.
+- A thick outlined irregular panel is one closed path with both fill and stroke, not a filled shape plus a duplicate border curve. Put the visible outline thickness in strokeWidthRatio.
+- pathPoints are normalized 0..1 inside the element box and follow the visible boundary in order. Use 3 to 8 anchors. Mark ordinary corners smooth false. Mark an anchor smooth true only where the boundary flows continuously through it; EasyPoster will generate symmetric Bezier handles automatically using pathTension.
+- Use pathClosed true for panels and filled shapes. Set the path box to the complete visible outside bounds, including its stroke. A path that touches a poster edge should have its box touch that edge; EasyPoster compensates for half of the centered stroke.
+- Prefer one or two meaningful smooth anchors over many approximate points. Use pathTension between 0.18 and 0.38; 0.28 is a safe default. The path fill and stroke must match the visible colors, and zIndex must place background paths behind portraits, badges, and text.
 - Do not create an image_region for the complete flattened poster. A contained contextual photograph or texture behind other elements is a background_photo and may cover a large section of the poster.
 - Distinguish image roles carefully: person is a foreground portrait; background_photo is a contextual photograph or texture behind text/shapes; photo is another self-contained photograph; icon is only calendar, clock, location, phone, or web; logo is a brand mark; decoration is complex non-semantic artwork.
 - Inspect every image_region boundary for contamination. imageHasOverlays is true when its rectangle necessarily includes text, badges, stripes, other people, or artwork that is not part of the underlying image.
@@ -163,7 +167,7 @@ Reconstruction rules:
 - For likely replaceable template fields, supply a unique snake_case suggestedFieldKey and a readable suggestedFieldLabel. Use null and an empty label for decorative/non-replaceable elements.
 - Typical fields include organization, event_title, theme, date, time, venue, contact, person_1_name, person_1_role, person_1_photo, logo, and similar semantic variants.
 - imageRole must be none except for image_region elements.
-- For flat text and non-text elements, set textEffect to flat and extrusionColor to null. For other properties that do not apply, use safe neutral values: empty text, arial, 400, normal, left, zero stroke and radius, imageRole none, imageHasOverlays false, replacementRecommended false, empty replacementReason and imageSearchQuery, null imageDominantColor, and iconName none.
+- For flat text and non-text elements, set textEffect to flat and extrusionColor to null. For other properties that do not apply, use safe neutral values: empty text, arial, 400, normal, left, zero stroke and radius, empty pathPoints, pathClosed false, pathTension 0.28, imageRole none, imageHasOverlays false, replacementRecommended false, empty replacementReason and imageSearchQuery, null imageDominantColor, and iconName none.
 - Prefer 8 to 30 useful layers. Never exceed 45. Avoid tiny noise or decorative specks.
 - Put uncertainty and features that require manual correction in warnings.`;
 

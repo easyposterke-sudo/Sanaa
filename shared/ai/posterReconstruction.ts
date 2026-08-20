@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 3 as const;
-export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v3' as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 4 as const;
+export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v4' as const;
 
 export const RECONSTRUCTION_FONT_TOKENS = [
   'arial',
@@ -48,10 +48,18 @@ export const ReconstructionBoxSchema = z
   })
   .strict();
 
+export const ReconstructionPathPointSchema = z
+  .object({
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    smooth: z.boolean(),
+  })
+  .strict();
+
 export const ReconstructionElementSchema = z
   .object({
     key: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
-    kind: z.enum(['text', 'rect', 'circle', 'ellipse', 'line', 'image_region']),
+    kind: z.enum(['text', 'rect', 'circle', 'ellipse', 'line', 'path', 'image_region']),
     label: z.string().trim().min(1).max(100),
     box: ReconstructionBoxSchema,
     angle: z.number().min(-180).max(180),
@@ -71,6 +79,9 @@ export const ReconstructionElementSchema = z
     textEffect: z.enum(['flat', 'two_layer_3d']),
     extrusionColor: NullableHexColorSchema,
     cornerRadiusRatio: z.number().min(0).max(0.5),
+    pathPoints: z.array(ReconstructionPathPointSchema).max(8),
+    pathClosed: z.boolean(),
+    pathTension: z.number().min(0.1).max(0.45),
     imageRole: z.enum([
       'none',
       'person',
@@ -161,6 +172,12 @@ const boxJsonSchema = strictObject({
   height: { type: 'number', minimum: 0.005, maximum: 1 },
 });
 
+const pathPointJsonSchema = strictObject({
+  x: { type: 'number', minimum: 0, maximum: 1 },
+  y: { type: 'number', minimum: 0, maximum: 1 },
+  smooth: { type: 'boolean' },
+});
+
 const hexJsonSchema = { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' };
 const fieldKeyJsonSchema = {
   type: 'string',
@@ -201,7 +218,7 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         key: fieldKeyJsonSchema,
         kind: {
           type: 'string',
-          enum: ['text', 'rect', 'circle', 'ellipse', 'line', 'image_region'],
+          enum: ['text', 'rect', 'circle', 'ellipse', 'line', 'path', 'image_region'],
         },
         label: { type: 'string', minLength: 1, maxLength: 100 },
         box: boxJsonSchema,
@@ -222,6 +239,13 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         textEffect: { type: 'string', enum: ['flat', 'two_layer_3d'] },
         extrusionColor: nullable(hexJsonSchema),
         cornerRadiusRatio: { type: 'number', minimum: 0, maximum: 0.5 },
+        pathPoints: {
+          type: 'array',
+          maxItems: 8,
+          items: pathPointJsonSchema,
+        },
+        pathClosed: { type: 'boolean' },
+        pathTension: { type: 'number', minimum: 0.1, maximum: 0.45 },
         imageRole: {
           type: 'string',
           enum: [

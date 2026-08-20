@@ -31,6 +31,9 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     textEffect: 'flat',
     extrusionColor: null,
     cornerRadiusRatio: 0,
+    pathPoints: [],
+    pathClosed: false,
+    pathTension: 0.28,
     imageRole: 'none',
     imageHasOverlays: false,
     replacementRecommended: false,
@@ -251,6 +254,61 @@ describe('compilePosterReconstruction', () => {
     expect(icon).toMatchObject({ type: 'image', layerName: 'AI icon: Location icon' });
     if (icon?.type !== 'image') throw new Error('Expected an icon image.');
     expect(decodeURIComponent(icon.src)).toContain('stroke="#176143"');
+  });
+
+  it('compiles one filled, outlined irregular panel with a smooth editable anchor', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'curved_photo_panel',
+          kind: 'path',
+          label: 'Curved photo boundary',
+          box: { x: 0, y: 0.4, width: 1, height: 0.4 },
+          fill: '#18b6a5',
+          stroke: '#ffc21c',
+          strokeWidthRatio: 0.02,
+          pathClosed: true,
+          pathTension: 0.28,
+          pathPoints: [
+            { x: 0, y: 1, smooth: false },
+            { x: 0, y: 0.52, smooth: false },
+            { x: 0.54, y: 0.42, smooth: true },
+            { x: 1, y: 0, smooth: false },
+            { x: 1, y: 1, smooth: false },
+          ],
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const path = compiled.project.elements[0];
+    expect(path).toMatchObject({
+      type: 'path',
+      layerName: 'AI path: Curved photo boundary',
+      left: 0,
+      top: 600,
+      fill: '#18b6a5',
+      stroke: '#ffc21c',
+      strokeWidth: 30,
+      closed: true,
+    });
+    if (path?.type !== 'path') throw new Error('Expected an editable path element.');
+    expect(path.pathPoints).toHaveLength(5);
+    expect(path.pathPoints[0]).toEqual({ x: 15, y: 585 });
+    expect(path.pathPoints[2]).toMatchObject({
+      x: 540,
+      y: 252,
+      inX: expect.any(Number),
+      inY: expect.any(Number),
+      outX: expect.any(Number),
+      outY: expect.any(Number),
+    });
+    expect(path.pathPoints[3]).toEqual({ x: 985, y: 15 });
   });
 });
 
