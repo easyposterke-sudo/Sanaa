@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import type { EditorStatePatch } from '../../core/types';
 import { MAX_TEXT_LAYERS, isShapeLayer } from '../../core/types';
 import { getCustomFont } from '../../core/font/customFontCache';
+import { BUILT_IN_3D_FONT_OPTIONS } from '../../core/font/builtIn3DFonts';
 import { useEditorStore } from '../../store/editorStore';
 import { PRESETS } from '../../data/presets';
 import {
@@ -10,13 +11,6 @@ import {
   compileTwoLayer3DTextState,
 } from '../../poster/ai/twoLayer3DTextSkill';
 import { ThemeToggle } from '../ThemeToggle';
-
-const LEARNED_STYLE_FONTS = [
-  { label: 'Times New Roman', value: 'Times New Roman, serif' },
-  { label: 'Arial Black', value: 'Arial Black, sans-serif' },
-  { label: 'Verdana', value: 'Verdana, sans-serif' },
-  { label: 'Courier New', value: 'Courier New, monospace' },
-] as const;
 
 export const LeftSidebar = memo(function LeftSidebar({
   force3dLayerUI = false,
@@ -196,9 +190,9 @@ export const LeftSidebar = memo(function LeftSidebar({
                 onChange={(event) => setLearnedStyleFont(event.target.value)}
                 className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-2.5 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-zinc-700 dark:bg-zinc-800"
               >
-                {LEARNED_STYLE_FONTS.map((font) => (
+                {BUILT_IN_3D_FONT_OPTIONS.map((font) => (
                   <option key={font.value} value={font.value}>
-                    {font.label}
+                    {font.name}
                   </option>
                 ))}
               </select>

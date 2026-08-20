@@ -1,6 +1,16 @@
-import type { PosterElement, PosterImageElement, PosterProject, PosterTextElement } from './types';
+import type {
+  Poster3DTextElement,
+  PosterElement,
+  PosterImageElement,
+  PosterProject,
+  PosterTextElement,
+} from './types';
 import type { PosterTemplateDefinition, PosterTemplateFieldBinding } from './templateTypes';
 import { generateElementId } from './utils/generateElementId';
+import {
+  renderTwoLayer3DTextPreview,
+  replaceTwoLayer3DTextContent,
+} from './ai/twoLayer3DTextSkill';
 
 function getImageDimensions(src: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
@@ -80,26 +90,78 @@ export function applyFieldBindings(
 
   return elements.map((el) => {
     const bs = byNewId.get(el.id);
-    if (!bs?.length || el.type !== 'text') return el;
-    const t = el as PosterTextElement;
-    const original = t.text;
-    let text = original;
-    for (const b of bs) {
-      const v = data[b.key] != null ? String(data[b.key]) : '';
-      const token = `{{${b.key}}}`;
-      if (original.includes(token)) {
-        text = text.split(token).join(v);
-      }
+    if (!bs?.length) return el;
+    if (el.type === 'text') {
+      const t = el as PosterTextElement;
+      return { ...t, text: applyBoundText(t.text, bs, data) };
     }
-    if (bs.length === 1) {
-      const b = bs[0];
-      const v = data[b.key] != null ? String(data[b.key]) : '';
-      if (!original.includes(`{{${b.key}}}`) && v !== '') {
-        text = v;
-      }
+    if (el.type === '3d-text') {
+      return applyTwoLayer3DTextBinding(el as Poster3DTextElement, bs, data);
     }
-    return { ...t, text };
+    return el;
   });
+}
+
+function applyBoundText(
+  original: string,
+  bindings: PosterTemplateFieldBinding[],
+  data: Record<string, string>,
+): string {
+  let text = original;
+  for (const binding of bindings) {
+    const value = data[binding.key] != null ? String(data[binding.key]) : '';
+    const token = `{{${binding.key}}}`;
+    if (original.includes(token)) text = text.split(token).join(value);
+  }
+  if (bindings.length === 1) {
+    const binding = bindings[0];
+    const value = data[binding.key] != null ? String(data[binding.key]) : '';
+    if (!original.includes(`{{${binding.key}}}`) && value !== '') text = value;
+  }
+  return text;
+}
+
+function applyTwoLayer3DTextBinding(
+  element: Poster3DTextElement,
+  bindings: PosterTemplateFieldBinding[],
+  data: Record<string, string>,
+): Poster3DTextElement {
+  const original = element.config.text?.content ?? '';
+  const content = applyBoundText(original, bindings, data).trim();
+  if (!content || content === original) return element;
+
+  const config = replaceTwoLayer3DTextContent(element.config, content);
+  if (!config) return element;
+  try {
+    const svg = renderTwoLayer3DTextPreview(config);
+    const size = readSvgSize(svg);
+    const displayedWidth = element.previewWidth
+      ? element.previewWidth * element.scaleX
+      : undefined;
+    const displayedHeight = element.previewHeight
+      ? element.previewHeight * element.scaleY
+      : undefined;
+    return {
+      ...element,
+      image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+      config,
+      previewWidth: size.width,
+      previewHeight: size.height,
+      scaleX: displayedWidth ? displayedWidth / size.width : element.scaleX,
+      scaleY: displayedHeight ? displayedHeight / size.height : element.scaleY,
+    };
+  } catch {
+    return element;
+  }
+}
+
+function readSvgSize(svg: string): { width: number; height: number } {
+  const width = Number(svg.match(/<svg[^>]*\bwidth="([0-9.]+)"/)?.[1]);
+  const height = Number(svg.match(/<svg[^>]*\bheight="([0-9.]+)"/)?.[1]);
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+    throw new Error('Invalid 3D preview dimensions.');
+  }
+  return { width, height };
 }
 
 /**

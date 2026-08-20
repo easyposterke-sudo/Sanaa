@@ -26,6 +26,7 @@ import {
   reencodeDataUrlImage,
 } from '../../recording/recordingEvidence';
 import { useDesignRecorderStore } from '../../recording/recordingStore';
+import { BUILT_IN_3D_FONT_OPTIONS } from '../../core/font/builtIn3DFonts';
 
 const BUILT_IN_HDR_PRESETS = [
   { id: 'silver', label: 'Silver studio', path: '/hdr/silver.hdr' },
@@ -56,30 +57,6 @@ export interface CloudTextureEntry {
   normalUrl?: string | null;
   metalnessUrl?: string | null;
 }
-
-const FONT_OPTIONS = [
-  { name: 'Arial Black', value: 'Arial Black, sans-serif' },
-  { name: 'Impact', value: 'Impact, sans-serif' },
-  { name: 'Georgia', value: 'Georgia, serif' },
-  { name: 'Times New Roman', value: 'Times New Roman, serif' },
-  { name: 'Courier New', value: 'Courier New, monospace' },
-  { name: 'Verdana', value: 'Verdana, sans-serif' },
-  { name: 'Trebuchet MS', value: '"Trebuchet MS", sans-serif' },
-  { name: 'Palatino', value: 'Palatino Linotype, Book Antiqua, serif' },
-  { name: 'Century Gothic', value: 'Century Gothic, sans-serif' },
-  { name: 'Franklin Gothic', value: 'Franklin Gothic Medium, sans-serif' },
-  { name: 'Brush Script MT', value: 'Brush Script MT, cursive' },
-  { name: 'Lucida Handwriting', value: 'Lucida Handwriting, cursive' },
-  { name: 'Segoe Script', value: 'Segoe Script, cursive' },
-  { name: 'Bradley Hand', value: 'Bradley Hand, cursive' },
-  { name: 'Great Vibes', value: '"Great Vibes", cursive' },
-  { name: 'Dancing Script', value: '"Dancing Script", cursive' },
-  { name: 'Allura', value: '"Allura", cursive' },
-  { name: 'Sacramento', value: '"Sacramento", cursive' },
-  { name: 'Satisfy', value: '"Satisfy", cursive' },
-  { name: 'Pacifico', value: '"Pacifico", cursive' },
-  { name: 'Tangerine', value: '"Tangerine", cursive' },
-];
 
 const Slider = memo(function Slider({
   label,
@@ -1026,7 +1003,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                     onChange={(e) => setText({ fontFamily: e.target.value })}
                     className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
                   >
-                    {FONT_OPTIONS.map((f) => (
+                    {BUILT_IN_3D_FONT_OPTIONS.map((f) => (
                       <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
                         {f.name}
                       </option>

@@ -6,12 +6,19 @@ import {
 import type { PosterTemplateCategory, PosterTemplateFieldBinding } from '../templateTypes';
 import type {
   CanvasBackground,
+  Poster3DTextElement,
   PosterElement,
   PosterImageElement,
   PosterProject,
   PosterShapeElement,
   PosterTextElement,
 } from '../types';
+import {
+  TWO_LAYER_3D_TEXT_RECIPE_ID,
+  compileTwoLayer3DTextState,
+  fitTwoLayer3DTextPlacement,
+  renderTwoLayer3DTextPreview,
+} from './twoLayer3DTextSkill';
 
 type PixelBox = { left: number; top: number; width: number; height: number };
 
@@ -26,20 +33,34 @@ export interface CompiledPosterReconstruction {
 
 const FONT_STACKS: Record<PosterReconstructionPlan['elements'][number]['fontFamily'], string> = {
   arial: 'Arial, Helvetica, sans-serif',
-  arial_black: 'Arial Black, Arial, sans-serif',
-  bebas_neue: 'Bebas Neue, Impact, sans-serif',
+  arial_black: 'Arial Black, sans-serif',
+  allura: '"Allura", cursive',
+  bebas_neue: '"Bebas Neue", sans-serif',
+  courier_new: 'Courier New, Courier, monospace',
+  crimson_pro: '"Crimson Pro", Georgia, serif',
+  dancing_script: '"Dancing Script", cursive',
   georgia: 'Georgia, serif',
-  great_vibes: 'Great Vibes, cursive',
-  impact: 'Impact, Arial Black, sans-serif',
-  inter: 'Inter, Arial, sans-serif',
-  montserrat: 'Montserrat, Arial, sans-serif',
-  open_sans: 'Open Sans, Arial, sans-serif',
-  oswald: 'Oswald, Arial, sans-serif',
-  pacifico: 'Pacifico, cursive',
-  playfair_display: 'Playfair Display, Georgia, serif',
-  poppins: 'Poppins, Arial, sans-serif',
-  roboto: 'Roboto, Arial, sans-serif',
-  times_new_roman: 'Times New Roman, Times, serif',
+  great_vibes: '"Great Vibes", cursive',
+  impact: 'Impact, sans-serif',
+  inter: '"Inter", sans-serif',
+  lato: '"Lato", Arial, sans-serif',
+  merriweather: '"Merriweather", Georgia, serif',
+  montserrat: '"Montserrat", sans-serif',
+  nunito: '"Nunito", Arial, sans-serif',
+  open_sans: '"Open Sans", sans-serif',
+  oswald: '"Oswald", sans-serif',
+  pacifico: '"Pacifico", cursive',
+  playfair_display: '"Playfair Display", serif',
+  poppins: '"Poppins", sans-serif',
+  raleway: '"Raleway", Arial, sans-serif',
+  roboto: '"Roboto", sans-serif',
+  sacramento: '"Sacramento", cursive',
+  satisfy: '"Satisfy", cursive',
+  source_sans_3: '"Source Sans 3", Arial, sans-serif',
+  tangerine: '"Tangerine", cursive',
+  times_new_roman: 'Times New Roman, serif',
+  trebuchet_ms: '"Trebuchet MS", sans-serif',
+  verdana: 'Verdana, sans-serif',
 };
 
 export async function compilePosterReconstruction(input: {
@@ -96,7 +117,15 @@ export async function compilePosterReconstruction(input: {
 
     let element: PosterElement;
     if (item.kind === 'text') {
-      element = compileTextElement(item, box, canvasHeight, base);
+      const displayText = (item.text || item.label).trim();
+      if (item.textEffect === 'two_layer_3d' && displayText.length <= 80) {
+        element = compileThreeDTextElement(item, box, base);
+      } else {
+        element = compileTextElement(item, box, canvasHeight, base);
+        if (item.textEffect === 'two_layer_3d') {
+          warnings.push(`“${item.label}” was kept flat because the two-layer 3D preset accepts at most 80 characters per block.`);
+        }
+      }
     } else if (item.kind === 'image_region') {
       const crop = await cropReferenceRegion(input.reference, box);
       element = {
@@ -117,7 +146,7 @@ export async function compilePosterReconstruction(input: {
     if (
       fieldKey &&
       item.suggestedFieldLabel.trim() &&
-      (element.type === 'text' || element.type === 'image') &&
+      (element.type === 'text' || element.type === '3d-text' || element.type === 'image') &&
       !usedFieldKeys.has(fieldKey)
     ) {
       usedFieldKeys.add(fieldKey);
@@ -150,6 +179,47 @@ export async function compilePosterReconstruction(input: {
     category: plan.category,
     description: plan.summary,
     warnings: [...new Set(warnings)],
+  };
+}
+
+function compileThreeDTextElement(
+  item: ReconstructionElement,
+  box: PixelBox,
+  base: Pick<Poster3DTextElement, 'id' | 'layerName' | 'zIndex'>,
+): Poster3DTextElement {
+  const text = (item.text || item.label).trim();
+  const fontFamily = FONT_STACKS[item.fontFamily];
+  const state = compileTwoLayer3DTextState({
+    recipeId: TWO_LAYER_3D_TEXT_RECIPE_ID,
+    text,
+    fontFamily,
+    fontSize: 120,
+    fontWeight: item.fontWeight,
+    letterSpacing: clamp((item.charSpacing / 1000) * 120, -20, 48),
+    faceColor: item.fill ?? '#ffffff',
+    extrusionColor: item.extrusionColor ?? item.stroke ?? '#000000',
+    environmentId: 'golden',
+  });
+  const svg = renderTwoLayer3DTextPreview(state);
+  const preview = readSvgSize(svg);
+  const placement = fitTwoLayer3DTextPlacement({
+    sourceWidth: preview.width,
+    sourceHeight: preview.height,
+    box,
+    fit: 'contain',
+    angle: item.angle,
+    opacity: item.opacity,
+  });
+
+  return {
+    ...base,
+    type: '3d-text',
+    image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    config: state,
+    previewWidth: preview.width,
+    previewHeight: preview.height,
+    ...placement,
+    shadow: { color: '#00000066', blur: 3, offsetX: 4, offsetY: 5 },
   };
 }
 
@@ -287,6 +357,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     image.onerror = () => reject(new Error('The reference image could not be decoded.'));
     image.src = src;
   });
+}
+
+function readSvgSize(svg: string): { width: number; height: number } {
+  const width = Number(svg.match(/<svg[^>]*\bwidth="([0-9.]+)"/)?.[1]);
+  const height = Number(svg.match(/<svg[^>]*\bheight="([0-9.]+)"/)?.[1]);
+  if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+    throw new Error('The generated two-layer 3D preview has invalid dimensions.');
+  }
+  return { width, height };
 }
 
 function uniqueId(preferred: string, used: Set<string>): string {

@@ -23,7 +23,7 @@ export interface PosterTemplateFieldBinding {
   key: string;
   /** Human label for forms and AI context. */
   label: string;
-  /** Element id in `project.elements` when the template was saved (`text` or `image`). */
+  /** Element id in `project.elements` when the template was saved (`text`, `3d-text`, or `image`). */
   sourceElementId: string;
   /** Default `text` for older templates. */
   kind?: PosterTemplateFieldKind;

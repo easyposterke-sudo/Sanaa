@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  POSTER_RECONSTRUCTION_SCHEMA_VERSION,
   PosterReconstructionPlanSchema,
   createFallbackReconstructionPlan,
   type PosterReconstructionPlan,
@@ -27,6 +28,8 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     textAlign: 'left',
     charSpacing: 0,
     lineHeight: 1.16,
+    textEffect: 'flat',
+    extrusionColor: null,
     cornerRadiusRatio: 0,
     imageRole: 'none',
     suggestedFieldKey: null,
@@ -38,7 +41,7 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
 
 function plan(elements: ReconstructionElement[]): PosterReconstructionPlan {
   return PosterReconstructionPlanSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION,
     suggestedTemplateName: 'Two person conference',
     category: 'conference',
     summary: 'Centered conference layout with a dark green background.',
@@ -131,6 +134,51 @@ describe('compilePosterReconstruction', () => {
     });
     expect(compiled.warnings.join(' ')).toContain('reference guide');
     expect(compiled.warnings.join(' ')).toContain('No editable layers');
+  });
+
+  it('turns clearly dimensional headline blocks into editable two-layer 3D elements', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'mens_title',
+          kind: 'text',
+          label: "MEN'S headline",
+          box: { x: 0.08, y: 0.1, width: 0.84, height: 0.18 },
+          text: "MEN'S",
+          fontFamily: 'bebas_neue',
+          fontWeight: '900',
+          textEffect: 'two_layer_3d',
+          fill: '#f4efe3',
+          extrusionColor: '#176143',
+          suggestedFieldKey: 'event_title',
+          suggestedFieldLabel: 'Event title',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const title = compiled.project.elements[0];
+    expect(title).toMatchObject({
+      type: '3d-text',
+      layerName: "AI draft: MEN'S headline",
+      previewWidth: expect.any(Number),
+      previewHeight: expect.any(Number),
+    });
+    if (title?.type !== '3d-text') throw new Error('Expected a 3D text element.');
+    expect(title.image).toContain('data:image/svg+xml');
+    expect(title.config.text?.content).toBe("MEN'S");
+    expect(title.config.textLayers).toHaveLength(2);
+    expect(title.config.textLayers?.map((layer) => layer.extrusionColor)).toContain('#176143');
+    expect(title.config.textLayers?.map((layer) => layer.frontColor)).toContain('#f4efe3');
+    expect(compiled.fieldBindings[0]).toMatchObject({
+      sourceElementId: 'reconstruction_mens_title',
+      kind: 'text',
+    });
   });
 });
 

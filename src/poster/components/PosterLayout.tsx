@@ -27,7 +27,7 @@ import { computePosterProjectPatch, patchIsEmpty } from '../utils/projectPatch';
 import { projectHasBlobImageUrls, warnIfPosterHasBlobRefs } from '../userTemplatesStorage';
 import { removePathAnchorAt } from '../path/penToolMath';
 import type { PosterTemplateCategory, PosterTemplateFieldBinding } from '../templateTypes';
-import type { PosterElement, PosterImageElement, PosterTextElement, PosterPathElement, PosterProject } from '../types';
+import type { Poster3DTextElement, PosterElement, PosterImageElement, PosterTextElement, PosterPathElement, PosterProject } from '../types';
 
 /** Set on full unload from `#/poster`; same tab refresh keeps sessionStorage → restore cloud/local autosave. New tab has no flag → cold start. */
 const POSTER_RESTORE_AUTOSAVE_AFTER_RELOAD_KEY = 'poster_restore_autosave_after_reload';
@@ -491,7 +491,7 @@ export function PosterLayout() {
     if (skipAutoOpenForIdRef.current === id) return;
 
     const el = elements.find((e) => e.id === id);
-    if (!el || (el.type !== 'text' && el.type !== 'image')) return;
+    if (!el || (el.type !== 'text' && el.type !== '3d-text' && el.type !== 'image')) return;
 
     setLabelTargetId(id);
   }, [templateAuthoring, selectedIds, elements, labelTargetId]);
@@ -502,10 +502,11 @@ export function PosterLayout() {
     templateAuthoring &&
       labelTargetId &&
       labelTargetEl &&
-      (labelTargetEl.type === 'text' || labelTargetEl.type === 'image')
+      (labelTargetEl.type === 'text' || labelTargetEl.type === '3d-text' || labelTargetEl.type === 'image')
   );
   const labelFieldKind = labelTargetEl?.type === 'image' ? 'image' : 'text';
   const labelTextEl = labelModalOpen && labelTargetEl?.type === 'text' ? (labelTargetEl as PosterTextElement) : null;
+  const labelThreeDTextEl = labelModalOpen && labelTargetEl?.type === '3d-text' ? (labelTargetEl as Poster3DTextElement) : null;
   const labelImageEl = labelModalOpen && labelTargetEl?.type === 'image' ? (labelTargetEl as PosterImageElement) : null;
 
   // Clipboard & keyboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+D, Ctrl+Z, Ctrl+Y, Ctrl+A, Delete)
@@ -833,12 +834,12 @@ export function PosterLayout() {
           isCloudEdit={templateAuthoring.editSource === 'cloud'}
         />
       )}
-      {labelModalOpen && labelTargetId && templateAuthoring && (labelTextEl || labelImageEl) && (
+      {labelModalOpen && labelTargetId && templateAuthoring && (labelTextEl || labelThreeDTextEl || labelImageEl) && (
         <TemplateElementLabelModal
           open
           elementId={labelTargetId}
           fieldKind={labelFieldKind}
-          textPreview={labelTextEl?.text ?? ''}
+          textPreview={labelTextEl?.text ?? labelThreeDTextEl?.config.text?.content ?? ''}
           imageSrcPreview={labelImageEl?.src ?? ''}
           existing={existingBindingForLabel}
           reservedKeys={reservedKeysForLabel}

@@ -1,24 +1,38 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 1 as const;
-export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v1' as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 2 as const;
+export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v2' as const;
 
 export const RECONSTRUCTION_FONT_TOKENS = [
   'arial',
   'arial_black',
+  'allura',
   'bebas_neue',
+  'courier_new',
+  'crimson_pro',
+  'dancing_script',
   'georgia',
   'great_vibes',
   'impact',
   'inter',
+  'lato',
+  'merriweather',
   'montserrat',
+  'nunito',
   'open_sans',
   'oswald',
   'pacifico',
   'playfair_display',
   'poppins',
+  'raleway',
   'roboto',
+  'sacramento',
+  'satisfy',
+  'source_sans_3',
+  'tangerine',
   'times_new_roman',
+  'trebuchet_ms',
+  'verdana',
 ] as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
@@ -54,6 +68,8 @@ export const ReconstructionElementSchema = z
     textAlign: z.enum(['left', 'center', 'right']),
     charSpacing: z.number().min(-250).max(1200),
     lineHeight: z.number().min(0.7).max(3),
+    textEffect: z.enum(['flat', 'two_layer_3d']),
+    extrusionColor: NullableHexColorSchema,
     cornerRadiusRatio: z.number().min(0).max(0.5),
     imageRole: z.enum(['none', 'person', 'logo', 'photo', 'decoration']),
     suggestedFieldKey: FieldKeySchema,
@@ -189,6 +205,8 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         textAlign: { type: 'string', enum: ['left', 'center', 'right'] },
         charSpacing: { type: 'number', minimum: -250, maximum: 1200 },
         lineHeight: { type: 'number', minimum: 0.7, maximum: 3 },
+        textEffect: { type: 'string', enum: ['flat', 'two_layer_3d'] },
+        extrusionColor: nullable(hexJsonSchema),
         cornerRadiusRatio: { type: 'number', minimum: 0, maximum: 0.5 },
         imageRole: {
           type: 'string',

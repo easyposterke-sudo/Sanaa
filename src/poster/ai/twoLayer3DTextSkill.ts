@@ -446,6 +446,35 @@ export function renderTwoLayer3DTextPreview(state: EditorState): string {
 </svg>`;
 }
 
+/**
+ * Replace the wording in a saved two-layer recipe while preserving its colors,
+ * materials, camera, and transform. Returns null for unrelated 3D scenes.
+ */
+export function replaceTwoLayer3DTextContent(
+  state: Partial<EditorState>,
+  content: string,
+): EditorState | null {
+  const layers = state.textLayers;
+  const rear = layers?.find(
+    (layer): layer is TextLayer3D => layer.id === REAR_LAYER_ID && !isShapeLayer(layer),
+  );
+  const front = layers?.find(
+    (layer): layer is TextLayer3D => layer.id === FRONT_LAYER_ID && !isShapeLayer(layer),
+  );
+  if (!state.text || !layers || !rear || !front) return null;
+
+  const text = { ...front.text, content };
+  return {
+    ...(state as EditorState),
+    text,
+    textLayers: layers.map((layer) =>
+      layer.id === REAR_LAYER_ID || layer.id === FRONT_LAYER_ID
+        ? { ...layer, text }
+        : layer,
+    ),
+  };
+}
+
 /** Fit a rendered transparent 3D image into a poster box without rasterizing it again. */
 export function fitTwoLayer3DTextPlacement(
   input: TwoLayer3DTextPlacementInput,

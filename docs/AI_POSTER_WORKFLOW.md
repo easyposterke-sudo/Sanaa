@@ -10,7 +10,8 @@ JPEG, or WebP posters.
    `POST /api/ai/poster-reconstruction`.
 2. The Worker requests a strict reconstruction manifest containing editable
    text, basic geometry, cropped image regions, approximate fonts, canvas
-   colors, z-order, confidence, and suggested field labels.
+   colors, z-order, confidence, suggested field labels, and whether a prominent
+   headline clearly uses the approved two-layer 3D treatment.
 3. Trusted browser code compiles the manifest into ordinary EasyPoster/Fabric
    layers. No model-produced SVG, paths, URLs, or executable code is accepted.
 4. A low-opacity, locked copy of the reference is added as a tracing guide and
@@ -18,6 +19,14 @@ JPEG, or WebP posters.
 5. The editor enters its existing template-labeling mode automatically. Likely
    titles, dates, names, venues, logos, and portrait slots arrive pre-labeled;
    the creator can correct the draft and then save it to the cloud library.
+
+Clearly dimensional headline blocks are compiled with
+`two-layer-face-shell-v1`: a light front face and a poster-matched colored rear
+shell. Separate headline lines are requested as separate 3D poster elements so
+they can be resized independently on the poster canvas. The elements keep the
+full 3D configuration for editing, and their template text bindings regenerate
+the preview without changing the poster-sized bounding box. Outlines, glows,
+and ordinary drop shadows remain flat text.
 
 This first version intentionally keeps complex photos, logos, and decorations
 as rectangular raster crops. It is an editable starting point, not lossless
@@ -160,7 +169,9 @@ color, environment, internal scene transform, and poster placement.
 
 The 3D editor exposes the recipe in **Learned 3D style** for manual testing.
 Applying it rebuilds both meshes atomically so they cannot begin with different
-text or fonts. The AI planner can select the same versioned recipe when its
+text or fonts. The preset and general 3D editor share an expanded built-in font
+menu, while uploaded custom TTF/OTF fonts remain supported. The AI planner can
+select the same versioned recipe when its
 reference analysis finds a raised face over a contrasting deep shell. AI-created
 poster layers use a lightweight two-layer SVG preview immediately and retain the
 full WebGL configuration for editing and high-quality re-export.
@@ -171,7 +182,7 @@ shell colors, and accepted placement while keeping the locked construction
 values unchanged. A recipe version must be bumped before changing a locked
 geometry, material, lighting, camera, or layer-order value.
 
-The current seed is intentionally bounded to 80 characters and 48â€“160 font
+The current seed is intentionally bounded to 80 characters and 48–160 font
 size because its camera/framing came from the supplied recording. Add accepted
 short, long, narrow-font, and wide-font examples before widening that envelope
 or adding automatic geometry-based camera fitting.

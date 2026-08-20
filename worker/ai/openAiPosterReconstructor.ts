@@ -143,6 +143,10 @@ Reconstruction rules:
 - Use normalized 0..1 boxes relative to the complete poster.
 - Create one element for every visually important text block, basic shape, logo, photograph, portrait, or decoration that can be identified confidently.
 - Use text for editable wording. Preserve capitalization, punctuation, and explicit line breaks as closely as possible.
+- Classify a text block as textEffect two_layer_3d only when the reference clearly shows a raised front face plus a deep offset/extruded shell. A plain outline, glow, drop shadow, duplicate shadow, or bold font alone is flat text.
+- The only supported dimensional treatment is two_layer_3d. For it, set fill to the visible front-face color (usually white or off-white) and extrusionColor to the dominant shell/side color sampled from the poster. Do not describe or invent any other 3D preset.
+- If a dimensional headline is arranged as separate lines or independently resizable blocks, emit separate text elements for those blocks (for example MEN'S and CONFERENCE) and give each its own exact box.
+- Use two_layer_3d only for prominent display headlines with no more than 80 characters per block. Keep supporting copy, names, dates, roles, and body text flat unless they unmistakably use the same deep extrusion.
 - Use rect, circle, ellipse, or line for simple geometry. Use image_region for portraits, photos, logos, and complex artwork.
 - Do not create an image_region for the complete poster or its background.
 - Approximate the background with a solid or linear gradient. Mention textures, photos, and complex backgrounds in warnings.
@@ -152,7 +156,7 @@ Reconstruction rules:
 - For likely replaceable template fields, supply a unique snake_case suggestedFieldKey and a readable suggestedFieldLabel. Use null and an empty label for decorative/non-replaceable elements.
 - Typical fields include organization, event_title, theme, date, time, venue, contact, person_1_name, person_1_role, person_1_photo, logo, and similar semantic variants.
 - imageRole must be none except for image_region elements.
-- For properties that do not apply to an element kind, use safe neutral values: empty text, arial, 400, normal, left, zero stroke and radius, and imageRole none.
+- For flat text and non-text elements, set textEffect to flat and extrusionColor to null. For other properties that do not apply, use safe neutral values: empty text, arial, 400, normal, left, zero stroke and radius, and imageRole none.
 - Prefer 8 to 30 useful layers. Never exceed 45. Avoid tiny noise or decorative specks.
 - Put uncertainty and features that require manual correction in warnings.`;
 
