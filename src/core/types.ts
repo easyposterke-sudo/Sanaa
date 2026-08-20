@@ -82,6 +82,8 @@ export interface WebGLRenderAPI {
   toDataURL: (scale?: number) => string;
   getCameraPose: () => CameraPose;
   getCameraEvidence: () => WebGLCameraEvidence;
+  /** Resolves after the current scene's async fonts and meshes have been added. */
+  whenContentReady?: () => Promise<void>;
 }
 
 export interface EditorState {

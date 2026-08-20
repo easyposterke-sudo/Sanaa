@@ -6,6 +6,7 @@ import { PosterToolbar } from './PosterToolbar';
 import { PosterCanvas } from './PosterCanvas';
 import { PosterRightSidebar } from './PosterRightSidebar';
 import { ThreeTextModal } from './ThreeTextModal';
+import { Poster3DPreviewRenderer } from './Poster3DPreviewRenderer';
 import { CanvasSizeModal } from './CanvasSizeModal';
 import { MobilePropertyBar } from './MobilePropertyBar';
 import { PosterMobileScaleFader } from './PosterMobileScaleFader';
@@ -81,6 +82,10 @@ export function PosterLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [threeTextModal, setThreeTextModal] = useState<'add' | { editId: string } | null>(null);
+  const [automatic3DRenderIds, setAutomatic3DRenderIds] = useState<string[]>([]);
+  const handleAutomatic3DRendered = useCallback((elementId: string) => {
+    setAutomatic3DRenderIds((ids) => ids.filter((id) => id !== elementId));
+  }, []);
   const [aiWizardOpen, setAiWizardOpen] = useState(false);
   const [templateCreatorOpen, setTemplateCreatorOpen] = useState(false);
   const [showCanvasSizeModal, setShowCanvasSizeModal] = useState(false);
@@ -738,6 +743,11 @@ export function PosterLayout() {
       skipAutoOpenForIdRef.current = null;
       setShowCanvasSizeModal(false);
       loadProject(compiled.project, { fieldBindings: compiled.fieldBindings });
+      setAutomatic3DRenderIds(
+        compiled.project.elements
+          .filter((element) => element.type === '3d-text')
+          .map((element) => element.id),
+      );
       setCloudDirty(true);
       if (!window.matchMedia('(min-width: 1024px)').matches) setLeftOpen(false);
     },
@@ -756,6 +766,11 @@ export function PosterLayout() {
       skipAutoOpenForIdRef.current = null;
       setShowCanvasSizeModal(false);
       loadProject(compiled.project, { fieldBindings: compiled.fieldBindings });
+      setAutomatic3DRenderIds(
+        compiled.project.elements
+          .filter((element) => element.type === '3d-text')
+          .map((element) => element.id),
+      );
       setTemplateAuthoring({
         templateId: `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         name: compiled.suggestedTemplateName,
@@ -942,6 +957,10 @@ export function PosterLayout() {
           onEditComplete={() => setThreeTextModal(null)}
         />
       )}
+      <Poster3DPreviewRenderer
+        elementIds={automatic3DRenderIds}
+        onRendered={handleAutomatic3DRendered}
+      />
       <AIPosterWizard
         open={aiWizardOpen}
         onClose={() => setAiWizardOpen(false)}

@@ -214,6 +214,10 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
     startPosX: number;
     startPosY: number;
   } | null>(null);
+  const contentReadyRef = useRef<{
+    ready: boolean;
+    waiters: Array<() => void>;
+  }>({ ready: false, waiters: [] });
 
   const {
     textLayers,
@@ -451,6 +455,10 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
     onReady?.({
       getCameraPose: () => readCameraPose(camera, controls.target),
       getCameraEvidence: () => readCameraEvidence(camera, controls.target, renderer),
+      whenContentReady: () =>
+        contentReadyRef.current.ready
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => contentReadyRef.current.waiters.push(resolve)),
       toDataURL: (scale?: number) => {
         const r = rendererRef.current;
         const sc = sceneRef.current;
@@ -737,6 +745,7 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
     if (!root || !fontsReady) return;
 
     const ac = new AbortController();
+    contentReadyRef.current.ready = false;
     disposeGroup(root);
 
     void (async () => {
@@ -805,6 +814,10 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
           }
         }
       }
+
+      contentReadyRef.current.ready = true;
+      const waiters = contentReadyRef.current.waiters.splice(0);
+      waiters.forEach((resolve) => resolve());
     })();
 
     return () => {

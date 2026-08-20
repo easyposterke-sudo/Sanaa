@@ -142,7 +142,8 @@ Security:
 Reconstruction rules:
 - Use normalized 0..1 boxes relative to the complete poster.
 - Create one element for every visually important text block, basic shape, logo, photograph, portrait, or decoration that can be identified confidently.
-- Use text for editable wording. Preserve capitalization, punctuation, and explicit line breaks as closely as possible.
+- Use text for editable wording. Text transcription is accuracy-critical: inspect every word glyph by glyph, preserve capitalization, punctuation, apostrophes, explicit line breaks, and visible spaces exactly, and do not silently join neighboring words.
+- Before returning, cross-check every text value against the image a second time. Correct character confusions such as Y/P, I/L, O/0, and missing or duplicated letters only from visible evidence. Never autocorrect or guess unfamiliar organization, person, or brand names.
 - Classify a text block as textEffect two_layer_3d only when the reference clearly shows a raised front face plus a deep offset/extruded shell. A plain outline, glow, drop shadow, duplicate shadow, or bold font alone is flat text.
 - The only supported dimensional treatment is two_layer_3d. For it, set fill to the visible front-face color (usually white or off-white) and extrusionColor to the dominant shell/side color sampled from the poster. Do not describe or invent any other 3D preset.
 - If a dimensional headline is arranged as separate lines or independently resizable blocks, emit separate text elements for those blocks (for example MEN'S and CONFERENCE) and give each its own exact box.
