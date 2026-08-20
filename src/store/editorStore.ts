@@ -177,6 +177,7 @@ function toSerializableEditorState(state: EditorState): EditorState {
       environmentId: state.environmentId,
       hdrPresets: state.hdrPresets,
       cameraPose: state.cameraPose,
+      autoFrame3DContent: state.autoFrame3DContent,
       frontColor: state.frontColor,
       frontOpacity: state.frontOpacity,
       extrusionColor: state.extrusionColor,

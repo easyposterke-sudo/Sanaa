@@ -112,6 +112,8 @@ export interface EditorState {
   hdrPresets?: HdriPreset[];
   /** Camera/orbit state. Optional for backwards compatibility with older projects. */
   cameraPose?: CameraPose;
+  /** Reframe the WebGL camera from actual scene bounds after text geometry changes. */
+  autoFrame3DContent?: boolean;
   /** WebGL preset: front face color (e.g. #ffffff). */
   frontColor?: string;
   /** WebGL preset: front face opacity 0–1 (1 = opaque). */

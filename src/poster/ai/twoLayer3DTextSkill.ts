@@ -373,6 +373,7 @@ export function compileTwoLayer3DTextState(input: TwoLayer3DTextSkillInput): Edi
     environmentId: resolved.environmentId,
     hdrPresets: TWO_LAYER_3D_TEXT_HDR_PRESETS.map((preset) => ({ ...preset })),
     cameraPose: normalizeCameraPose(resolved.cameraPose),
+    autoFrame3DContent: true,
     lightIntensity: 2,
     textLayers: [rear, front],
     activeTextLayerId: FRONT_LAYER_ID,

@@ -9,21 +9,28 @@ import { loadFontsForPosterElements } from '../loadPosterFonts';
 import type { Poster3DTextElement } from '../types';
 import { attachRecordingDataUrlExportIfEligible } from '../../recording/recordingEvidence';
 import { useDesignRecorderStore } from '../../recording/recordingStore';
+import {
+  computeUniform3DTextReplacement,
+  readRasterDimensions,
+  trimTransparentRaster,
+  type RasterDimensions,
+} from '../threeTextHandoff';
 
 interface ThreeTextModalProps {
   mode: 'add' | { editId: string };
   onClose: () => void;
-  onSendToPoster: (image: string, config: Poster3DTextElement['config']) => void;
+  onSendToPoster: (
+    image: string,
+    config: Poster3DTextElement['config'],
+    dimensions: RasterDimensions,
+  ) => void;
   onEditComplete: (image: string, config: Poster3DTextElement['config']) => void;
 }
 
-function readRasterDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    image.onerror = () => reject(new Error('Could not read the exported 3D image dimensions.'));
-    image.src = dataUrl;
-  });
+function isTwoLayerRecipe(config: Poster3DTextElement['config']): boolean {
+  const ids = config.textLayers?.map((layer) => layer.id) ?? [];
+  return ids.includes('two-layer-face-shell-v1:rear-shell') &&
+    ids.includes('two-layer-face-shell-v1:front-face');
 }
 
 export function ThreeTextModal({
@@ -72,7 +79,13 @@ export function ThreeTextModal({
         const e3d = el as Poster3DTextElement;
         // Ensure fonts are in cache before mounting 3D canvas
         void loadFontsForPosterElements([e3d]).finally(() => {
-          loadPoster3DConfig(e3d.config);
+          // Projects created before content framing was introduced still carry
+          // the recipe's old short-word camera. Migrate only this known recipe.
+          loadPoster3DConfig(
+            isTwoLayerRecipe(e3d.config)
+              ? { ...e3d.config, autoFrame3DContent: true }
+              : e3d.config,
+          );
           setCanvasRemountKey((k) => k + 1);
         });
       }
@@ -89,38 +102,31 @@ export function ThreeTextModal({
         return;
       }
       const HI_RES_SCALE = 2;
-      const dataUrl = api.toDataURL(HI_RES_SCALE);
-      if (!dataUrl) {
+      const rawDataUrl = api.toDataURL(HI_RES_SCALE);
+      if (!rawDataUrl) {
         setSendError('Could not export the 3D image. Please try again.');
         return;
       }
+      const exported = await trimTransparentRaster(rawDataUrl);
+      const dataUrl = exported.dataUrl;
       const recordingState = getEditorRecordingSnapshot();
       const config = serializeEditorState();
       if (mode === 'add') {
-        onSendToPoster(dataUrl, config);
+        onSendToPoster(dataUrl, config, exported);
       } else {
         const editId = mode.editId;
         const existing = usePosterStore.getState().elements.find((element) => element.id === editId);
-        let scaleUpdate: Pick<Poster3DTextElement, 'scaleX' | 'scaleY'> | undefined;
-        if (
-          existing?.type === '3d-text' &&
-          existing.previewWidth &&
-          existing.previewHeight
-        ) {
-          const dimensions = await readRasterDimensions(dataUrl);
-          const width = Math.max(1, dimensions.width);
-          const height = Math.max(1, dimensions.height);
-          scaleUpdate = {
-            scaleX: (existing.previewWidth * existing.scaleX) / width,
-            scaleY: (existing.previewHeight * existing.scaleY) / height,
-          };
+        let geometryUpdate: ReturnType<typeof computeUniform3DTextReplacement> | undefined;
+        if (existing?.type === '3d-text') {
+          const previousIntrinsic = existing.previewWidth && existing.previewHeight
+            ? { width: existing.previewWidth, height: existing.previewHeight }
+            : await readRasterDimensions(existing.image);
+          geometryUpdate = computeUniform3DTextReplacement(existing, exported, previousIntrinsic);
         }
         updateElement(editId, {
           image: dataUrl,
           config,
-          ...scaleUpdate,
-          previewWidth: undefined,
-          previewHeight: undefined,
+          ...geometryUpdate,
           userPosterImageId: undefined,
         });
         onEditComplete(dataUrl, config);

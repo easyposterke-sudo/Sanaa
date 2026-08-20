@@ -382,10 +382,20 @@ function buildTypefaceTextGeometry(
     }
     const g = new TextGeometry(ch, textParams);
     g.computeBoundingBox();
+    const glyphAdvance = typefaceGlyphAdvance(ch, font, opts.size) + spacingWorld;
+    const position = g.getAttribute('position');
+    // Whitespace has advance width but no faces/groups. Passing that empty
+    // geometry into the merger makes it reject the whole title and fall back
+    // to the first glyph only.
+    if (!position || position.count === 0 || g.groups.length === 0 || !g.boundingBox) {
+      g.dispose();
+      penX += glyphAdvance;
+      continue;
+    }
     const box = g.boundingBox!;
     g.translate(penX - box.min.x, penY - box.min.y, 0);
     geoms.push(g);
-    penX += typefaceGlyphAdvance(ch, font, opts.size) + spacingWorld;
+    penX += glyphAdvance;
   }
   if (geoms.length === 0) {
     return new TextGeometry(' ', textParams);

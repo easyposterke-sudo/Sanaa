@@ -19,6 +19,7 @@ import { getCustomFont } from '../font/customFontCache';
 import { cameraPosesEqual } from '../cameraPose';
 import type { CameraPose, WebGLRenderAPI } from '../types';
 import { applyCameraPose, readCameraEvidence, readCameraPose } from './cameraPoseThree';
+import { fitPerspectiveCameraPoseToBounds } from './fitCameraToContent';
 
 const DEG2RAD = Math.PI / 180;
 
@@ -779,6 +780,31 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
         tagMeshRoles(built.group);
         root.add(built.group);
       }
+
+      if (useEditorStore.getState().autoFrame3DContent && root.children.length > 0) {
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        const renderer = rendererRef.current;
+        if (camera && controls && renderer) {
+          root.updateMatrixWorld(true);
+          const bounds = new THREE.Box3().setFromObject(root);
+          if (!bounds.isEmpty()) {
+            const fitted = fitPerspectiveCameraPoseToBounds(
+              readCameraPose(camera, controls.target),
+              {
+                min: { x: bounds.min.x, y: bounds.min.y, z: bounds.min.z },
+                max: { x: bounds.max.x, y: bounds.max.y, z: bounds.max.z },
+              },
+              camera.aspect,
+            );
+            const applied = applyCameraPose(camera, controls.target, fitted);
+            orbitStateRef.current = applied;
+            controls.update();
+            renderer.render(sceneRef.current!, camera);
+            setCameraPose(applied);
+          }
+        }
+      }
     })();
 
     return () => {
@@ -787,6 +813,7 @@ export const MultiLayerThreeCanvas = memo(function MultiLayerThreeCanvas({
   }, [
     fontsReady,
     debouncedLayersGeometrySig,
+    setCameraPose,
     // Debounced so depth / angle sliders don’t re-extrude every pointer event. Steps & shine omitted from fingerprint (SVG-only).
   ]);
 
