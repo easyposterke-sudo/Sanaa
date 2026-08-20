@@ -123,6 +123,11 @@ After the first deployment, add `OPENAI_API_KEY` under the Worker's
 another deployment. Do not add it as a GitHub secret, build variable, plain
 Wrangler variable, or committed file.
 
+To offer Pexels choices when template reconstruction detects an unsafe photo
+crop, also add `PEXELS_API_KEY` as an encrypted runtime secret. This integration
+is optional: without it, users can upload a clean replacement or continue with
+the generated placeholder.
+
 Before enabling project/AI APIs for users, protect `/api/*` with Cloudflare
 Access and make sure an unprotected `workers.dev` hostname cannot bypass that
 policy. The production API trusts Cloudflare Access's authenticated email

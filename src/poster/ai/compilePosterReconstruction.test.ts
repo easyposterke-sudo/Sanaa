@@ -32,6 +32,12 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     extrusionColor: null,
     cornerRadiusRatio: 0,
     imageRole: 'none',
+    imageHasOverlays: false,
+    replacementRecommended: false,
+    replacementReason: '',
+    imageSearchQuery: '',
+    imageDominantColor: null,
+    iconName: 'none',
     suggestedFieldKey: null,
     suggestedFieldLabel: '',
     confidence: 0.9,
@@ -179,6 +185,72 @@ describe('compilePosterReconstruction', () => {
       sourceElementId: 'reconstruction_mens_title',
       kind: 'text',
     });
+  });
+
+  it('uses a clean placeholder instead of a contaminated background-photo crop', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'praying_hands',
+          kind: 'image_region',
+          label: 'Praying hands background',
+          box: { x: 0.1, y: 0.12, width: 0.8, height: 0.35 },
+          imageRole: 'background_photo',
+          imageHasOverlays: true,
+          replacementRecommended: true,
+          replacementReason: 'the title and date badge overlap the photograph',
+          imageSearchQuery: 'praying hands dark navy background',
+          imageDominantColor: '#17366f',
+          suggestedFieldKey: 'background_photo',
+          suggestedFieldLabel: 'Background photo',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const photo = compiled.project.elements[0];
+    expect(photo).toMatchObject({
+      type: 'image',
+      layerName: 'REPLACE IMAGE: Praying hands background',
+      left: 100,
+      top: 180,
+    });
+    if (photo?.type !== 'image') throw new Error('Expected an image placeholder.');
+    expect(photo.src).toContain('data:image/svg+xml');
+    expect(decodeURIComponent(photo.src)).toContain('REPLACE: Praying hands background');
+    expect(compiled.warnings.join(' ')).toContain('title and date badge overlap');
+  });
+
+  it('rebuilds supported semantic icons as clean tintable SVG layers', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'venue_pin',
+          kind: 'image_region',
+          label: 'Location icon',
+          box: { x: 0.05, y: 0.8, width: 0.08, height: 0.06 },
+          imageRole: 'icon',
+          iconName: 'location',
+          imageDominantColor: '#176143',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const icon = compiled.project.elements[0];
+    expect(icon).toMatchObject({ type: 'image', layerName: 'AI icon: Location icon' });
+    if (icon?.type !== 'image') throw new Error('Expected an icon image.');
+    expect(decodeURIComponent(icon.src)).toContain('stroke="#176143"');
   });
 });
 

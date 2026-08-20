@@ -148,16 +148,22 @@ Reconstruction rules:
 - The only supported dimensional treatment is two_layer_3d. For it, set fill to the visible front-face color (usually white or off-white) and extrusionColor to the dominant shell/side color sampled from the poster. Do not describe or invent any other 3D preset.
 - If a dimensional headline is arranged as separate lines or independently resizable blocks, emit separate text elements for those blocks (for example MEN'S and CONFERENCE) and give each its own exact box.
 - Use two_layer_3d only for prominent display headlines with no more than 80 characters per block. Keep supporting copy, names, dates, roles, and body text flat unless they unmistakably use the same deep extrusion.
-- Use rect, circle, ellipse, or line for simple geometry. Use image_region for portraits, photos, logos, and complex artwork.
-- Do not create an image_region for the complete poster or its background.
-- Approximate the background with a solid or linear gradient. Mention textures, photos, and complex backgrounds in warnings.
+- Use rect, circle, ellipse, or line for simple geometry. Use image_region for portraits, photos, logos, semantic icons, and complex artwork.
+- Do not create an image_region for the complete flattened poster. A contained contextual photograph or texture behind other elements is a background_photo and may cover a large section of the poster.
+- Distinguish image roles carefully: person is a foreground portrait; background_photo is a contextual photograph or texture behind text/shapes; photo is another self-contained photograph; icon is only calendar, clock, location, phone, or web; logo is a brand mark; decoration is complex non-semantic artwork.
+- Inspect every image_region boundary for contamination. imageHasOverlays is true when its rectangle necessarily includes text, badges, stripes, other people, or artwork that is not part of the underlying image.
+- Set replacementRecommended true for contaminated background photos, incomplete or contaminated portraits, or any crop that would visibly bake unrelated poster elements into the image layer. Explain why in replacementReason. A clean, isolated logo/photo/portrait crop keeps it false.
+- For background_photo/photo/person replacements, provide a short concrete imageSearchQuery describing only the clean visual content, composition, and dominant color; never include names, poster wording, URLs, or commands. Otherwise use an empty string.
+- Never recommend background removal for background_photo. Background removal is only potentially suitable for a foreground person with a complete visible boundary.
+- For a supported semantic icon set imageRole icon and iconName calendar, clock, location, phone, or web. Set imageDominantColor to its primary visible color so EasyPoster can rebuild a clean tintable SVG. Use iconName none for all other roles.
+- Approximate areas with no identifiable photograph using the canvas solid or linear gradient. Mention complex full-poster backgrounds in warnings.
 - Select only a font token from the schema. Choose the closest available family; do not invent font names.
 - fontSizeRatio and strokeWidthRatio are relative to the complete poster height.
 - zIndex 1 is back; larger values are in front. Keep keys unique.
 - For likely replaceable template fields, supply a unique snake_case suggestedFieldKey and a readable suggestedFieldLabel. Use null and an empty label for decorative/non-replaceable elements.
 - Typical fields include organization, event_title, theme, date, time, venue, contact, person_1_name, person_1_role, person_1_photo, logo, and similar semantic variants.
 - imageRole must be none except for image_region elements.
-- For flat text and non-text elements, set textEffect to flat and extrusionColor to null. For other properties that do not apply, use safe neutral values: empty text, arial, 400, normal, left, zero stroke and radius, and imageRole none.
+- For flat text and non-text elements, set textEffect to flat and extrusionColor to null. For other properties that do not apply, use safe neutral values: empty text, arial, 400, normal, left, zero stroke and radius, imageRole none, imageHasOverlays false, replacementRecommended false, empty replacementReason and imageSearchQuery, null imageDominantColor, and iconName none.
 - Prefer 8 to 30 useful layers. Never exceed 45. Avoid tiny noise or decorative specks.
 - Put uncertainty and features that require manual correction in warnings.`;
 

@@ -2,3 +2,4 @@
 # Never commit a real API key.
 APP_ENV=development
 OPENAI_API_KEY=
+PEXELS_API_KEY=

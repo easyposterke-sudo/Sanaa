@@ -31,6 +31,13 @@ export interface CompiledPosterReconstruction {
   warnings: string[];
 }
 
+export interface ReconstructionImageReplacement {
+  src: string;
+  width: number;
+  height: number;
+  credit?: string;
+}
+
 const FONT_STACKS: Record<PosterReconstructionPlan['elements'][number]['fontFamily'], string> = {
   arial: 'Arial, Helvetica, sans-serif',
   arial_black: 'Arial Black, sans-serif',
@@ -67,6 +74,7 @@ export async function compilePosterReconstruction(input: {
   plan: PosterReconstructionPlan;
   reference: { dataUrl: string; width: number; height: number };
   referenceGuideOpacity?: number;
+  imageReplacements?: Readonly<Record<string, ReconstructionImageReplacement>>;
 }): Promise<CompiledPosterReconstruction> {
   const plan = PosterReconstructionPlanSchema.parse(input.plan);
   const canvasWidth = input.reference.width;
@@ -127,13 +135,21 @@ export async function compilePosterReconstruction(input: {
         }
       }
     } else if (item.kind === 'image_region') {
-      const crop = await cropReferenceRegion(input.reference, box);
+      const replacement = input.imageReplacements?.[item.key];
+      const image = await compileImageRegion({
+        item,
+        box,
+        reference: input.reference,
+        replacement,
+        warnings,
+      });
       element = {
         ...base,
+        layerName: image.layerName ?? base.layerName,
         type: 'image',
-        src: crop.dataUrl,
-        scaleX: box.width / crop.width,
-        scaleY: box.height / crop.height,
+        src: image.dataUrl,
+        scaleX: box.width / image.width,
+        scaleY: box.height / image.height,
         mask: 'none',
         edge: 'none',
       } satisfies PosterImageElement;
@@ -180,6 +196,55 @@ export async function compilePosterReconstruction(input: {
     description: plan.summary,
     warnings: [...new Set(warnings)],
   };
+}
+
+async function compileImageRegion(input: {
+  item: ReconstructionElement;
+  box: PixelBox;
+  reference: { dataUrl: string; width: number; height: number };
+  replacement?: ReconstructionImageReplacement;
+  warnings: string[];
+}): Promise<{ dataUrl: string; width: number; height: number; layerName?: string }> {
+  const { item, box, replacement, warnings } = input;
+  if (item.imageRole === 'icon' && item.iconName !== 'none') {
+    return {
+      dataUrl: builtInIconDataUrl(item.iconName, item.imageDominantColor ?? item.fill ?? '#111111'),
+      width: 100,
+      height: 100,
+      layerName: `AI icon: ${item.label}`,
+    };
+  }
+
+  if (replacement) {
+    const crop = await cropImageToAspect(replacement, box.width / box.height);
+    if (replacement.credit?.trim()) {
+      warnings.push(`Replacement for “${item.label}”: ${replacement.credit.trim()}.`);
+    }
+    return {
+      dataUrl: crop.dataUrl,
+      width: crop.width,
+      height: crop.height,
+      layerName: `AI replacement: ${item.label}`,
+    };
+  }
+
+  if (item.replacementRecommended) {
+    const role = item.imageRole === 'person' ? 'person' : 'photo';
+    const reason = item.replacementReason.trim() || 'the source area contains overlapping poster artwork';
+    warnings.push(`“${item.label}” uses a clean ${role} placeholder because ${reason}. Replace it with an original, uploaded, or stock image.`);
+    return {
+      dataUrl: imagePlaceholderDataUrl({
+        role,
+        label: item.label,
+        color: item.imageDominantColor ?? '#64748b',
+      }),
+      width: 400,
+      height: 400,
+      layerName: `REPLACE IMAGE: ${item.label}`,
+    };
+  }
+
+  return cropReferenceRegion(input.reference, box);
 }
 
 function compileThreeDTextElement(
@@ -348,6 +413,78 @@ async function cropReferenceRegion(
   if (!context) throw new Error('This browser could not extract an image layer.');
   context.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
   return { dataUrl: canvas.toDataURL('image/webp', 0.9), width: sw, height: sh };
+}
+
+async function cropImageToAspect(
+  source: { src: string; width: number; height: number },
+  targetAspect: number,
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const image = await loadImage(source.src);
+  const naturalWidth = Math.max(1, image.naturalWidth || image.width || source.width);
+  const naturalHeight = Math.max(1, image.naturalHeight || image.height || source.height);
+  const sourceAspect = naturalWidth / naturalHeight;
+  let sx = 0;
+  let sy = 0;
+  let sw = naturalWidth;
+  let sh = naturalHeight;
+  if (sourceAspect > targetAspect) {
+    sw = Math.max(1, Math.round(naturalHeight * targetAspect));
+    sx = Math.round((naturalWidth - sw) / 2);
+  } else if (sourceAspect < targetAspect) {
+    sh = Math.max(1, Math.round(naturalWidth / targetAspect));
+    sy = Math.round((naturalHeight - sh) / 2);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('This browser could not prepare the replacement image.');
+  context.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+  return { dataUrl: canvas.toDataURL('image/webp', 0.9), width: sw, height: sh };
+}
+
+function imagePlaceholderDataUrl(input: {
+  role: 'person' | 'photo';
+  label: string;
+  color: string;
+}): string {
+  const label = escapeXml(input.label.slice(0, 42));
+  const color = /^#[0-9a-f]{6}$/i.test(input.color) ? input.color : '#64748b';
+  const artwork = input.role === 'person'
+    ? `<circle cx="200" cy="145" r="62" fill="#ffffff" fill-opacity=".9"/><path d="M88 360c10-91 54-137 112-137s102 46 112 137" fill="#ffffff" fill-opacity=".9"/>`
+    : `<path d="M54 305l82-91 57 56 50-43 103 104H54z" fill="#ffffff" fill-opacity=".82"/><circle cx="291" cy="116" r="35" fill="#ffffff" fill-opacity=".82"/>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="24" fill="${color}"/>${artwork}<rect y="344" width="400" height="56" fill="#000000" fill-opacity=".42"/><text x="200" y="378" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">REPLACE: ${label}</text></svg>`;
+  return svgDataUrl(svg);
+}
+
+function builtInIconDataUrl(
+  icon: Exclude<ReconstructionElement['iconName'], 'none'>,
+  requestedColor: string,
+): string {
+  const color = /^#[0-9a-f]{6}$/i.test(requestedColor) ? requestedColor : '#111111';
+  const paths: Record<typeof icon, string> = {
+    calendar: '<rect x="17" y="22" width="66" height="61" rx="8"/><path d="M17 39h66M34 13v18M66 13v18M32 53h8M47 53h8M62 53h8M32 68h8M47 68h8M62 68h8"/>',
+    clock: '<circle cx="50" cy="50" r="36"/><path d="M50 29v23l17 11"/>',
+    location: '<path d="M50 89S22 62 22 39a28 28 0 1 1 56 0c0 23-28 50-28 50z"/><circle cx="50" cy="39" r="9"/>',
+    phone: '<path d="M29 15l15 18-10 11c8 16 16 24 32 32l11-10 18 15-7 12c-4 7-13 9-21 6C36 88 12 64 1 33-2 25 0 16 7 12l12-7z" transform="translate(3 -1) scale(.92)"/>',
+    web: '<circle cx="50" cy="50" r="37"/><path d="M13 50h74M50 13c13 12 19 24 19 37S63 75 50 87M50 13C37 25 31 37 31 50s6 25 19 37"/>',
+  };
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><g fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">${paths[icon]}</g></svg>`;
+  return svgDataUrl(svg);
+}
+
+function svgDataUrl(svg: string): string {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function escapeXml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&apos;',
+  })[character] ?? character);
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

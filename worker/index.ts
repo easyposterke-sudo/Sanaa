@@ -445,6 +445,122 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
   }
 });
 
+app.get('/api/stock-photos/search', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, max-age=300');
+  const apiKey = context.env.PEXELS_API_KEY?.trim();
+  if (!apiKey) {
+    return context.json(
+      {
+        error: 'Stock photo search is not configured. You can still upload a replacement image.',
+        code: 'STOCK_PHOTOS_NOT_CONFIGURED',
+        requestId,
+      },
+      503,
+    );
+  }
+  const query = context.req.query('query')?.trim() ?? '';
+  if (query.length < 2 || query.length > 120) {
+    return context.json({ error: 'Use a stock photo search between 2 and 120 characters.', requestId }, 400);
+  }
+  const orientation = context.req.query('orientation');
+  if (orientation && !['landscape', 'portrait', 'square'].includes(orientation)) {
+    return context.json({ error: 'The stock photo orientation is invalid.', requestId }, 400);
+  }
+  const color = context.req.query('color');
+  if (color && !/^(?:#[0-9a-f]{6}|red|orange|yellow|green|turquoise|blue|violet|pink|brown|black|gray|white)$/i.test(color)) {
+    return context.json({ error: 'The stock photo color is invalid.', requestId }, 400);
+  }
+  const perPage = Math.max(1, Math.min(12, Number(context.req.query('perPage')) || 8));
+  const params = new URLSearchParams({ query, per_page: String(perPage) });
+  if (orientation) params.set('orientation', orientation);
+  if (color) params.set('color', color);
+  const upstream = await fetch(`https://api.pexels.com/v1/search?${params.toString()}`, {
+    headers: { authorization: apiKey },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!upstream.ok) {
+    await upstream.body?.cancel().catch(() => undefined);
+    return context.json(
+      { error: 'Pexels could not complete the stock photo search.', code: 'STOCK_PHOTO_UPSTREAM', requestId },
+      upstream.status === 429 ? 429 : 502,
+    );
+  }
+  const payload = (await upstream.json()) as {
+    photos?: Array<{
+      id?: number;
+      width?: number;
+      height?: number;
+      alt?: string;
+      photographer?: string;
+      photographer_url?: string;
+      url?: string;
+      src?: { medium?: string };
+    }>;
+  };
+  const photos = (payload.photos ?? []).flatMap((photo) =>
+    Number.isSafeInteger(photo.id) && photo.src?.medium && photo.url
+      ? [{
+          id: photo.id as number,
+          width: finitePositiveInteger(photo.width),
+          height: finitePositiveInteger(photo.height),
+          alt: String(photo.alt ?? '').slice(0, 300),
+          photographer: String(photo.photographer ?? 'Pexels contributor').slice(0, 120),
+          photographerUrl: safePexelsUrl(photo.photographer_url),
+          pexelsUrl: safePexelsUrl(photo.url),
+          thumbnailUrl: photo.src.medium,
+        }]
+      : [],
+  );
+  return context.json({ photos, requestId });
+});
+
+app.get('/api/stock-photos/:photoId/image', async (context) => {
+  const requestId = context.get('requestId');
+  const apiKey = context.env.PEXELS_API_KEY?.trim();
+  if (!apiKey) {
+    return context.json({ error: 'Stock photo download is not configured.', requestId }, 503);
+  }
+  const photoId = context.req.param('photoId');
+  if (!/^[1-9][0-9]{0,15}$/.test(photoId)) {
+    return context.json({ error: 'The stock photo identifier is invalid.', requestId }, 400);
+  }
+  const metadata = await fetch(`https://api.pexels.com/v1/photos/${photoId}`, {
+    headers: { authorization: apiKey },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!metadata.ok) {
+    await metadata.body?.cancel().catch(() => undefined);
+    return context.json({ error: 'The selected Pexels photo is unavailable.', requestId }, 502);
+  }
+  const photo = (await metadata.json()) as { src?: { large2x?: string; large?: string } };
+  const source = photo.src?.large2x || photo.src?.large;
+  if (!source || !source.startsWith('https://images.pexels.com/')) {
+    return context.json({ error: 'Pexels returned an invalid image source.', requestId }, 502);
+  }
+  const image = await fetch(source, { signal: AbortSignal.timeout(20_000) });
+  if (!image.ok || !image.body) {
+    await image.body?.cancel().catch(() => undefined);
+    return context.json({ error: 'The selected Pexels image could not be downloaded.', requestId }, 502);
+  }
+  const mediaType = image.headers.get('content-type')?.split(';', 1)[0]?.toLowerCase();
+  if (!mediaType || !['image/jpeg', 'image/png', 'image/webp'].includes(mediaType)) {
+    await image.body.cancel().catch(() => undefined);
+    return context.json({ error: 'Pexels returned an unsupported image format.', requestId }, 502);
+  }
+  const bytes = await image.arrayBuffer();
+  if (bytes.byteLength <= 0 || bytes.byteLength > 20 * 1024 * 1024) {
+    return context.json({ error: 'The selected stock photo is too large.', requestId }, 413);
+  }
+  return new Response(bytes, {
+    headers: {
+      'content-type': mediaType,
+      'cache-control': 'private, max-age=86400',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+});
+
 app.get('/api/projects', async (context) => {
   const ownerId = context.get('ownerId');
   const result = await context.env.DB.prepare(
@@ -943,6 +1059,22 @@ function parseContentLength(value: string | undefined | null): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function finitePositiveInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : 1;
+}
+
+function safePexelsUrl(value: unknown): string {
+  if (typeof value !== 'string') return 'https://www.pexels.com/';
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && (url.hostname === 'pexels.com' || url.hostname.endsWith('.pexels.com'))
+      ? url.toString()
+      : 'https://www.pexels.com/';
+  } catch {
+    return 'https://www.pexels.com/';
+  }
 }
 
 function cleanFileName(value: string): string {

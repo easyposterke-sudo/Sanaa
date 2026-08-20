@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 2 as const;
-export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v2' as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 3 as const;
+export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v3' as const;
 
 export const RECONSTRUCTION_FONT_TOKENS = [
   'arial',
@@ -71,7 +71,21 @@ export const ReconstructionElementSchema = z
     textEffect: z.enum(['flat', 'two_layer_3d']),
     extrusionColor: NullableHexColorSchema,
     cornerRadiusRatio: z.number().min(0).max(0.5),
-    imageRole: z.enum(['none', 'person', 'logo', 'photo', 'decoration']),
+    imageRole: z.enum([
+      'none',
+      'person',
+      'logo',
+      'photo',
+      'background_photo',
+      'icon',
+      'decoration',
+    ]),
+    imageHasOverlays: z.boolean(),
+    replacementRecommended: z.boolean(),
+    replacementReason: z.string().max(180),
+    imageSearchQuery: z.string().max(120),
+    imageDominantColor: NullableHexColorSchema,
+    iconName: z.enum(['none', 'calendar', 'clock', 'location', 'phone', 'web']),
     suggestedFieldKey: FieldKeySchema,
     suggestedFieldLabel: z.string().max(80),
     confidence: z.number().min(0).max(1),
@@ -210,7 +224,24 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         cornerRadiusRatio: { type: 'number', minimum: 0, maximum: 0.5 },
         imageRole: {
           type: 'string',
-          enum: ['none', 'person', 'logo', 'photo', 'decoration'],
+          enum: [
+            'none',
+            'person',
+            'logo',
+            'photo',
+            'background_photo',
+            'icon',
+            'decoration',
+          ],
+        },
+        imageHasOverlays: { type: 'boolean' },
+        replacementRecommended: { type: 'boolean' },
+        replacementReason: { type: 'string', maxLength: 180 },
+        imageSearchQuery: { type: 'string', maxLength: 120 },
+        imageDominantColor: nullable(hexJsonSchema),
+        iconName: {
+          type: 'string',
+          enum: ['none', 'calendar', 'clock', 'location', 'phone', 'web'],
         },
         suggestedFieldKey: nullable(fieldKeyJsonSchema),
         suggestedFieldLabel: { type: 'string', maxLength: 80 },
