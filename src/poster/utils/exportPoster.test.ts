@@ -3,6 +3,7 @@ import {
   MAX_EXPORT_DIMENSION,
   MAX_EXPORT_PIXELS,
   getPosterExportPlan,
+  withFabricExportExclusions,
 } from './exportPoster';
 
 describe('getPosterExportPlan', () => {
@@ -32,5 +33,36 @@ describe('getPosterExportPlan', () => {
   it('rejects invalid dimensions and scales', () => {
     expect(getPosterExportPlan(0, 600, 2).safe).toBe(false);
     expect(getPosterExportPlan(800, 600, 0).safe).toBe(false);
+  });
+});
+
+describe('withFabricExportExclusions', () => {
+  it('hides editor-only guides during rendering and restores them afterward', () => {
+    const guide = { visible: true, data: { excludeFromExport: true } };
+    const artwork = { visible: true, data: { excludeFromExport: false } };
+    let guideVisibleDuringRender = true;
+    let artworkVisibleDuringRender = false;
+    let renders = 0;
+
+    const result = withFabricExportExclusions(
+      {
+        getObjects: () => [guide, artwork],
+        requestRenderAll: () => {
+          renders += 1;
+        },
+      },
+      () => {
+        guideVisibleDuringRender = guide.visible;
+        artworkVisibleDuringRender = artwork.visible;
+        return 'rendered';
+      },
+    );
+
+    expect(result).toBe('rendered');
+    expect(guideVisibleDuringRender).toBe(false);
+    expect(artworkVisibleDuringRender).toBe(true);
+    expect(guide.visible).toBe(true);
+    expect(artwork.visible).toBe(true);
+    expect(renders).toBe(1);
   });
 });

@@ -44,16 +44,22 @@ const FONT_STACKS: Record<PosterReconstructionPlan['elements'][number]['fontFami
   arial: 'Arial, Helvetica, sans-serif',
   arial_black: 'Arial Black, sans-serif',
   allura: '"Allura", cursive',
+  anton: '"Anton", sans-serif',
   bebas_neue: '"Bebas Neue", sans-serif',
+  chewy: '"Chewy", cursive',
   courier_new: 'Courier New, Courier, monospace',
   crimson_pro: '"Crimson Pro", Georgia, serif',
   dancing_script: '"Dancing Script", cursive',
+  fredoka: '"Fredoka", sans-serif',
   georgia: 'Georgia, serif',
   great_vibes: '"Great Vibes", cursive',
   impact: 'Impact, sans-serif',
   inter: '"Inter", sans-serif',
   lato: '"Lato", Arial, sans-serif',
+  lilita_one: '"Lilita One", sans-serif',
+  luckiest_guy: '"Luckiest Guy", cursive',
   merriweather: '"Merriweather", Georgia, serif',
+  modak: '"Modak", cursive',
   montserrat: '"Montserrat", sans-serif',
   nunito: '"Nunito", Arial, sans-serif',
   open_sans: '"Open Sans", sans-serif',
@@ -103,6 +109,7 @@ export async function compilePosterReconstruction(input: {
       opacity: guideOpacity,
       zIndex: nextZ++,
       locked: true,
+      excludeFromExport: true,
       mask: 'none',
       edge: 'none',
     });
@@ -190,7 +197,10 @@ export async function compilePosterReconstruction(input: {
         layerName: image.layerName ?? base.layerName,
         type: 'image',
         src: image.dataUrl,
-        mask: 'none',
+        mask: reconstructionImageMask(item.imageMask),
+        ...(item.imageMask === 'rounded_rect'
+          ? { maskCornerRadius: resolvedMaskCornerRadius(item.cornerStyle, item.cornerRadiusRatio) }
+          : {}),
         edge: 'none',
       } satisfies PosterImageElement;
     } else if (item.kind === 'path') {
@@ -331,7 +341,7 @@ async function compileImageRegion(input: {
   }
 
   if (replacement) {
-    if (item.imageRole === 'person') {
+    if (item.imageRole === 'person' && item.imageMask === 'none') {
       if (replacement.credit?.trim()) {
         warnings.push(`Replacement for “${item.label}”: ${replacement.credit.trim()}.`);
       }
@@ -372,6 +382,24 @@ async function compileImageRegion(input: {
   }
 
   return cropReferenceRegion(input.reference, box);
+}
+
+function reconstructionImageMask(
+  mask: ReconstructionElement['imageMask'],
+): PosterImageElement['mask'] {
+  return mask === 'rounded_rect' ? 'rounded-rect' : mask;
+}
+
+function resolvedMaskCornerRadius(
+  style: ReconstructionElement['cornerStyle'],
+  detectedRatio: number,
+): number {
+  if (style === 'sharp') return 0;
+  if (detectedRatio > 0) return clamp(detectedRatio, 0, 0.5);
+  if (style === 'pill') return 0.5;
+  if (style === 'rounded') return 0.18;
+  if (style === 'subtle') return 0.08;
+  return 0.18;
 }
 
 /**
@@ -456,16 +484,30 @@ function compileTextElement(
   canvasHeight: number,
   base: Pick<PosterTextElement, 'id' | 'layerName' | 'left' | 'top' | 'scaleX' | 'scaleY' | 'angle' | 'opacity' | 'zIndex'>,
 ): PosterTextElement {
-  const lineCount = Math.max(1, item.text.split(/\r?\n/).length);
+  const displayText = item.text || item.label;
+  const lines = displayText.split(/\r?\n/);
+  const lineCount = Math.max(1, lines.length);
   const measuredSize = item.fontSizeRatio * canvasHeight;
   const boxLimitedSize = (box.height / lineCount) * 0.94;
-  const fontSize = Math.max(6, Math.min(measuredSize, Math.max(8, boxLimitedSize)));
+  const initialFontSize = Math.max(6, Math.min(measuredSize, Math.max(8, boxLimitedSize)));
+  const fontFamily = FONT_STACKS[item.fontFamily];
+  const fontSize = item.visibleLineCount > 0 && item.visibleLineCount === lineCount
+    ? fitDetectedTextFontSize({
+        lines,
+        fontFamily,
+        fontWeight: item.fontWeight,
+        fontStyle: item.fontStyle,
+        charSpacing: item.charSpacing,
+        initialFontSize,
+        availableWidth: Math.max(12, box.width),
+      })
+    : initialFontSize;
   return {
     ...base,
     type: 'text',
-    text: item.text || item.label,
+    text: displayText,
     fontSize,
-    fontFamily: FONT_STACKS[item.fontFamily],
+    fontFamily,
     fill: item.fill ?? '#111111',
     width: Math.max(12, box.width),
     fontWeight: item.fontWeight,
@@ -476,6 +518,58 @@ function compileTextElement(
     stroke: item.stroke ?? undefined,
     strokeWidth: item.stroke ? item.strokeWidthRatio * canvasHeight : 0,
   };
+}
+
+export function fitDetectedTextFontSize(input: {
+  lines: string[];
+  fontFamily: string;
+  fontWeight: string;
+  fontStyle: 'normal' | 'italic';
+  charSpacing: number;
+  initialFontSize: number;
+  availableWidth: number;
+}): number {
+  const initial = Math.max(6, input.initialFontSize);
+  const widthLimit = Math.max(12, input.availableWidth) * 0.98;
+  const widest = Math.max(
+    1,
+    ...input.lines.map((line) => measuredTextLineWidth({ ...input, line, fontSize: initial })),
+  );
+  if (widest <= widthLimit) return initial;
+  return Math.max(6, initial * (widthLimit / widest));
+}
+
+function measuredTextLineWidth(input: {
+  line: string;
+  fontFamily: string;
+  fontWeight: string;
+  fontStyle: 'normal' | 'italic';
+  charSpacing: number;
+  fontSize: number;
+}): number {
+  const glyphs = Array.from(input.line);
+  const spacing = Math.max(0, glyphs.length - 1) * input.fontSize * (input.charSpacing / 1000);
+  try {
+    if (typeof document !== 'undefined') {
+      const context = document.createElement('canvas').getContext('2d');
+      if (context) {
+        context.font = `${input.fontStyle} ${input.fontWeight} ${input.fontSize}px ${input.fontFamily}`;
+        const measured = context.measureText(input.line).width;
+        if (Number.isFinite(measured) && measured > 0) return measured + spacing;
+      }
+    }
+  } catch {
+    // Browser/test environments without Canvas 2D use the deterministic estimate below.
+  }
+  const lowerFamily = input.fontFamily.toLowerCase();
+  const widthFactor = /(?:bebas|oswald|anton)/.test(lowerFamily)
+    ? 0.54
+    : /(?:allura|dancing|great vibes|sacramento|satisfy|tangerine)/.test(lowerFamily)
+      ? 0.56
+      : /(?:arial black|impact|luckiest|lilita|modak)/.test(lowerFamily)
+        ? 0.66
+        : 0.6;
+  return glyphs.length * input.fontSize * widthFactor + spacing;
 }
 
 const TEXT_BADGE_SUFFIX = /\s+(?:badge|button|callout)$/i;
@@ -542,9 +636,9 @@ function compileMisclassifiedTextBadge(input: {
         type: 'rect',
         width: box.width,
         height: box.height,
-        rx: item.cornerRadiusRatio > 0
-          ? amplifiedDetectedCornerRadius(item.cornerRadiusRatio, box)
-          : Math.min(box.width, box.height) * 0.18,
+        rx: item.cornerStyle === 'auto' && item.cornerRadiusRatio <= 0
+          ? Math.min(box.width, box.height) * 0.18
+          : resolvedDetectedCornerRadius(item.cornerStyle, item.cornerRadiusRatio, box),
       };
 
   const text = isCircular ? splitBadgeText(wording) : wording;
@@ -656,7 +750,7 @@ function compileShapeElement(
     type: 'rect',
     width: box.width,
     height: box.height,
-    rx: amplifiedDetectedCornerRadius(item.cornerRadiusRatio, box),
+    rx: resolvedDetectedCornerRadius(item.cornerStyle, item.cornerRadiusRatio, box),
   };
 }
 
@@ -671,6 +765,22 @@ export function amplifiedDetectedCornerRadius(
 ): number {
   if (detectedRatio <= 0) return 0;
   const adjustedRatio = Math.min(0.5, detectedRatio * 1.4);
+  return adjustedRatio * Math.min(box.width, box.height);
+}
+
+/**
+ * Turn an explicit visual corner class into a stable radius. Old plans use
+ * `auto`, which retains the previous numeric-radius behavior exactly.
+ */
+export function resolvedDetectedCornerRadius(
+  style: ReconstructionElement['cornerStyle'],
+  detectedRatio: number,
+  box: Pick<PixelBox, 'width' | 'height'>,
+): number {
+  if (style === 'auto') return amplifiedDetectedCornerRadius(detectedRatio, box);
+  if (style === 'sharp') return 0;
+  const minimumRatio = style === 'pill' ? 0.42 : style === 'rounded' ? 0.16 : 0.06;
+  const adjustedRatio = Math.min(0.5, Math.max(minimumRatio, detectedRatio * 1.4));
   return adjustedRatio * Math.min(box.width, box.height);
 }
 

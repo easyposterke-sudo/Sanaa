@@ -9,7 +9,9 @@ import {
 import {
   amplifiedDetectedCornerRadius,
   compilePosterReconstruction,
+  fitDetectedTextFontSize,
   fitPersonReplacementIntoBox,
+  resolvedDetectedCornerRadius,
 } from './compilePosterReconstruction';
 
 function element(overrides: Partial<ReconstructionElement>): ReconstructionElement {
@@ -32,13 +34,16 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     textAlign: 'left',
     charSpacing: 0,
     lineHeight: 1.16,
+    visibleLineCount: 0,
     textEffect: 'flat',
     extrusionColor: null,
     cornerRadiusRatio: 0,
+    cornerStyle: 'auto',
     pathPoints: [],
     pathClosed: false,
     pathTension: 0.28,
     imageRole: 'none',
+    imageMask: 'none',
     imageHasOverlays: false,
     replacementRecommended: false,
     replacementReason: '',
@@ -148,6 +153,7 @@ describe('compilePosterReconstruction', () => {
       type: 'image',
       locked: true,
       opacity: 0.25,
+      excludeFromExport: true,
     });
     expect(compiled.warnings.join(' ')).toContain('reference guide');
     expect(compiled.warnings.join(' ')).toContain('No editable layers');
@@ -417,6 +423,85 @@ describe('compilePosterReconstruction', () => {
     expect(amplifiedDetectedCornerRadius(0.5, box)).toBe(100);
   });
 
+  it('uses explicit corner classes without changing old auto-radius behavior', () => {
+    const box = { width: 800, height: 200 };
+    expect(resolvedDetectedCornerRadius('auto', 0, box)).toBe(0);
+    expect(resolvedDetectedCornerRadius('sharp', 0.4, box)).toBe(0);
+    expect(resolvedDetectedCornerRadius('subtle', 0, box)).toBeCloseTo(12);
+    expect(resolvedDetectedCornerRadius('rounded', 0, box)).toBeCloseTo(32);
+    expect(resolvedDetectedCornerRadius('pill', 0, box)).toBeCloseTo(84);
+  });
+
+  it('shrinks a detected one-line heading to prevent unintended wrapping', () => {
+    const fitted = fitDetectedTextFontSize({
+      lines: ['ACTIVITIES INCLUDE:'],
+      fontFamily: '"Anton", sans-serif',
+      fontWeight: '700',
+      fontStyle: 'normal',
+      charSpacing: 0,
+      initialFontSize: 80,
+      availableWidth: 360,
+    });
+    expect(fitted).toBeLessThan(80);
+    expect(fitted).toBeGreaterThanOrEqual(6);
+  });
+
+  it('uses detected line count when compiling flat text', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'activities_heading',
+          kind: 'text',
+          label: 'Activities heading',
+          text: 'ACTIVITIES INCLUDE:',
+          fontFamily: 'anton',
+          fontSizeRatio: 0.08,
+          visibleLineCount: 1,
+          box: { x: 0.1, y: 0.1, width: 0.25, height: 0.1 },
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1000,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const heading = compiled.project.elements[0];
+    expect(heading).toMatchObject({ type: 'text', text: 'ACTIVITIES INCLUDE:' });
+    if (heading?.type !== 'text') throw new Error('Expected flat text.');
+    expect(heading.fontSize).toBeLessThan(80);
+  });
+
+  it('applies detected image masks to reconstructed photo regions', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'classroom_photo',
+          kind: 'image_region',
+          label: 'Circular classroom photo',
+          imageRole: 'photo',
+          imageMask: 'circle',
+          replacementRecommended: true,
+          replacementReason: 'the source crop is contaminated',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'image',
+      mask: 'circle',
+      edge: 'none',
+    });
+  });
+
   it('rebuilds supported semantic icons as clean tintable SVG layers', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
@@ -501,6 +586,26 @@ describe('compilePosterReconstruction', () => {
 });
 
 describe('PosterReconstructionPlanSchema', () => {
+  it('keeps older cached elements readable with neutral detail defaults', () => {
+    const current = plan([element({ kind: 'text', text: 'Legacy heading' })]);
+    const {
+      visibleLineCount: _visibleLineCount,
+      cornerStyle: _cornerStyle,
+      imageMask: _imageMask,
+      ...legacyElement
+    } = current.elements[0];
+    const parsed = PosterReconstructionPlanSchema.parse({
+      ...current,
+      elements: [legacyElement],
+    });
+
+    expect(parsed.elements[0]).toMatchObject({
+      visibleLineCount: 0,
+      cornerStyle: 'auto',
+      imageMask: 'none',
+    });
+  });
+
   it('rejects arbitrary executable fields', () => {
     const unsafe = {
       ...createFallbackReconstructionPlan(),

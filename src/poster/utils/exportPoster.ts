@@ -24,9 +24,37 @@ export type PosterExportResult = {
   mediaType: string;
 };
 
-type FabricExportCanvas = {
-  toCanvasElement: (multiplier?: number) => HTMLCanvasElement;
+type FabricExportObject = {
+  visible?: boolean;
+  data?: { excludeFromExport?: boolean };
 };
+
+export type FabricExportCanvas = {
+  toCanvasElement: (multiplier?: number) => HTMLCanvasElement;
+  getObjects?: () => FabricExportObject[];
+  requestRenderAll?: () => unknown;
+};
+
+/** Keep editor-only guides visible while ensuring no export or thumbnail can bake them in. */
+export function withFabricExportExclusions<T>(
+  fabricCanvas: Pick<FabricExportCanvas, 'getObjects' | 'requestRenderAll'>,
+  render: () => T,
+): T {
+  const excluded = (fabricCanvas.getObjects?.() ?? [])
+    .filter((object) => object.data?.excludeFromExport === true)
+    .map((object) => ({ object, visible: object.visible !== false }));
+  try {
+    for (const { object } of excluded) setFabricObjectVisible(object, false);
+    return render();
+  } finally {
+    for (const { object, visible } of excluded) setFabricObjectVisible(object, visible);
+    if (excluded.length > 0) fabricCanvas.requestRenderAll?.();
+  }
+}
+
+function setFabricObjectVisible(object: FabricExportObject, visible: boolean): void {
+  object.visible = visible;
+}
 
 export function getPosterExportPlan(
   canvasWidth: number,
@@ -138,7 +166,7 @@ export async function exportPosterPng(options: {
   let rendered: HTMLCanvasElement | null = null;
   let composite: HTMLCanvasElement | null = null;
   try {
-    rendered = fabricCanvas.toCanvasElement(scale);
+    rendered = withFabricExportExclusions(fabricCanvas, () => fabricCanvas.toCanvasElement(scale));
     let output = rendered;
 
     if (!isSolidBackground(canvasBackground)) {

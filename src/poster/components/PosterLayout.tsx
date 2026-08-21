@@ -25,6 +25,7 @@ import { loadPosterProjectFromCloud, savePosterProjectToCloud, savePosterProject
 import { syncLinkedUserPosterImagesAfterCloudSave } from '../services/userPosterImagesApi';
 import { resolveBlobUrlsInProject, applyProcessedProjectUrlsToStore } from '../utils/resolveBlobUrlsInProject';
 import { computePosterProjectPatch, patchIsEmpty } from '../utils/projectPatch';
+import { withFabricExportExclusions } from '../utils/exportPoster';
 import { projectHasBlobImageUrls, warnIfPosterHasBlobRefs } from '../userTemplatesStorage';
 import { removePathAnchorAt } from '../path/penToolMath';
 import type { PosterTemplateCategory, PosterTemplateFieldBinding } from '../templateTypes';
@@ -370,7 +371,11 @@ export function PosterLayout() {
       // Also save a private snapshot to "My stuff" (per-user library)
       try {
         const fabric = getFabricCanvasRef();
-        const thumb = fabric ? fabric.toDataURL({ format: 'webp', multiplier: 0.35, quality: 0.8 }) : undefined;
+        const thumb = fabric
+          ? withFabricExportExclusions(fabric, () =>
+              fabric.toDataURL({ format: 'webp', multiplier: 0.35, quality: 0.8 }),
+            )
+          : undefined;
         const editId =
           typeof sessionStorage !== 'undefined'
             ? sessionStorage.getItem('poster_edit_my_project_id')

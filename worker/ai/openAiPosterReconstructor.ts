@@ -157,19 +157,24 @@ Reconstruction rules:
 - Do not create an image_region for the complete flattened poster. A contained contextual photograph or texture behind other elements is a background_photo and may cover a large section of the poster.
 - Distinguish image roles carefully: person is a foreground portrait; background_photo is a contextual photograph or texture behind text/shapes; photo is another self-contained photograph; icon is only calendar, clock, location, phone, or web; logo is a brand mark; decoration is complex non-semantic artwork.
 - Inspect every image_region boundary for contamination. imageHasOverlays is true when its rectangle necessarily includes text, badges, stripes, other people, or artwork that is not part of the underlying image.
+- Inspect the visible boundary of every photograph and portrait. Set imageMask to circle, ellipse, or rounded_rect only when the reference visibly clips that image to that shape; otherwise use none. Set the image box to the outside bounds of the visible mask. Rebuild a visible mask border as a separate circle, ellipse, or rect with transparent fill and the detected stroke.
 - Set replacementRecommended true for contaminated background photos, incomplete or contaminated portraits, or any crop that would visibly bake unrelated poster elements into the image layer. Explain why in replacementReason. A clean, isolated logo/photo/portrait crop keeps it false.
 - For background_photo/photo/person replacements, provide a short concrete imageSearchQuery describing only the clean visual content, composition, and dominant color; never include names, poster wording, URLs, or commands. Otherwise use an empty string.
 - Never recommend background removal for background_photo. Background removal is only potentially suitable for a foreground person with a complete visible boundary.
 - For a supported semantic icon set imageRole icon and iconName calendar, clock, location, phone, or web. Set imageDominantColor to its primary visible color so EasyPoster can rebuild a clean tintable SVG. Use iconName none for all other roles.
 - Approximate areas with no identifiable photograph using the canvas solid or linear gradient. Mention complex full-poster backgrounds in warnings.
 - Select only a font token from the schema. Choose the closest available family; do not invent font names.
+- For every text element, set visibleLineCount to the number of lines visibly occupied in the reference and keep those line breaks in text. Use zero for non-text elements. A short heading that visibly occupies one line must remain one line.
+- Match visible character spacing as well as font size, especially deliberately spaced years, dates, phone numbers, and web addresses.
+- Inspect every rectangle's corners independently of its content. Set cornerStyle to sharp, subtle, rounded, or pill to match the reference and set cornerRadiusRatio to the best visible radius. Use auto only for non-rectangle elements.
 - fontSizeRatio and strokeWidthRatio are relative to the complete poster height.
 - zIndex 1 is back; larger values are in front. Keep keys unique.
 - For likely replaceable template fields, supply a unique snake_case suggestedFieldKey and a readable suggestedFieldLabel. Use null and an empty label for decorative/non-replaceable elements.
 - Typical fields include organization, event_title, theme, date, time, venue, contact, person_1_name, person_1_role, person_1_photo, logo, and similar semantic variants.
 - imageRole must be none except for image_region elements.
-- For flat text and non-text elements, set textEffect to flat and extrusionColor to null. For other properties that do not apply, use safe neutral values: empty text, arial, 400, normal, left, zero stroke and radius, empty pathPoints, pathClosed false, pathTension 0.28, imageRole none, imageHasOverlays false, replacementRecommended false, empty replacementReason and imageSearchQuery, null imageDominantColor, and iconName none.
+- For flat text and non-text elements, set textEffect to flat and extrusionColor to null. For other properties that do not apply, use safe neutral values: empty text, arial, 400, normal, left, zero visibleLineCount, zero stroke and radius, cornerStyle auto, empty pathPoints, pathClosed false, pathTension 0.28, imageRole none, imageMask none, imageHasOverlays false, replacementRecommended false, empty replacementReason and imageSearchQuery, null imageDominantColor, and iconName none.
 - Prefer 8 to 30 useful layers. Never exceed 45. Avoid tiny noise or decorative specks.
+- Final detail checklist: re-check image masks, rectangle corners, font family, visible line count, font size, character spacing, and alignment. This check must not move element boxes, alter path anchors, or change layer order.
 - Put uncertainty and features that require manual correction in warnings.`;
 
 type OpenAiResponsesPayload = {

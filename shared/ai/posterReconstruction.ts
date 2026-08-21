@@ -1,22 +1,28 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 4 as const;
-export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v4' as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 5 as const;
+export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v5-details' as const;
 
 export const RECONSTRUCTION_FONT_TOKENS = [
   'arial',
   'arial_black',
   'allura',
+  'anton',
   'bebas_neue',
+  'chewy',
   'courier_new',
   'crimson_pro',
   'dancing_script',
+  'fredoka',
   'georgia',
   'great_vibes',
   'impact',
   'inter',
   'lato',
+  'lilita_one',
+  'luckiest_guy',
   'merriweather',
+  'modak',
   'montserrat',
   'nunito',
   'open_sans',
@@ -76,9 +82,11 @@ export const ReconstructionElementSchema = z
     textAlign: z.enum(['left', 'center', 'right']),
     charSpacing: z.number().min(-250).max(1200),
     lineHeight: z.number().min(0.7).max(3),
+    visibleLineCount: z.number().int().min(0).max(20).default(0),
     textEffect: z.enum(['flat', 'two_layer_3d']),
     extrusionColor: NullableHexColorSchema,
     cornerRadiusRatio: z.number().min(0).max(0.5),
+    cornerStyle: z.enum(['auto', 'sharp', 'subtle', 'rounded', 'pill']).default('auto'),
     pathPoints: z.array(ReconstructionPathPointSchema).max(8),
     pathClosed: z.boolean(),
     pathTension: z.number().min(0.1).max(0.45),
@@ -91,6 +99,7 @@ export const ReconstructionElementSchema = z
       'icon',
       'decoration',
     ]),
+    imageMask: z.enum(['none', 'circle', 'ellipse', 'rounded_rect']).default('none'),
     imageHasOverlays: z.boolean(),
     replacementRecommended: z.boolean(),
     replacementReason: z.string().max(180),
@@ -236,9 +245,14 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         textAlign: { type: 'string', enum: ['left', 'center', 'right'] },
         charSpacing: { type: 'number', minimum: -250, maximum: 1200 },
         lineHeight: { type: 'number', minimum: 0.7, maximum: 3 },
+        visibleLineCount: { type: 'integer', minimum: 0, maximum: 20 },
         textEffect: { type: 'string', enum: ['flat', 'two_layer_3d'] },
         extrusionColor: nullable(hexJsonSchema),
         cornerRadiusRatio: { type: 'number', minimum: 0, maximum: 0.5 },
+        cornerStyle: {
+          type: 'string',
+          enum: ['auto', 'sharp', 'subtle', 'rounded', 'pill'],
+        },
         pathPoints: {
           type: 'array',
           maxItems: 8,
@@ -257,6 +271,10 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
             'icon',
             'decoration',
           ],
+        },
+        imageMask: {
+          type: 'string',
+          enum: ['none', 'circle', 'ellipse', 'rounded_rect'],
         },
         imageHasOverlays: { type: 'boolean' },
         replacementRecommended: { type: 'boolean' },

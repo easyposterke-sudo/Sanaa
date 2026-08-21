@@ -1,6 +1,7 @@
 import type { Canvas } from 'fabric';
 import { canvasBackgroundToCanvas2D } from './types';
 import type { CanvasBackground } from './types';
+import { withFabricExportExclusions } from './utils/exportPoster';
 
 let fabricCanvasRef: Canvas | null = null;
 
@@ -37,11 +38,13 @@ export async function capturePosterThumbnail(
 
   let fabricDataUrl: string;
   try {
-    fabricDataUrl = fabricCanvas.toDataURL({
-      format: 'webp',
-      multiplier: scale,
-      quality: 0.8,
-    });
+    fabricDataUrl = withFabricExportExclusions(fabricCanvas, () =>
+      fabricCanvas.toDataURL({
+        format: 'webp',
+        multiplier: scale,
+        quality: 0.8,
+      }),
+    );
   } catch {
     // Tainted canvas (e.g. cross-origin images without CORS) cannot be exported
     return null;

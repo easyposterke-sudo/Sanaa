@@ -1207,6 +1207,10 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
                     : undefined;
                 (obj as { data?: Record<string, unknown> }).data = {
                   posterId: el.id,
+                  excludeFromExport:
+                    el.excludeFromExport === true ||
+                    el.id.startsWith('reconstruction_reference_guide') ||
+                    el.layerName?.startsWith('REFERENCE GUIDE') === true,
                   imageSrc,
                   ...(imageEffectsKey !== undefined ? { imageEffectsKey } : {}),
                   ...(adjKey !== undefined ? { adjustmentsKey: adjKey } : {}),

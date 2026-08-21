@@ -36,6 +36,8 @@ export interface PosterElementBase {
   shadow?: PosterShadow;
   /** When true, element cannot be moved, scaled, or rotated on the canvas. */
   locked?: boolean;
+  /** Helper/reference layer that remains visible in the editor but is omitted from exports and thumbnails. */
+  excludeFromExport?: boolean;
 }
 
 /**
