@@ -1,7 +1,23 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 5 as const;
-export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v5-details' as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 6 as const;
+export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v6-social-icons' as const;
+
+export const RECONSTRUCTION_ICON_NAMES = [
+  'none',
+  'calendar',
+  'clock',
+  'location',
+  'phone',
+  'web',
+  'facebook',
+  'instagram',
+  'youtube',
+  'x',
+  'tiktok',
+  'linkedin',
+  'whatsapp',
+] as const;
 
 export const RECONSTRUCTION_FONT_TOKENS = [
   'arial',
@@ -105,7 +121,7 @@ export const ReconstructionElementSchema = z
     replacementReason: z.string().max(180),
     imageSearchQuery: z.string().max(120),
     imageDominantColor: NullableHexColorSchema,
-    iconName: z.enum(['none', 'calendar', 'clock', 'location', 'phone', 'web']),
+    iconName: z.enum(RECONSTRUCTION_ICON_NAMES),
     suggestedFieldKey: FieldKeySchema,
     suggestedFieldLabel: z.string().max(80),
     confidence: z.number().min(0).max(1),
@@ -283,7 +299,7 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         imageDominantColor: nullable(hexJsonSchema),
         iconName: {
           type: 'string',
-          enum: ['none', 'calendar', 'clock', 'location', 'phone', 'web'],
+          enum: [...RECONSTRUCTION_ICON_NAMES],
         },
         suggestedFieldKey: nullable(fieldKeyJsonSchema),
         suggestedFieldLabel: { type: 'string', maxLength: 80 },

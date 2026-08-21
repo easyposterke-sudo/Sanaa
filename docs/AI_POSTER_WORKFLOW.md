@@ -14,6 +14,9 @@ JPEG, or WebP posters.
    headline clearly uses the approved two-layer 3D treatment.
 3. Trusted browser code compiles the manifest into ordinary EasyPoster/Fabric
    layers. No model-produced SVG, paths, URLs, or executable code is accepted.
+   Common Facebook, Instagram, YouTube, X, TikTok, LinkedIn, and WhatsApp marks
+   are rebuilt from pinned local SVG assets in the detected poster color rather
+   than retained as low-resolution crops.
 4. A low-opacity, locked copy of the reference is added as a tracing guide and
    must be replaced or deleted before the template is published.
 5. The editor enters its existing template-labeling mode automatically. Likely

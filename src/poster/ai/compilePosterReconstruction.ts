@@ -21,6 +21,11 @@ import {
   fitTwoLayer3DTextPlacement,
   renderTwoLayer3DTextPreview,
 } from './twoLayer3DTextSkill';
+import {
+  isSocialIconName,
+  socialIconSvg,
+  type SocialIconName,
+} from '../assets/social-icons';
 
 type PixelBox = { left: number; top: number; width: number; height: number };
 
@@ -866,7 +871,9 @@ function builtInIconDataUrl(
   requestedColor: string,
 ): string {
   const color = /^#[0-9a-f]{6}$/i.test(requestedColor) ? requestedColor : '#111111';
-  const paths: Record<typeof icon, string> = {
+  if (isSocialIconName(icon)) return svgDataUrl(socialIconSvg(icon, color));
+
+  const paths: Record<Exclude<typeof icon, SocialIconName>, string> = {
     calendar: '<rect x="17" y="22" width="66" height="61" rx="8"/><path d="M17 39h66M34 13v18M66 13v18M32 53h8M47 53h8M62 53h8M32 68h8M47 68h8M62 68h8"/>',
     clock: '<circle cx="50" cy="50" r="36"/><path d="M50 29v23l17 11"/>',
     location: '<path d="M50 89S22 62 22 39a28 28 0 1 1 56 0c0 23-28 50-28 50z"/><circle cx="50" cy="39" r="9"/>',

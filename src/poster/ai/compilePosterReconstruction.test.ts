@@ -529,6 +529,44 @@ describe('compilePosterReconstruction', () => {
     expect(decodeURIComponent(icon.src)).toContain('stroke="#176143"');
   });
 
+  it.each([
+    'facebook',
+    'instagram',
+    'youtube',
+    'x',
+    'tiktok',
+    'linkedin',
+    'whatsapp',
+  ] as const)('rebuilds the %s social icon from a local tintable SVG asset', async (iconName) => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: `${iconName}_icon`,
+          kind: 'image_region',
+          label: `${iconName} social icon`,
+          box: { x: 0.05, y: 0.8, width: 0.08, height: 0.06 },
+          imageRole: 'icon',
+          iconName,
+          imageDominantColor: '#2878c7',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const icon = compiled.project.elements[0];
+    expect(icon).toMatchObject({ type: 'image', layerName: `AI icon: ${iconName} social icon` });
+    if (icon?.type !== 'image') throw new Error('Expected a social icon image.');
+    const svg = decodeURIComponent(icon.src);
+    expect(svg).toContain('fill="#2878c7"');
+    expect(svg).toContain('<path');
+    expect(svg).not.toContain('iVBORw0KGgo');
+  });
+
   it('compiles one filled, outlined irregular panel with a smooth editable anchor', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
