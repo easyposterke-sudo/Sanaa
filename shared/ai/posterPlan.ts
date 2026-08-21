@@ -286,7 +286,7 @@ export function createFallbackPosterPlan(peopleCount: number): PosterDesignPlan 
     },
     confidence: 0.62,
     unsupportedFeatures: [
-      'Automatic portrait background removal is not part of this first version.',
+      'Background removal is available as a separate user-approved image action, not an automatic AI step.',
       'The initial 3D preview approximates the reference material and remains re-editable.',
     ],
   });

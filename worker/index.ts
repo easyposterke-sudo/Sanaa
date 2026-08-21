@@ -20,6 +20,7 @@ import { OpenAiPlannerError, planPosterWithOpenAI } from './ai/openAiPosterPlann
 import { reconstructPosterWithOpenAI } from './ai/openAiPosterReconstructor';
 import { parsePosterDocument } from './domain/document';
 import { parseRecordingSession } from './domain/recording';
+import { RemoveBgUpstreamError, removeBackgroundWithRemoveBg } from './integrations/removeBg';
 
 type Variables = {
   ownerId: string;
@@ -561,6 +562,94 @@ app.get('/api/stock-photos/:photoId/image', async (context) => {
   });
 });
 
+app.post('/api/images/remove-background', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const apiKey = context.env.REMOVE_BG_API_KEY?.trim();
+  if (!apiKey) {
+    return context.json(
+      {
+        error: 'Background removal is not configured yet.',
+        code: 'BACKGROUND_REMOVAL_NOT_CONFIGURED',
+        requestId,
+      },
+      503,
+    );
+  }
+
+  const contentType = context.req.header('content-type')?.toLowerCase();
+  if (!contentType?.startsWith('multipart/form-data;')) {
+    return context.json(
+      { error: 'Upload an image as multipart form data.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+
+  const maximumBytes = maxBackgroundRemovalBytes(context.env);
+  const bytes = await readBoundedBytes(context.req.raw, maximumBytes + 128 * 1024);
+  const parsedRequest = new Request('https://easyposter.invalid/remove-background', {
+    method: 'POST',
+    headers: { 'content-type': contentType },
+    body: bytes,
+  });
+  const form = await parsedRequest.formData();
+  const image = form.get('image');
+  if (!(image instanceof File)) {
+    return context.json(
+      { error: 'Choose an image to remove its background.', code: 'IMAGE_REQUIRED', requestId },
+      400,
+    );
+  }
+  const mediaType = image.type.toLowerCase();
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mediaType)) {
+    return context.json(
+      { error: 'Use a PNG, JPEG, or WebP image.', code: 'UNSUPPORTED_IMAGE', requestId },
+      415,
+    );
+  }
+  if (image.size <= 0 || image.size > maximumBytes) {
+    return context.json(
+      { error: 'Use an image between 1 byte and 22 MB.', code: 'IMAGE_TOO_LARGE', requestId },
+      413,
+    );
+  }
+  const signature = new Uint8Array(await image.slice(0, 16).arrayBuffer());
+  if (!matchesImageSignature(mediaType, signature)) {
+    return context.json(
+      { error: 'The uploaded file is not a valid image.', code: 'INVALID_IMAGE', requestId },
+      400,
+    );
+  }
+
+  try {
+    const upstream = await removeBackgroundWithRemoveBg({ image, apiKey });
+    return new Response(upstream.body, {
+      headers: {
+        'content-type': upstream.headers.get('content-type') || 'image/webp',
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  } catch (error) {
+    if (error instanceof RemoveBgUpstreamError) {
+      console.warn(
+        JSON.stringify({
+          message: 'Remove.bg request failed',
+          code: error.code,
+          status: error.status,
+          requestId,
+        }),
+      );
+      if (error.retryAfter) context.header('retry-after', error.retryAfter);
+      return context.json(
+        { error: error.message, code: error.code, requestId },
+        error.status,
+      );
+    }
+    throw error;
+  }
+});
+
 app.get('/api/projects', async (context) => {
   const ownerId = context.get('ownerId');
   const result = await context.env.DB.prepare(
@@ -945,6 +1034,43 @@ function maxProjectBytes(env: Env): number {
 function maxAiRequestBytes(env: Env): number {
   const configured = Number(env.MAX_AI_REQUEST_BYTES);
   return Number.isFinite(configured) && configured > 0 ? configured : 3 * 1024 * 1024;
+}
+
+function maxBackgroundRemovalBytes(env: Env): number {
+  const configured = Number(env.MAX_BACKGROUND_REMOVAL_BYTES);
+  return Number.isFinite(configured) && configured > 0 ? configured : 22 * 1024 * 1024;
+}
+
+async function readBoundedBytes(request: Request, maximumBytes: number): Promise<ArrayBuffer> {
+  const contentLength = parseContentLength(request.headers.get('content-length'));
+  if (contentLength !== null && contentLength > maximumBytes) {
+    throw new RangeError('Background-removal upload is too large.');
+  }
+  if (!request.body) return new ArrayBuffer(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      totalBytes += chunk.value.byteLength;
+      if (totalBytes > maximumBytes) {
+        await reader.cancel('Background-removal upload is too large.');
+        throw new RangeError('Background-removal upload is too large.');
+      }
+      chunks.push(chunk.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return combined.buffer;
 }
 
 function maxAiGenerationsPerDay(env: Env): number {

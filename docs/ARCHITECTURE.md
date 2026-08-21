@@ -65,8 +65,12 @@ semantic design plan and caches it in D1. A deterministic compiler—not the
 model—creates every ID, text value, shape, image layer, 3D configuration, and
 z-order. The initial 3D layer uses an SVG preview plus an editable WebGL recipe.
 
-The active build still excludes an AI chat loop, arbitrary model-generated
-code/SVG, and automatic background removal. See `AI_POSTER_WORKFLOW.md`.
+The active build still excludes an AI chat loop and arbitrary model-generated
+code/SVG. Background removal is never triggered automatically by AI. The stable
+action is proxied through the Worker to Remove.bg, while a separate experimental
+action runs MODNet or U²-NetP entirely inside a dedicated browser worker. The
+local action can be removed without changing the Worker API or stable action.
+See `AI_POSTER_WORKFLOW.md`.
 
 ## Cloudflare boundary
 

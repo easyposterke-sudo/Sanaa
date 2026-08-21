@@ -147,8 +147,11 @@ The non-secret settings live in `wrangler.jsonc`:
 
 ## Current limits and next recipes
 
-- Automatic portrait background removal is not included yet. Use transparent
-  cutouts or the existing mask/selection tools.
+- Background removal is available as an explicit action for a selected poster
+  image when `REMOVE_BG_API_KEY` is configured. AI never spends a Remove.bg
+  credit automatically. A separate browser-only beta lets users compare MODNet
+  for portraits and U²-NetP for general objects without an API charge; users can
+  also use transparent cutouts or the existing mask/selection tools.
 - The sample's diamond-plate front is approximated by an ivory metallic face
   and rough material. A licensed diamond-plate texture can be added as a new
   versioned headline recipe.

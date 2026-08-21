@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 export default defineConfig({
   plugins: [react(), cloudflare()],
   resolve: {
+    conditions: ['module', 'browser', 'development|production', 'onnxruntime-web-use-extern-wasm'],
     alias: {
       'react-router-dom': fileURLToPath(new URL('./src/routerCompat.tsx', import.meta.url)),
     },

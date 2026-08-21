@@ -39,6 +39,7 @@
     "APP_ENV": "production",
     "MAX_PROJECT_BYTES": "15728640",
     "MAX_AI_REQUEST_BYTES": "3145728",
+    "MAX_BACKGROUND_REMOVAL_BYTES": "23068672",
     "MAX_AI_GENERATIONS_PER_DAY": "20",
     "OPENAI_MODEL": "gpt-5.6-luna",
     "AI_PROMPT_VERSION": "poster-planner-v2",
