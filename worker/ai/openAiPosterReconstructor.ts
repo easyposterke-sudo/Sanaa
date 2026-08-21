@@ -7,6 +7,33 @@ import {
 import { OpenAiPlannerError } from './openAiPosterPlanner';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+const POSTER_RECONSTRUCTION_TIMEOUT_MS = 110_000;
+
+export const POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS = 12_000;
+
+export type OpenAiPosterReconstructionIncompleteReason =
+  | 'max_output_tokens'
+  | 'content_filter'
+  | 'unknown';
+
+export interface OpenAiPosterReconstructionFailureDetails {
+  openAiRequestId: string | null;
+  incompleteReason: OpenAiPosterReconstructionIncompleteReason;
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
+export class OpenAiPosterReconstructionError extends OpenAiPlannerError {
+  constructor(
+    message: string,
+    status: number,
+    code: string,
+    readonly details: OpenAiPosterReconstructionFailureDetails,
+  ) {
+    super(message, status, code);
+    this.name = 'OpenAiPosterReconstructionError';
+  }
+}
 
 export interface OpenAiPosterReconstructionResult {
   plan: PosterReconstructionPlan;
@@ -22,7 +49,10 @@ export async function reconstructPosterWithOpenAI(input: {
   timeoutMs?: number;
 }): Promise<OpenAiPosterReconstructionResult> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), input.timeoutMs ?? 75_000);
+  const timer = setTimeout(
+    () => controller.abort(),
+    input.timeoutMs ?? POSTER_RECONSTRUCTION_TIMEOUT_MS,
+  );
   let response: Response;
   try {
     response = await fetch(OPENAI_RESPONSES_URL, {
@@ -35,7 +65,7 @@ export async function reconstructPosterWithOpenAI(input: {
         model: input.model,
         store: false,
         reasoning: { effort: 'none' },
-        max_output_tokens: 7000,
+        max_output_tokens: POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS,
         input: [
           {
             role: 'system',
@@ -99,7 +129,35 @@ export async function reconstructPosterWithOpenAI(input: {
 
   const data = (await response.json()) as OpenAiResponsesPayload;
   if (data.status === 'incomplete') {
-    throw new OpenAiPlannerError('The AI reconstruction was incomplete.', 502, 'AI_INCOMPLETE');
+    const incompleteReason = readIncompleteReason(data);
+    const details: OpenAiPosterReconstructionFailureDetails = {
+      openAiRequestId: openAiRequestId ?? data.id ?? null,
+      incompleteReason,
+      inputTokens: finiteInteger(data.usage?.input_tokens),
+      outputTokens: finiteInteger(data.usage?.output_tokens),
+    };
+    if (incompleteReason === 'max_output_tokens') {
+      throw new OpenAiPosterReconstructionError(
+        'This poster needs more reconstruction output than the AI service could return. Try again or use a less detailed reference.',
+        502,
+        'AI_OUTPUT_LIMIT',
+        details,
+      );
+    }
+    if (incompleteReason === 'content_filter') {
+      throw new OpenAiPosterReconstructionError(
+        'The AI safety filter could not complete this poster reconstruction.',
+        422,
+        'AI_CONTENT_FILTER',
+        details,
+      );
+    }
+    throw new OpenAiPosterReconstructionError(
+      'The AI reconstruction was incomplete.',
+      502,
+      'AI_INCOMPLETE',
+      details,
+    );
   }
   if (readRefusal(data)) {
     throw new OpenAiPlannerError(
@@ -180,12 +238,20 @@ Reconstruction rules:
 type OpenAiResponsesPayload = {
   id?: string;
   status?: string;
+  incomplete_details?: { reason?: string };
   output?: Array<{
     type?: string;
     content?: Array<{ type?: string; text?: string; refusal?: string }>;
   }>;
   usage?: { input_tokens?: number; output_tokens?: number };
 };
+
+function readIncompleteReason(
+  payload: OpenAiResponsesPayload,
+): OpenAiPosterReconstructionIncompleteReason {
+  const reason = payload.incomplete_details?.reason;
+  return reason === 'max_output_tokens' || reason === 'content_filter' ? reason : 'unknown';
+}
 
 function readOutputText(payload: OpenAiResponsesPayload): string | null {
   for (const output of payload.output ?? []) {

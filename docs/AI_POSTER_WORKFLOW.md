@@ -20,6 +20,12 @@ JPEG, or WebP posters.
    titles, dates, names, venues, logos, and portrait slots arrive pre-labeled;
    the creator can correct the draft and then save it to the cloud library.
 
+Complex references have a reconstruction-only output allowance of 12,000
+tokens and a 110-second upstream timeout. The browser waits 135 seconds so the
+Worker can return a structured error first. If OpenAI still ends a response
+early, Worker logs distinguish output-limit, content-filter, and unknown
+incomplete responses and include the upstream request ID and token usage.
+
 Clearly dimensional headline blocks are compiled with
 `two-layer-face-shell-v1`: a light front face and a poster-matched colored rear
 shell. Separate headline lines are requested as separate 3D poster elements so

@@ -17,7 +17,10 @@ import {
   type PosterReconstructionRequest,
 } from '../shared/ai/posterReconstruction';
 import { OpenAiPlannerError, planPosterWithOpenAI } from './ai/openAiPosterPlanner';
-import { reconstructPosterWithOpenAI } from './ai/openAiPosterReconstructor';
+import {
+  OpenAiPosterReconstructionError,
+  reconstructPosterWithOpenAI,
+} from './ai/openAiPosterReconstructor';
 import { parsePosterDocument } from './domain/document';
 import { parseRecordingSession } from './domain/recording';
 import { RemoveBgUpstreamError, removeBackgroundWithRemoveBg } from './integrations/removeBg';
@@ -429,12 +432,18 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
     return context.json({ plan: result.plan, source: 'openai', model, requestId });
   } catch (error) {
     if (error instanceof OpenAiPlannerError) {
+      const reconstructionDetails =
+        error instanceof OpenAiPosterReconstructionError ? error.details : null;
       console.warn(
         JSON.stringify({
           message: 'OpenAI poster reconstruction failed',
           code: error.code,
           status: error.status,
           requestId,
+          openAiRequestId: reconstructionDetails?.openAiRequestId ?? null,
+          incompleteReason: reconstructionDetails?.incompleteReason ?? null,
+          inputTokens: reconstructionDetails?.inputTokens ?? null,
+          outputTokens: reconstructionDetails?.outputTokens ?? null,
         }),
       );
       return context.json(

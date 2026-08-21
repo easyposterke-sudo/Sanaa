@@ -24,7 +24,7 @@ export async function requestPosterReconstruction(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-    timeoutMs: 105_000,
+    timeoutMs: 135_000,
   });
   const data = (await response.json().catch(() => null)) as
     | {
