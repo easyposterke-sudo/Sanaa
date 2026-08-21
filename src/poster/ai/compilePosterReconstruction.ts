@@ -147,11 +147,15 @@ export async function compilePosterReconstruction(input: {
       });
       element = {
         ...base,
+        ...(image.layout ?? {
+          left: box.left,
+          top: box.top,
+          scaleX: box.width / image.width,
+          scaleY: box.height / image.height,
+        }),
         layerName: image.layerName ?? base.layerName,
         type: 'image',
         src: image.dataUrl,
-        scaleX: box.width / image.width,
-        scaleY: box.height / image.height,
         mask: 'none',
         edge: 'none',
       } satisfies PosterImageElement;
@@ -275,7 +279,13 @@ async function compileImageRegion(input: {
   reference: { dataUrl: string; width: number; height: number };
   replacement?: ReconstructionImageReplacement;
   warnings: string[];
-}): Promise<{ dataUrl: string; width: number; height: number; layerName?: string }> {
+}): Promise<{
+  dataUrl: string;
+  width: number;
+  height: number;
+  layerName?: string;
+  layout?: Pick<PosterImageElement, 'left' | 'top' | 'scaleX' | 'scaleY'>;
+}> {
   const { item, box, replacement, warnings } = input;
   if (item.imageRole === 'icon' && item.iconName !== 'none') {
     return {
@@ -287,6 +297,18 @@ async function compileImageRegion(input: {
   }
 
   if (replacement) {
+    if (item.imageRole === 'person') {
+      if (replacement.credit?.trim()) {
+        warnings.push(`Replacement for “${item.label}”: ${replacement.credit.trim()}.`);
+      }
+      return {
+        dataUrl: replacement.src,
+        width: Math.max(1, replacement.width),
+        height: Math.max(1, replacement.height),
+        layerName: `AI replacement: ${item.label}`,
+        layout: fitPersonReplacementIntoBox(replacement, box),
+      };
+    }
     const crop = await cropImageToAspect(replacement, box.width / box.height);
     if (replacement.credit?.trim()) {
       warnings.push(`Replacement for “${item.label}”: ${replacement.credit.trim()}.`);
@@ -316,6 +338,27 @@ async function compileImageRegion(input: {
   }
 
   return cropReferenceRegion(input.reference, box);
+}
+
+/**
+ * Foreground people are cutouts, not photo frames. Keep the full replacement visible,
+ * center it horizontally, and anchor it to the bottom of the detected portrait region.
+ */
+export function fitPersonReplacementIntoBox(
+  source: Pick<ReconstructionImageReplacement, 'width' | 'height'>,
+  box: PixelBox,
+): Pick<PosterImageElement, 'left' | 'top' | 'scaleX' | 'scaleY'> {
+  const sourceWidth = Math.max(1, source.width);
+  const sourceHeight = Math.max(1, source.height);
+  const scale = Math.min(box.width / sourceWidth, box.height / sourceHeight);
+  const renderedWidth = sourceWidth * scale;
+  const renderedHeight = sourceHeight * scale;
+  return {
+    left: box.left + (box.width - renderedWidth) / 2,
+    top: box.top + box.height - renderedHeight,
+    scaleX: scale,
+    scaleY: scale,
+  };
 }
 
 function compileThreeDTextElement(

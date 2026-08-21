@@ -6,7 +6,10 @@ import {
   type PosterReconstructionPlan,
   type ReconstructionElement,
 } from '../../../shared/ai/posterReconstruction';
-import { compilePosterReconstruction } from './compilePosterReconstruction';
+import {
+  compilePosterReconstruction,
+  fitPersonReplacementIntoBox,
+} from './compilePosterReconstruction';
 
 function element(overrides: Partial<ReconstructionElement>): ReconstructionElement {
   return {
@@ -105,6 +108,8 @@ describe('compilePosterReconstruction', () => {
     expect(compiled.project.canvasWidth).toBe(1000);
     expect(compiled.project.canvasHeight).toBe(1500);
     expect(compiled.project.elements).toHaveLength(2);
+    const panel = compiled.project.elements.find((item) => item.type === 'rect');
+    expect(panel).toMatchObject({ width: 900, height: 300, rx: 30 });
     const title = compiled.project.elements.find((item) => item.type === 'text');
     expect(title).toMatchObject({
       left: 100,
@@ -227,6 +232,58 @@ describe('compilePosterReconstruction', () => {
     expect(photo.src).toContain('data:image/svg+xml');
     expect(decodeURIComponent(photo.src)).toContain('REPLACE: Praying hands background');
     expect(compiled.warnings.join(' ')).toContain('title and date badge overlap');
+  });
+
+  it('keeps a complete person replacement visible and bottom-aligned in its detected region', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'guest_portrait',
+          kind: 'image_region',
+          label: 'Guest portrait',
+          box: { x: 0.1, y: 0.2, width: 0.6, height: 0.5 },
+          imageRole: 'person',
+          replacementRecommended: true,
+          suggestedFieldKey: 'guest_photo',
+          suggestedFieldLabel: 'Guest photo',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+      imageReplacements: {
+        guest_portrait: {
+          src: 'data:image/webp;base64,replacement',
+          width: 400,
+          height: 1000,
+        },
+      },
+    });
+
+    const portrait = compiled.project.elements[0];
+    expect(portrait).toMatchObject({
+      type: 'image',
+      src: 'data:image/webp;base64,replacement',
+      left: 250,
+      top: 300,
+      scaleX: 0.75,
+      scaleY: 0.75,
+    });
+  });
+
+  it('computes uniform contain scaling without cropping a tall portrait', () => {
+    expect(fitPersonReplacementIntoBox(
+      { width: 500, height: 1200 },
+      { left: 100, top: 200, width: 600, height: 720 },
+    )).toEqual({
+      left: 250,
+      top: 200,
+      scaleX: 0.6,
+      scaleY: 0.6,
+    });
   });
 
   it('rebuilds supported semantic icons as clean tintable SVG layers', async () => {

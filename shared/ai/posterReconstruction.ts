@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 4 as const;
-export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v4' as const;
+export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v5' as const;
 
 export const RECONSTRUCTION_FONT_TOKENS = [
   'arial',

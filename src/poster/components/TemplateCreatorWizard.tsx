@@ -323,7 +323,15 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
 
                     {selected && (
                       <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-2 dark:border-emerald-800 dark:bg-emerald-950/20">
-                        <img src={selected.src} alt="Selected clean replacement" className="h-16 w-20 rounded object-cover" />
+                        <img
+                          src={selected.src}
+                          alt="Selected clean replacement"
+                          className={`h-16 w-20 rounded ${
+                            item.imageRole === 'person'
+                              ? 'bg-zinc-100 object-contain dark:bg-zinc-800'
+                              : 'object-cover'
+                          }`}
+                        />
                         <div className="min-w-0 flex-1 text-xs text-emerald-900 dark:text-emerald-200">
                           <p className="font-semibold">Clean replacement selected</p>
                           {selected.credit && <p className="mt-1 truncate">{selected.credit}</p>}
