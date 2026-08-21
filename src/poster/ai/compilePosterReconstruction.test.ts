@@ -237,6 +237,127 @@ describe('compilePosterReconstruction', () => {
     expect(compiled.warnings.join(' ')).toContain('title and date badge overlap');
   });
 
+  it('repairs a misclassified circular text badge into editable circle and text layers', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'enroll_badge',
+          kind: 'image_region',
+          label: 'Enroll Today badge',
+          box: { x: 0.65, y: 0.55, width: 0.2, height: 0.1333333333 },
+          imageRole: 'decoration',
+          imageHasOverlays: true,
+          replacementRecommended: true,
+          replacementReason: 'the words overlap the colored badge',
+          imageDominantColor: '#e52d1b',
+          suggestedFieldKey: 'enroll_callout',
+          suggestedFieldLabel: 'Enroll callout',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements).toHaveLength(2);
+    expect(compiled.project.elements.some((item) => item.type === 'image')).toBe(false);
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'circle',
+      fill: '#e52d1b',
+      left: 650,
+      radius: 100,
+    });
+    expect(compiled.project.elements[0]?.top).toBeCloseTo(825);
+    expect(compiled.project.elements[1]).toMatchObject({
+      type: 'text',
+      text: 'Enroll\nToday',
+      textAlign: 'center',
+      fill: '#ffffff',
+      angle: 0,
+    });
+    expect(compiled.fieldBindings).toEqual([{
+      key: 'enroll_callout',
+      label: 'Enroll callout',
+      sourceElementId: 'reconstruction_enroll_badge',
+      kind: 'text',
+    }]);
+    expect(compiled.warnings.join(' ')).toContain('editable shape and text');
+  });
+
+  it('repairs a wide text badge as a rounded rectangle without affecting photo placeholders', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'did_you_know',
+          kind: 'image_region',
+          label: 'Did You Know badge',
+          box: { x: 0.08, y: 0.32, width: 0.35, height: 0.1 },
+          angle: -32,
+          imageRole: 'decoration',
+          imageHasOverlays: true,
+          replacementRecommended: true,
+          replacementReason: 'the words overlap the colored rectangle',
+          imageDominantColor: '#ffba08',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements).toHaveLength(2);
+    const background = compiled.project.elements[0];
+    expect(background).toMatchObject({
+      type: 'rect',
+      width: 350,
+      height: 150,
+      fill: '#ffba08',
+      angle: -32,
+    });
+    if (background?.type !== 'rect') throw new Error('Expected a rounded rectangle badge.');
+    expect(background.rx).toBeGreaterThan(0);
+    expect(compiled.project.elements[1]).toMatchObject({
+      type: 'text',
+      text: 'Did You Know',
+      fill: '#111111',
+      angle: -32,
+    });
+  });
+
+  it('does not rewrite a photographic or branded badge as text', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'school_badge',
+          kind: 'image_region',
+          label: 'School badge',
+          imageRole: 'logo',
+          imageHasOverlays: true,
+          replacementRecommended: true,
+          replacementReason: 'the source logo is incomplete',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements).toHaveLength(1);
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'image',
+      layerName: 'REPLACE IMAGE: School badge',
+    });
+  });
+
   it('keeps a complete person replacement visible and bottom-aligned in its detected region', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([

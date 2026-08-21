@@ -125,6 +125,40 @@ export async function compilePosterReconstruction(input: {
       zIndex: nextZ++,
     };
 
+    const repairedBadgeWording = item.kind === 'image_region'
+      ? extractMisclassifiedBadgeWording(item)
+      : null;
+    const repairedBadge = repairedBadgeWording
+      ? compileMisclassifiedTextBadge({
+          item,
+          box,
+          canvasHeight,
+          shapeId: uniqueId(`${id}_background`, usedIds),
+          wording: repairedBadgeWording,
+          textBase: base,
+          textZIndex: nextZ,
+        })
+      : null;
+    if (repairedBadge) {
+      nextZ += 1;
+      elements.push(repairedBadge.shape, repairedBadge.text);
+      const fieldKey = item.suggestedFieldKey;
+      if (fieldKey && item.suggestedFieldLabel.trim() && !usedFieldKeys.has(fieldKey)) {
+        usedFieldKeys.add(fieldKey);
+        fields.push({
+          key: fieldKey,
+          label: item.suggestedFieldLabel.trim(),
+          sourceElementId: id,
+          kind: 'text',
+        });
+      }
+      warnings.push(`“${item.label}” was rebuilt as an editable shape and text instead of an image placeholder.`);
+      if (item.confidence < 0.55) {
+        warnings.push(`Review “${item.label}”; the AI reported low confidence.`);
+      }
+      continue;
+    }
+
     let element: PosterElement;
     if (item.kind === 'text') {
       const displayText = (item.text || item.label).trim();
@@ -442,6 +476,138 @@ function compileTextElement(
     stroke: item.stroke ?? undefined,
     strokeWidth: item.stroke ? item.strokeWidthRatio * canvasHeight : 0,
   };
+}
+
+const TEXT_BADGE_SUFFIX = /\s+(?:badge|button|callout)$/i;
+const GENERIC_BADGE_LABEL = /\b(?:badge|button|callout|decorative|decoration|graphic|artwork|illustration|image|photo|logo|icon|round|rounded|circular|rectangle|rectangular)\b/i;
+
+function extractMisclassifiedBadgeWording(item: ReconstructionElement): string | null {
+  if (
+    item.imageRole !== 'decoration' ||
+    !item.replacementRecommended ||
+    !item.imageHasOverlays ||
+    !TEXT_BADGE_SUFFIX.test(item.label)
+  ) {
+    return null;
+  }
+  const wording = item.text.trim() || item.label.replace(TEXT_BADGE_SUFFIX, '').trim();
+  if (
+    wording.length < 2 ||
+    wording.length > 60 ||
+    GENERIC_BADGE_LABEL.test(wording) ||
+    /https?:|www\.|[@{}<>]/i.test(wording)
+  ) {
+    return null;
+  }
+  return wording;
+}
+
+function compileMisclassifiedTextBadge(input: {
+  item: ReconstructionElement;
+  box: PixelBox;
+  canvasHeight: number;
+  shapeId: string;
+  wording: string;
+  textBase: Pick<PosterTextElement, 'id' | 'layerName' | 'left' | 'top' | 'scaleX' | 'scaleY' | 'angle' | 'opacity' | 'zIndex'>;
+  textZIndex: number;
+}): { shape: PosterShapeElement; text: PosterTextElement } {
+  const { item, box, canvasHeight, shapeId, wording, textBase, textZIndex } = input;
+
+  const aspect = box.width / box.height;
+  const isCircular = aspect >= 0.75 && aspect <= 1.25;
+  const fill = item.imageDominantColor ?? item.fill ?? '#64748b';
+  const shapeBase = {
+    id: shapeId,
+    layerName: `AI badge background: ${wording}`,
+    left: box.left,
+    top: box.top,
+    scaleX: 1,
+    scaleY: 1,
+    angle: item.angle,
+    opacity: item.opacity,
+    zIndex: textBase.zIndex,
+    fill,
+    stroke: item.stroke ?? undefined,
+    strokeWidth: item.stroke ? item.strokeWidthRatio * canvasHeight : 0,
+  };
+  const shape: PosterShapeElement = isCircular
+    ? {
+        ...shapeBase,
+        type: 'circle',
+        radius: box.width / 2,
+        scaleY: box.height / box.width,
+      }
+    : {
+        ...shapeBase,
+        type: 'rect',
+        width: box.width,
+        height: box.height,
+        rx: item.cornerRadiusRatio > 0
+          ? amplifiedDetectedCornerRadius(item.cornerRadiusRatio, box)
+          : Math.min(box.width, box.height) * 0.18,
+      };
+
+  const text = isCircular ? splitBadgeText(wording) : wording;
+  const lines = text.split('\n');
+  const horizontalPadding = box.width * (isCircular ? 0.15 : 0.08);
+  const textWidth = Math.max(12, box.width - horizontalPadding * 2);
+  const longestLine = Math.max(...lines.map((line) => line.length), 1);
+  const fontSize = Math.max(6, Math.min(
+    box.height / (lines.length * 1.3),
+    textWidth / (longestLine * 0.58),
+  ));
+  const estimatedTextHeight = fontSize * lines.length * 1.05;
+  const textColor = contrastingTextColor(fill);
+  const textElement: PosterTextElement = {
+    ...textBase,
+    layerName: `AI badge text: ${wording}`,
+    left: box.left + horizontalPadding,
+    top: box.top + (box.height - estimatedTextHeight) / 2,
+    zIndex: textZIndex,
+    type: 'text',
+    text,
+    fontSize,
+    fontFamily: FONT_STACKS[item.fontFamily],
+    fill: textColor,
+    width: textWidth,
+    fontWeight: item.fontWeight === '400' ? '700' : item.fontWeight,
+    fontStyle: item.fontStyle,
+    charSpacing: item.charSpacing,
+    lineHeight: 1.05,
+    textAlign: 'center',
+    stroke: undefined,
+    strokeWidth: 0,
+  };
+
+  return { shape, text: textElement };
+}
+
+function splitBadgeText(text: string): string {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return text;
+  let splitAt = 1;
+  let bestDifference = Number.POSITIVE_INFINITY;
+  for (let index = 1; index < words.length; index += 1) {
+    const leftLength = words.slice(0, index).join(' ').length;
+    const rightLength = words.slice(index).join(' ').length;
+    const difference = Math.abs(leftLength - rightLength);
+    if (difference < bestDifference) {
+      bestDifference = difference;
+      splitAt = index;
+    }
+  }
+  return `${words.slice(0, splitAt).join(' ')}\n${words.slice(splitAt).join(' ')}`;
+}
+
+function contrastingTextColor(color: string): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return '#ffffff';
+  const value = Number.parseInt(match[1], 16);
+  const red = (value >> 16) & 0xff;
+  const green = (value >> 8) & 0xff;
+  const blue = value & 0xff;
+  const perceivedBrightness = (red * 299 + green * 587 + blue * 114) / 255000;
+  return perceivedBrightness > 0.62 ? '#111111' : '#ffffff';
 }
 
 function compileShapeElement(
