@@ -7,6 +7,7 @@ import {
   type ReconstructionElement,
 } from '../../../shared/ai/posterReconstruction';
 import {
+  amplifiedDetectedCornerRadius,
   compilePosterReconstruction,
   fitPersonReplacementIntoBox,
 } from './compilePosterReconstruction';
@@ -109,7 +110,9 @@ describe('compilePosterReconstruction', () => {
     expect(compiled.project.canvasHeight).toBe(1500);
     expect(compiled.project.elements).toHaveLength(2);
     const panel = compiled.project.elements.find((item) => item.type === 'rect');
-    expect(panel).toMatchObject({ width: 900, height: 300, rx: 30 });
+    expect(panel).toMatchObject({ width: 900, height: 300 });
+    if (panel?.type !== 'rect') throw new Error('Expected a rectangle panel.');
+    expect(panel.rx).toBeCloseTo(42);
     const title = compiled.project.elements.find((item) => item.type === 'text');
     expect(title).toMatchObject({
       left: 100,
@@ -284,6 +287,13 @@ describe('compilePosterReconstruction', () => {
       scaleX: 0.6,
       scaleY: 0.6,
     });
+  });
+
+  it('only amplifies corners already detected as rounded', () => {
+    const box = { width: 800, height: 200 };
+    expect(amplifiedDetectedCornerRadius(0, box)).toBe(0);
+    expect(amplifiedDetectedCornerRadius(0.1, box)).toBeCloseTo(28);
+    expect(amplifiedDetectedCornerRadius(0.5, box)).toBe(100);
   });
 
   it('rebuilds supported semantic icons as clean tintable SVG layers', async () => {

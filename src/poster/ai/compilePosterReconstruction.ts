@@ -490,8 +490,22 @@ function compileShapeElement(
     type: 'rect',
     width: box.width,
     height: box.height,
-    rx: item.cornerRadiusRatio * Math.min(box.width, box.height),
+    rx: amplifiedDetectedCornerRadius(item.cornerRadiusRatio, box),
   };
+}
+
+/**
+ * Preserve the AI's sharp-vs-rounded decision while compensating slightly for
+ * understated detected radii. This is deliberately local to rect geometry: it
+ * cannot affect text metrics, element boxes, fonts, z-order, or path anchors.
+ */
+export function amplifiedDetectedCornerRadius(
+  detectedRatio: number,
+  box: Pick<PixelBox, 'width' | 'height'>,
+): number {
+  if (detectedRatio <= 0) return 0;
+  const adjustedRatio = Math.min(0.5, detectedRatio * 1.4);
+  return adjustedRatio * Math.min(box.width, box.height);
 }
 
 function pixelBox(
