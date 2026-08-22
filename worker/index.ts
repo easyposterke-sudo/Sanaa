@@ -129,7 +129,7 @@ app.post('/api/fonts/upload', async (context) => {
   const maximumRequestBytes = MAX_FONT_FILE_BYTES + 256 * 1024;
   if (contentLength === null || contentLength <= 0 || contentLength > maximumRequestBytes) {
     return context.json(
-      { error: 'Each font upload must be between 1 byte and 10 MB.', requestId },
+      { error: 'Each font upload must be between 1 byte and 30 MB.', requestId },
       413,
     );
   }
@@ -145,7 +145,7 @@ app.post('/api/fonts/upload', async (context) => {
     return context.json({ error: 'Choose a TTF or OTF font file.', requestId }, 400);
   }
   if (uploaded.size <= 0 || uploaded.size > MAX_FONT_FILE_BYTES) {
-    return context.json({ error: 'Each font must be between 1 byte and 10 MB.', requestId }, 413);
+    return context.json({ error: 'Each font must be between 1 byte and 30 MB.', requestId }, 413);
   }
 
   const bytes = new Uint8Array(await uploaded.arrayBuffer());

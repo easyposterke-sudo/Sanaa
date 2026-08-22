@@ -12,16 +12,18 @@
     {
       "binding": "DB",
       "database_name": "easyposter-studio-db",
-      "database_id": "a9bb1a3f-8a9a-4c2f-a61e-a62518827534",
+      "database_id": "e7174962-3da2-4886-8304-ce7abb696f57",
       "migrations_dir": "migrations"
     }
   ],
   "r2_buckets": [
     {
-      "binding": "PROJECTS"
+      "binding": "PROJECTS",
+      "bucket_name": "easyposter-studio-projects"
     },
     {
-      "binding": "ASSETS"
+      "binding": "ASSETS",
+      "bucket_name": "easyposter-studio-assets"
     }
   ],
   "observability": {

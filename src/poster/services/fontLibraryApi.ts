@@ -12,7 +12,7 @@ export interface FontLibraryEntry {
 }
 
 export const FONT_LIBRARY_CHANGED_EVENT = 'easyposter:font-library-changed';
-const MAX_FONT_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_FONT_FILE_BYTES = 30 * 1024 * 1024;
 
 export async function listFontLibrary(): Promise<FontLibraryEntry[]> {
   const response = await apiFetch('/api/fonts');
@@ -27,7 +27,7 @@ export async function inspectFontFile(file: File): Promise<{ label: string }> {
     throw new Error(`${file.name}: only .ttf and .otf files are supported.`);
   }
   if (file.size <= 0 || file.size > MAX_FONT_FILE_BYTES) {
-    throw new Error(`${file.name}: each font must be between 1 byte and 10 MB.`);
+    throw new Error(`${file.name}: each font must be between 1 byte and 30 MB.`);
   }
   try {
     const font = opentype.parse(await file.arrayBuffer());
@@ -63,4 +63,3 @@ function readApiError(value: unknown, fallback: string): string {
   }
   return fallback;
 }
-

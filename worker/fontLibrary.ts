@@ -1,5 +1,5 @@
 export const FONT_LIBRARY_PREFIX = 'font-library/';
-export const MAX_FONT_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_FONT_FILE_BYTES = 30 * 1024 * 1024;
 
 export type FontFormat = 'ttf' | 'otf';
 
