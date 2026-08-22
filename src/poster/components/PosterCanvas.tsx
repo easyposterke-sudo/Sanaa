@@ -67,6 +67,7 @@ import {
   exitFabricReflectSuppress,
   isFabricReflectSuppressed,
 } from '../posterFabricReflectGuard';
+import { buildPosterTextEffectStyles, posterTextEffectPadding } from '../textEffects';
 
 /** Stable signature of text font stacks for poster font preload + Fabric sync gating. */
 function posterFontSignature(elements: PosterElement[]): string {
@@ -1066,6 +1067,17 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
             updates.charSpacing = t.charSpacing ?? 0;
             updates.lineHeight = t.lineHeight ?? 1.16;
             updates.textAlign = t.textAlign ?? 'left';
+            const effectText = existing instanceof Textbox && existing.isEditing
+              ? existing.text
+              : t.text;
+            updates.styles = buildPosterTextEffectStyles(
+              effectText,
+              t.fontSize,
+              t.curve ?? 0,
+              t.taper ?? 0,
+            );
+            updates.padding = posterTextEffectPadding(t.fontSize, t.curve ?? 0);
+            updates.objectCaching = false;
           }
           if (
             el.type === 'rect' ||
@@ -1161,6 +1173,9 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
             updates.fillRule = pathEl.fillRule ?? 'nonzero';
           }
           existing.set(updates);
+          if (el.type === 'text' && existing instanceof Textbox && !existing.isEditing) {
+            existing.initDimensions();
+          }
           if (
             el.type === 'rect' &&
             rectHasPerCornerRadii(el as PosterShapeElement) &&
@@ -2774,6 +2789,14 @@ async function createFabricObject(
         charSpacing: t.charSpacing ?? 0,
         lineHeight: t.lineHeight ?? 1.16,
         textAlign: t.textAlign ?? 'left',
+        styles: buildPosterTextEffectStyles(
+          t.text,
+          t.fontSize,
+          t.curve ?? 0,
+          t.taper ?? 0,
+        ),
+        padding: posterTextEffectPadding(t.fontSize, t.curve ?? 0),
+        objectCaching: false,
       });
       return text;
     }

@@ -213,6 +213,10 @@ export interface PosterTextElement extends PosterElementBase {
   lineHeight?: number;
   /** Horizontal text alignment within the textbox. Default `'left'`. */
   textAlign?: PosterTextAlign;
+  /** Signed arc strength from -100 (down) to 100 (up). Zero keeps text straight. */
+  curve?: number;
+  /** Signed character-size taper. Positive starts large and ends small; negative reverses it. */
+  taper?: number;
   /** Outline/stroke color. When set with strokeWidth > 0, draws an outline. */
   stroke?: string;
   /** Outline width in pixels. Default 0. */

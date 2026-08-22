@@ -39,6 +39,12 @@ import {
 import { MaskEditorModal } from './MaskEditorModal';
 import { BUILT_IN_TEXTURES } from '../posterTextures';
 import { removeImageBackgroundLocally } from '../services/localBackgroundRemoval';
+import {
+  TEXT_CURVE_MAX,
+  TEXT_CURVE_MIN,
+  TEXT_TAPER_MAX,
+  TEXT_TAPER_MIN,
+} from '../textEffects';
 
 interface PosterRightSidebarProps {
   readOnly?: boolean;
@@ -1742,6 +1748,68 @@ function PosterTextControls({
         <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
           Controls spacing between lines in multi-line text.
         </p>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <PosterSlider
+          label={
+            <>
+              Curve{' '}
+              <span className="font-normal text-zinc-400">
+                ({(text.curve ?? 0) === 0
+                  ? 'straight'
+                  : `${Math.abs(text.curve ?? 0)}% ${(text.curve ?? 0) > 0 ? 'up' : 'down'}`})
+              </span>
+            </>
+          }
+          min={TEXT_CURVE_MIN}
+          max={TEXT_CURVE_MAX}
+          step={1}
+          value={text.curve ?? 0}
+          onChange={(value) => updateElement(text.id, { curve: value })}
+        />
+        <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400">
+          <span>Curve down</span>
+          <button
+            type="button"
+            onClick={() => updateElement(text.id, { curve: 0 })}
+            className="rounded px-1.5 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          >
+            Straight
+          </button>
+          <span>Curve up</span>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <PosterSlider
+          label={
+            <>
+              Taper / skew{' '}
+              <span className="font-normal text-zinc-400">
+                ({(text.taper ?? 0) === 0
+                  ? 'even'
+                  : `${Math.abs(text.taper ?? 0)}% ${(text.taper ?? 0) > 0 ? 'large → small' : 'small → large'}`})
+              </span>
+            </>
+          }
+          min={TEXT_TAPER_MIN}
+          max={TEXT_TAPER_MAX}
+          step={1}
+          value={text.taper ?? 0}
+          onChange={(value) => updateElement(text.id, { taper: value })}
+        />
+        <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400">
+          <span>Small → large</span>
+          <button
+            type="button"
+            onClick={() => updateElement(text.id, { taper: 0 })}
+            className="rounded px-1.5 py-0.5 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          >
+            Even
+          </button>
+          <span>Large → small</span>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
