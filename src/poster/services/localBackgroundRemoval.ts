@@ -1,7 +1,4 @@
 import { fetchWithTimeout } from '../../lib/api';
-import type { LocalBackgroundRemovalModel } from '../workers/localBackgroundRemovalMath';
-
-export type { LocalBackgroundRemovalModel } from '../workers/localBackgroundRemovalMath';
 
 const MAX_SOURCE_BYTES = 22 * 1024 * 1024;
 const SUPPORTED_SOURCE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -10,7 +7,6 @@ export interface LocalBackgroundRemovalResult {
   dataUrl: string;
   elapsedMs: number;
   firstLoad: boolean;
-  model: LocalBackgroundRemovalModel;
 }
 
 type PendingJob = {
@@ -24,7 +20,6 @@ type WorkerResponse =
   | {
       type: 'result';
       id: string;
-      model: LocalBackgroundRemovalModel;
       mediaType: string;
       elapsedMs: number;
       firstLoad: boolean;
@@ -38,7 +33,6 @@ const pendingJobs = new Map<string, PendingJob>();
 
 export async function removeImageBackgroundLocally(
   source: string,
-  model: LocalBackgroundRemovalModel,
   onProgress?: (message: string) => void,
 ): Promise<LocalBackgroundRemovalResult> {
   const sourceResponse = await fetchWithTimeout(source, {}, 30_000).catch(() => {
@@ -61,7 +55,7 @@ export async function removeImageBackgroundLocally(
   return new Promise<LocalBackgroundRemovalResult>((resolve, reject) => {
     pendingJobs.set(id, { resolve, reject, onProgress });
     getWorker().postMessage(
-      { type: 'remove', id, model, mediaType: sourceBlob.type, source: sourceBuffer },
+      { type: 'remove', id, mediaType: sourceBlob.type, source: sourceBuffer },
       [sourceBuffer],
     );
   });
@@ -101,7 +95,6 @@ function getWorker(): Worker {
           dataUrl,
           elapsedMs: response.elapsedMs,
           firstLoad: response.firstLoad,
-          model: response.model,
         }),
       )
       .catch((error) =>

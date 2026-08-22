@@ -30,11 +30,7 @@ import { POSTER_FONT_OPTIONS } from '../posterFonts';
 import { usePosterFontOptions } from '../usePosterFontOptions';
 import { MaskEditorModal } from './MaskEditorModal';
 import { BUILT_IN_TEXTURES } from '../posterTextures';
-import { removeImageBackground } from '../services/backgroundRemovalApi';
-import {
-  removeImageBackgroundLocally,
-  type LocalBackgroundRemovalModel,
-} from '../services/localBackgroundRemoval';
+import { removeImageBackgroundLocally } from '../services/localBackgroundRemoval';
 
 interface PosterRightSidebarProps {
   readOnly?: boolean;
@@ -1026,9 +1022,6 @@ function PosterImageAppearanceControls({
   const [maskEditorOpen, setMaskEditorOpen] = useState(false);
   const [removingBackground, setRemovingBackground] = useState(false);
   const [backgroundRemovalMessage, setBackgroundRemovalMessage] = useState<string | null>(null);
-  const [localRemovalModel, setLocalRemovalModel] = useState<LocalBackgroundRemovalModel>('portrait');
-  const [removingLocally, setRemovingLocally] = useState(false);
-  const [localRemovalMessage, setLocalRemovalMessage] = useState<string | null>(null);
   const imageCropTargetId = usePosterStore((s) => s.imageCropTargetId);
   const setImageCropTargetId = usePosterStore((s) => s.setImageCropTargetId);
 
@@ -1052,8 +1045,6 @@ function PosterImageAppearanceControls({
   useEffect(() => {
     setRemovingBackground(false);
     setBackgroundRemovalMessage(null);
-    setRemovingLocally(false);
-    setLocalRemovalMessage(null);
   }, [raster.id]);
 
   return (
@@ -1083,15 +1074,21 @@ function PosterImageAppearanceControls({
             type="button"
             onClick={async () => {
               setRemovingBackground(true);
-              setBackgroundRemovalMessage(null);
+              setBackgroundRemovalMessage('Preparing background remover…');
               try {
-                const sourceBeforeRemoval = raster.src;
-                const result = await removeImageBackground(sourceBeforeRemoval);
+                const result = await removeImageBackgroundLocally(
+                  raster.src,
+                  setBackgroundRemovalMessage,
+                );
+                usePosterStore.getState().pushHistory();
                 updateElement(raster.id, {
-                  src: result,
+                  src: result.dataUrl,
                   originalSrc: undefined,
                 });
-                setBackgroundRemovalMessage('Background removed. Use Undo to restore the original.');
+                const seconds = (result.elapsedMs / 1000).toFixed(1);
+                setBackgroundRemovalMessage(
+                  `Background removed in ${seconds}s${result.firstLoad ? ' including first model load' : ''}. Use Undo to restore the original.`,
+                );
               } catch (error) {
                 setBackgroundRemovalMessage(
                   error instanceof Error ? error.message : 'Background removal failed.',
@@ -1106,7 +1103,8 @@ function PosterImageAppearanceControls({
             {removingBackground ? 'Removing background…' : 'Remove background'}
           </button>
           <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-            Uses Remove.bg on this image. Your API key stays in the Cloudflare Worker.
+            Runs free on this device using the objects-and-products model. The first use
+            downloads and caches the model.
           </p>
           {backgroundRemovalMessage && (
             <p
@@ -1114,71 +1112,6 @@ function PosterImageAppearanceControls({
               role="status"
             >
               {backgroundRemovalMessage}
-            </p>
-          )}
-        </div>
-      )}
-
-      {raster.type === 'image' && (
-        <div className="flex flex-col gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950/30">
-          <div>
-            <p className="text-xs font-semibold text-sky-900 dark:text-sky-200">
-              Local remover (experimental)
-            </p>
-            <p className="mt-1 text-[10px] text-sky-700 dark:text-sky-300">
-              Runs free on this device. The first run downloads and caches the selected model.
-            </p>
-          </div>
-          <label className="flex flex-col gap-1 text-[11px] text-zinc-600 dark:text-zinc-300">
-            Best for
-            <select
-              value={localRemovalModel}
-              onChange={(event) =>
-                setLocalRemovalModel(event.target.value as LocalBackgroundRemovalModel)
-              }
-              disabled={readOnly || !!raster.locked || removingLocally}
-              className="rounded-lg border border-sky-200 bg-white px-2 py-2 text-xs text-zinc-800 disabled:opacity-50 dark:border-sky-800 dark:bg-zinc-900 dark:text-zinc-200"
-            >
-              <option value="portrait">People and portraits — MODNet</option>
-              <option value="general">Objects and products — U²-NetP</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={async () => {
-              setRemovingLocally(true);
-              setLocalRemovalMessage('Preparing local background remover…');
-              try {
-                const result = await removeImageBackgroundLocally(
-                  raster.src,
-                  localRemovalModel,
-                  setLocalRemovalMessage,
-                );
-                usePosterStore.getState().pushHistory();
-                updateElement(raster.id, {
-                  src: result.dataUrl,
-                  originalSrc: undefined,
-                });
-                const seconds = (result.elapsedMs / 1000).toFixed(1);
-                setLocalRemovalMessage(
-                  `Removed locally in ${seconds}s${result.firstLoad ? ' including first model load' : ''}. Use Undo to restore the original.`,
-                );
-              } catch (error) {
-                setLocalRemovalMessage(
-                  error instanceof Error ? error.message : 'Local background removal failed.',
-                );
-              } finally {
-                setRemovingLocally(false);
-              }
-            }}
-            disabled={readOnly || !!raster.locked || removingLocally}
-            className="rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {removingLocally ? 'Removing locally…' : 'Try local removal'}
-          </button>
-          {localRemovalMessage && (
-            <p className="text-[11px] text-zinc-600 dark:text-zinc-300" role="status">
-              {localRemovalMessage}
             </p>
           )}
         </div>

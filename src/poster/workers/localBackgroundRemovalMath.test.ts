@@ -7,30 +7,22 @@ import {
 } from './localBackgroundRemovalMath';
 
 describe('local background-removal model math', () => {
-  it('keeps portrait input aspect ratio while bounding both dimensions', () => {
-    expect(localModelInputSize('portrait', 1200, 800)).toEqual({ width: 768, height: 512 });
-    expect(localModelInputSize('portrait', 800, 1200)).toEqual({ width: 512, height: 768 });
-    expect(localModelInputSize('general', 1200, 800)).toEqual({ width: 320, height: 320 });
+  it('uses the fixed U²-NetP input dimensions', () => {
+    expect(localModelInputSize(1200, 800)).toEqual({ width: 320, height: 320 });
+    expect(localModelInputSize(800, 1200)).toEqual({ width: 320, height: 320 });
   });
 
-  it('creates channel-first normalized tensors for each model family', () => {
+  it('creates a channel-first U²-NetP normalized tensor', () => {
     const pixels = new Uint8ClampedArray([255, 128, 0, 255]);
-    const portrait = rgbaToModelTensor(pixels, 1, 1, 'portrait');
-    const general = rgbaToModelTensor(pixels, 1, 1, 'general');
+    const general = rgbaToModelTensor(pixels, 1, 1);
 
-    expect(Array.from(portrait)).toEqual([1, expect.closeTo(128 / 127.5 - 1, 6), -1]);
     expect(general[0]).toBeCloseTo((1 - 0.485) / 0.229, 6);
     expect(general[1]).toBeCloseTo((128 / 255 - 0.456) / 0.224, 6);
     expect(general[2]).toBeCloseTo((0 - 0.406) / 0.225, 6);
   });
 
-  it('min-max normalizes general masks but preserves portrait alpha values', () => {
-    expect(Array.from(normalizeModelMask(new Float32Array([2, 4, 6]), 'general'))).toEqual([
-      0,
-      128,
-      255,
-    ]);
-    expect(Array.from(normalizeModelMask(new Float32Array([-1, 0.5, 2]), 'portrait'))).toEqual([
+  it('min-max normalizes U²-NetP masks', () => {
+    expect(Array.from(normalizeModelMask(new Float32Array([2, 4, 6])))).toEqual([
       0,
       128,
       255,

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 6 as const;
-export const POSTER_RECONSTRUCTION_PROMPT_VERSION = 'poster-reconstruction-v6-social-icons' as const;
+export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
+  'poster-reconstruction-v6-social-icons-object-removal' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',

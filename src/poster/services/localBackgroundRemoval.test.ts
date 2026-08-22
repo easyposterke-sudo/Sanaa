@@ -24,7 +24,7 @@ class FakeWorker {
     this.listeners.set(type, listeners);
   }
 
-  postMessage(message: { id: string; model: string }, transfer: Transferable[]) {
+  postMessage(message: { id: string }, transfer: Transferable[]) {
     this.posted = message;
     this.transfer = transfer;
     queueMicrotask(() => {
@@ -33,7 +33,6 @@ class FakeWorker {
       this.emit('message', {
         type: 'result',
         id: message.id,
-        model: message.model,
         mediaType: 'image/webp',
         elapsedMs: 321,
         firstLoad: true,
@@ -73,14 +72,13 @@ describe('removeImageBackgroundLocally', () => {
 
     const result = await removeImageBackgroundLocally(
       'data:image/png;base64,c291cmNl',
-      'portrait',
       progress,
     );
 
     expect(result.dataUrl).toMatch(/^data:image\/webp;base64,/);
-    expect(result).toMatchObject({ model: 'portrait', elapsedMs: 321, firstLoad: true });
+    expect(result).toMatchObject({ elapsedMs: 321, firstLoad: true });
     expect(progress).toHaveBeenCalledWith('Loading model…');
-    expect(FakeWorker.latest?.posted).toMatchObject({ model: 'portrait', mediaType: 'image/png' });
+    expect(FakeWorker.latest?.posted).toMatchObject({ mediaType: 'image/png' });
     expect(FakeWorker.latest?.transfer).toHaveLength(1);
     expect(fetchWithTimeout).toHaveBeenCalledWith(
       'data:image/png;base64,c291cmNl',
@@ -97,7 +95,7 @@ describe('removeImageBackgroundLocally', () => {
     );
 
     await expect(
-      removeImageBackgroundLocally('data:image/svg+xml;base64,c3Zn', 'general'),
+      removeImageBackgroundLocally('data:image/svg+xml;base64,c3Zn'),
     ).rejects.toThrow('supports PNG, JPEG, and WebP');
     expect(FakeWorker.latest).toBeNull();
   });

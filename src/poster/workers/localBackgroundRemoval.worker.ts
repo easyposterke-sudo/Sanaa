@@ -6,32 +6,24 @@ import {
   localModelInputSize,
   normalizeModelMask,
   rgbaToModelTensor,
-  type LocalBackgroundRemovalModel,
 } from './localBackgroundRemovalMath';
 
 const workerScope = self as unknown as Worker;
 const MAX_OUTPUT_PIXELS = 30_000_000;
-const MODEL_CONFIG: Record<LocalBackgroundRemovalModel, { label: string; url: string }> = {
-  portrait: {
-    label: 'portrait model',
-    url: '/models/background-removal/modnet-quantized.onnx',
-  },
-  general: {
-    label: 'general-object model',
-    url: '/models/background-removal/u2netp.onnx',
-  },
+const MODEL_CONFIG = {
+  label: 'objects-and-products model',
+  url: '/models/background-removal/u2netp.onnx',
 };
 
 type RemoveRequest = {
   type: 'remove';
   id: string;
-  model: LocalBackgroundRemovalModel;
   mediaType: string;
   source: ArrayBuffer;
 };
 
-const sessionPromises = new Map<LocalBackgroundRemovalModel, Promise<ort.InferenceSession>>();
-const loadedSessions = new Set<LocalBackgroundRemovalModel>();
+let sessionPromise: Promise<ort.InferenceSession> | null = null;
+let sessionLoaded = false;
 
 ort.env.wasm.numThreads = 1;
 ort.env.wasm.proxy = false;
@@ -62,7 +54,7 @@ async function removeBackground(request: RemoveRequest): Promise<void> {
       throw new Error('The local beta supports images up to 30 megapixels.');
     }
 
-    const inputSize = localModelInputSize(request.model, bitmap.width, bitmap.height);
+    const inputSize = localModelInputSize(bitmap.width, bitmap.height);
     const inputCanvas = new OffscreenCanvas(inputSize.width, inputSize.height);
     const inputContext = inputCanvas.getContext('2d', { willReadFrequently: true });
     if (!inputContext) throw new Error('The browser could not prepare the image canvas.');
@@ -72,18 +64,18 @@ async function removeBackground(request: RemoveRequest): Promise<void> {
     const pixels = inputContext.getImageData(0, 0, inputSize.width, inputSize.height);
     const inputTensor = new ort.Tensor(
       'float32',
-      rgbaToModelTensor(pixels.data, inputSize.width, inputSize.height, request.model),
+      rgbaToModelTensor(pixels.data, inputSize.width, inputSize.height),
       [1, 3, inputSize.height, inputSize.width],
     );
 
-    const sessionAlreadyLoaded = loadedSessions.has(request.model);
+    const sessionAlreadyLoaded = sessionLoaded;
     progress(
       request.id,
       sessionAlreadyLoaded
-        ? `Using cached ${MODEL_CONFIG[request.model].label}…`
-        : `Loading ${MODEL_CONFIG[request.model].label} for the first run…`,
+        ? `Using cached ${MODEL_CONFIG.label}…`
+        : `Loading ${MODEL_CONFIG.label} for the first run…`,
     );
-    const session = await getSession(request.model);
+    const session = await getSession();
     progress(request.id, 'Removing background on this device…');
     const outputs = await session.run({ [session.inputNames[0]]: inputTensor });
     const maskTensor = outputs[session.outputNames[0]];
@@ -100,11 +92,11 @@ async function removeBackground(request: RemoveRequest): Promise<void> {
     if (maskWidth <= 0 || maskHeight <= 0 || maskValues.length < maskWidth * maskHeight) {
       throw new Error('The local model returned an incomplete mask.');
     }
-    const alpha = normalizeModelMask(maskValues, request.model);
+    const alpha = normalizeModelMask(maskValues);
     const maskInspection = inspectAlphaMask(alpha);
     if (maskInspection.maximum - maskInspection.minimum < 4 || maskInspection.foregroundRatio < 0.001) {
       throw new Error(
-        'The local model could not find a clear foreground. Try the other local model or use Remove.bg.',
+        'The background remover could not find a clear object or product in this image.',
       );
     }
 
@@ -137,7 +129,6 @@ async function removeBackground(request: RemoveRequest): Promise<void> {
       {
         type: 'result',
         id: request.id,
-        model: request.model,
         mediaType: output.type || 'image/webp',
         elapsedMs: Math.round(performance.now() - startedAt),
         firstLoad: !sessionAlreadyLoaded,
@@ -156,27 +147,24 @@ async function removeBackground(request: RemoveRequest): Promise<void> {
   }
 }
 
-function getSession(model: LocalBackgroundRemovalModel): Promise<ort.InferenceSession> {
-  const existing = sessionPromises.get(model);
-  if (existing) return existing;
+function getSession(): Promise<ort.InferenceSession> {
+  if (sessionPromise) return sessionPromise;
 
-  const config = MODEL_CONFIG[model];
-  const modelUrl = new URL(config.url, self.location.origin).href;
-  const pending = ort.InferenceSession.create(modelUrl, {
+  const modelUrl = new URL(MODEL_CONFIG.url, self.location.origin).href;
+  sessionPromise = ort.InferenceSession.create(modelUrl, {
     executionProviders: ['wasm'],
     executionMode: 'sequential',
     graphOptimizationLevel: 'all',
   })
     .then((session) => {
-      loadedSessions.add(model);
+      sessionLoaded = true;
       return session;
     })
     .catch((error) => {
-      sessionPromises.delete(model);
+      sessionPromise = null;
       throw error;
     });
-  sessionPromises.set(model, pending);
-  return pending;
+  return sessionPromise;
 }
 
 function progress(id: string, message: string): void {

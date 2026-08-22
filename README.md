@@ -28,7 +28,8 @@ The previous proof-of-concept source is preserved under
 - Cloudflare Worker, D1, and R2 APIs for projects, recordings, assets, and AI
   plan metadata
 
-Selected poster images can use the optional server-side Remove.bg integration.
+Selected poster images use the browser-side U²-NetP objects-and-products model
+for free background removal. Image pixels stay on the user's device.
 Unrestricted generative poster rendering remains intentionally excluded. AI
 selects a constrained recipe; the editor renders all final layers locally.
 
@@ -128,18 +129,10 @@ crop, also add `PEXELS_API_KEY` as an encrypted runtime secret. This integration
 is optional: without it, users can upload a clean replacement or continue with
 the generated placeholder.
 
-To enable the selected-image **Remove background** action, add
-`REMOVE_BG_API_KEY` under the Worker's **Settings > Variables & Secrets** as an
-encrypted runtime secret. The key is read only by the Worker and is never sent
-to the browser. For local development, add the same name to the ignored
-`.dev.vars` file.
-
-The image properties panel also includes a separate **Local remover
-(experimental)** action. It runs Apache-licensed MODNet or U²-NetP inference in
-a browser worker and does not use the Remove.bg endpoint or an API credit. The
-first run downloads one 4-7 MB model; the browser cache makes later runs faster.
-Portrait and general-object modes are deliberately separate so quality and
-speed can be evaluated independently before this beta becomes a default.
+The selected-image **Remove background** action runs the Apache-licensed U²-NetP
+objects-and-products model inside a browser worker. It does not use an API key
+or spend a Remove.bg credit. The first run downloads the pinned 4.6 MB model;
+the browser cache makes later runs faster.
 
 Before enabling project/AI APIs for users, protect `/api/*` with Cloudflare
 Access and make sure an unprotected `workers.dev` hostname cannot bypass that

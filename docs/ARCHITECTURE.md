@@ -66,11 +66,11 @@ model—creates every ID, text value, shape, image layer, 3D configuration, and
 z-order. The initial 3D layer uses an SVG preview plus an editable WebGL recipe.
 
 The active build still excludes an AI chat loop and arbitrary model-generated
-code/SVG. Background removal is never triggered automatically by AI. The stable
-action is proxied through the Worker to Remove.bg, while a separate experimental
-action runs MODNet or U²-NetP entirely inside a dedicated browser worker. The
-local action can be removed without changing the Worker API or stable action.
-See `AI_POSTER_WORKFLOW.md`.
+code/SVG. Background removal is never triggered automatically by AI. The primary
+selected-image action runs U²-NetP entirely inside a dedicated browser worker;
+image pixels stay on the device and no paid API key is required. The dormant
+Worker-side Remove.bg endpoint remains available for compatibility but is not
+called by the editor. See `AI_POSTER_WORKFLOW.md`.
 
 ## Cloudflare boundary
 
