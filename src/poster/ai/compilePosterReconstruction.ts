@@ -123,7 +123,12 @@ export async function compilePosterReconstruction(input: {
 
   const ordered = [...plan.elements].sort((a, b) => a.zIndex - b.zIndex);
   for (const item of ordered) {
-    const box = pixelBox(item.box, canvasWidth, canvasHeight);
+    const box = pixelBox(
+      item.box,
+      canvasWidth,
+      canvasHeight,
+      isNativeShapeKind(item.kind),
+    );
     const id = uniqueId(`reconstruction_${sanitizeKey(item.key)}`, usedIds);
     const base = {
       id,
@@ -493,7 +498,11 @@ function compileTextElement(
   const lines = displayText.split(/\r?\n/);
   const lineCount = Math.max(1, lines.length);
   const measuredSize = item.fontSizeRatio * canvasHeight;
-  const boxLimitedSize = (box.height / lineCount) * 0.94;
+  // Fabric applies lineHeight between baselines rather than independently to
+  // every row. Include those extra line gaps when enforcing the detected
+  // source box, otherwise multi-line copy grows beyond its reference bounds.
+  const verticalLineUnits = 1 + Math.max(0, lineCount - 1) * item.lineHeight;
+  const boxLimitedSize = (box.height / verticalLineUnits) * 0.94;
   const initialFontSize = Math.max(6, Math.min(measuredSize, Math.max(8, boxLimitedSize)));
   const fontFamily = FONT_STACKS[item.fontFamily];
   const fontSize = item.visibleLineCount > 0 && item.visibleLineCount === lineCount
@@ -722,12 +731,16 @@ function compileShapeElement(
     strokeWidth: item.stroke ? item.strokeWidthRatio * canvasHeight : 0,
   };
   if (item.kind === 'circle') {
-    const diameter = Math.max(1, box.width);
+    // A circle must remain circular even when the model's two detected
+    // dimensions differ slightly. Ellipses have their own explicit kind.
+    const diameter = Math.max(1, (box.width + box.height) / 2);
     return {
       ...common,
+      left: box.left + (box.width - diameter) / 2,
+      top: box.top + (box.height - diameter) / 2,
       type: 'circle',
       radius: diameter / 2,
-      scaleY: box.height / diameter,
+      scaleY: 1,
     };
   }
   if (item.kind === 'ellipse') {
@@ -748,6 +761,21 @@ function compileShapeElement(
       y2: box.height / 2,
       fill: item.stroke ?? item.fill ?? '#111111',
       strokeWidth: Math.max(1, item.strokeWidthRatio * canvasHeight),
+    };
+  }
+  if (item.kind === 'triangle') {
+    return {
+      ...common,
+      type: 'triangle',
+      width: box.width,
+      height: box.height,
+    };
+  }
+  if (item.kind === 'star') {
+    return {
+      ...common,
+      type: 'polygon',
+      polygonPoints: regularStarPoints(box.width, box.height),
     };
   }
   return {
@@ -793,7 +821,16 @@ function pixelBox(
   box: PosterReconstructionPlan['elements'][number]['box'],
   width: number,
   height: number,
+  allowCanvasOverflow = false,
 ): PixelBox {
+  if (allowCanvasOverflow) {
+    return {
+      left: box.x * width,
+      top: box.y * height,
+      width: Math.max(1, box.width * width),
+      height: Math.max(1, box.height * height),
+    };
+  }
   const left = clamp(box.x * width, 0, Math.max(0, width - 1));
   const top = clamp(box.y * height, 0, Math.max(0, height - 1));
   return {
@@ -802,6 +839,27 @@ function pixelBox(
     width: Math.max(1, Math.min(box.width * width, width - left)),
     height: Math.max(1, Math.min(box.height * height, height - top)),
   };
+}
+
+function isNativeShapeKind(kind: ReconstructionElement['kind']): boolean {
+  return kind === 'rect' || kind === 'circle' || kind === 'ellipse' ||
+    kind === 'triangle' || kind === 'star' || kind === 'line';
+}
+
+function regularStarPoints(width: number, height: number): { x: number; y: number }[] {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const outerX = width / 2;
+  const outerY = height / 2;
+  const innerScale = 0.4;
+  return Array.from({ length: 10 }, (_, index) => {
+    const angle = -Math.PI / 2 + (index * Math.PI) / 5;
+    const scale = index % 2 === 0 ? 1 : innerScale;
+    return {
+      x: centerX + Math.cos(angle) * outerX * scale,
+      y: centerY + Math.sin(angle) * outerY * scale,
+    };
+  });
 }
 
 async function cropReferenceRegion(

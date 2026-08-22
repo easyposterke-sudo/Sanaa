@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 6 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 7 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v6-social-icons-object-removal' as const;
+  'poster-reconstruction-v7-text-size-native-shapes' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -64,10 +64,12 @@ const FieldKeySchema = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/).nullable();
 
 export const ReconstructionBoxSchema = z
   .object({
-    x: z.number().min(0).max(1),
-    y: z.number().min(0).max(1),
-    width: z.number().min(0.005).max(1),
-    height: z.number().min(0.005).max(1),
+    // Native geometry can extend beyond the canvas when the reference clips it
+    // at an edge (for example, a large circle whose top is outside the poster).
+    x: z.number().min(-0.5).max(1.5),
+    y: z.number().min(-0.5).max(1.5),
+    width: z.number().min(0.005).max(1.5),
+    height: z.number().min(0.005).max(1.5),
   })
   .strict();
 
@@ -82,7 +84,7 @@ export const ReconstructionPathPointSchema = z
 export const ReconstructionElementSchema = z
   .object({
     key: z.string().regex(/^[a-z][a-z0-9_]{0,47}$/),
-    kind: z.enum(['text', 'rect', 'circle', 'ellipse', 'line', 'path', 'image_region']),
+    kind: z.enum(['text', 'rect', 'circle', 'ellipse', 'triangle', 'star', 'line', 'path', 'image_region']),
     label: z.string().trim().min(1).max(100),
     box: ReconstructionBoxSchema,
     angle: z.number().min(-180).max(180),
@@ -192,10 +194,10 @@ function nullable(schema: JsonSchema): JsonSchema {
 }
 
 const boxJsonSchema = strictObject({
-  x: { type: 'number', minimum: 0, maximum: 1 },
-  y: { type: 'number', minimum: 0, maximum: 1 },
-  width: { type: 'number', minimum: 0.005, maximum: 1 },
-  height: { type: 'number', minimum: 0.005, maximum: 1 },
+  x: { type: 'number', minimum: -0.5, maximum: 1.5 },
+  y: { type: 'number', minimum: -0.5, maximum: 1.5 },
+  width: { type: 'number', minimum: 0.005, maximum: 1.5 },
+  height: { type: 'number', minimum: 0.005, maximum: 1.5 },
 });
 
 const pathPointJsonSchema = strictObject({
@@ -244,7 +246,7 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         key: fieldKeyJsonSchema,
         kind: {
           type: 'string',
-          enum: ['text', 'rect', 'circle', 'ellipse', 'line', 'path', 'image_region'],
+          enum: ['text', 'rect', 'circle', 'ellipse', 'triangle', 'star', 'line', 'path', 'image_region'],
         },
         label: { type: 'string', minLength: 1, maxLength: 100 },
         box: boxJsonSchema,

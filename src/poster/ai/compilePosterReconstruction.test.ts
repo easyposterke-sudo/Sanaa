@@ -474,6 +474,104 @@ describe('compilePosterReconstruction', () => {
     expect(heading.fontSize).toBeLessThan(80);
   });
 
+  it('includes detected line spacing when limiting multi-line text height', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'body_copy',
+          kind: 'text',
+          label: 'Body copy',
+          text: 'FIRST LINE\nSECOND LINE\nTHIRD LINE',
+          fontSizeRatio: 0.2,
+          lineHeight: 1.5,
+          visibleLineCount: 3,
+          box: { x: 0.1, y: 0.1, width: 0.8, height: 0.2 },
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1000,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const body = compiled.project.elements[0];
+    if (body?.type !== 'text') throw new Error('Expected flat text.');
+    expect(body.fontSize).toBeCloseTo(47);
+  });
+
+  it('keeps a clipped outlined circle native, circular, and outside the canvas', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'corner_ring',
+          kind: 'circle',
+          label: 'Clipped corner ring',
+          box: { x: 0.78, y: -0.08, width: 0.36, height: 0.34 },
+          fill: null,
+          stroke: '#ff654f',
+          strokeWidthRatio: 0.025,
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1000,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const ring = compiled.project.elements[0];
+    expect(ring).toMatchObject({
+      type: 'circle',
+      left: 785,
+      top: -85,
+      radius: 175,
+      scaleX: 1,
+      scaleY: 1,
+      fill: 'transparent',
+      stroke: '#ff654f',
+      strokeWidth: 25,
+    });
+  });
+
+  it('compiles regular triangles and stars as native editable shapes', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'triangle',
+          kind: 'triangle',
+          label: 'Triangle',
+          box: { x: 0.1, y: 0.1, width: 0.2, height: 0.15 },
+        }),
+        element({
+          key: 'star',
+          kind: 'star',
+          label: 'Five-point star',
+          box: { x: 0.4, y: 0.1, width: 0.2, height: 0.2 },
+          zIndex: 2,
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1000,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'triangle',
+      width: 200,
+      height: 150,
+    });
+    const star = compiled.project.elements[1];
+    expect(star).toMatchObject({ type: 'polygon' });
+    if (star?.type !== 'polygon') throw new Error('Expected a native polygon star.');
+    expect(star.polygonPoints).toHaveLength(10);
+  });
+
   it('applies detected image masks to reconstructed photo regions', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
@@ -624,6 +722,15 @@ describe('compilePosterReconstruction', () => {
 });
 
 describe('PosterReconstructionPlanSchema', () => {
+  it('accepts limited overflow for regular geometry clipped by the canvas', () => {
+    expect(plan([
+      element({
+        kind: 'circle',
+        box: { x: 0.8, y: -0.12, width: 0.4, height: 0.4 },
+      }),
+    ]).elements[0].box).toEqual({ x: 0.8, y: -0.12, width: 0.4, height: 0.4 });
+  });
+
   it('keeps older cached elements readable with neutral detail defaults', () => {
     const current = plan([element({ kind: 'text', text: 'Legacy heading' })]);
     const {
