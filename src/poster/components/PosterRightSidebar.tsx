@@ -28,6 +28,7 @@ import { rectHasPerCornerRadii } from '../roundedRectPath';
 import { pathPointsToSvgPathElement } from '../path/penToolMath';
 import { usePosterFontOptions } from '../usePosterFontOptions';
 import { ensureFontPreviewFromUrl, releaseFontPreview } from '../../core/font/customFontCache';
+import { LazyFontPreviewLabel } from '../../components/LazyFontPreviewLabel';
 import {
   deleteFontFile,
   inspectFontFile,
@@ -1500,6 +1501,7 @@ function PosterTextControls({
               className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-600 dark:bg-zinc-900"
               role="listbox"
               aria-label="Choose font"
+              data-font-preview-scroll
             >
               {!knownMatch && (
                 <li>
@@ -1529,7 +1531,7 @@ function PosterTextControls({
                         role="option"
                         aria-selected={selected}
                         className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        style={{ fontFamily: o.value }}
+                        style={o.previewKey ? undefined : { fontFamily: o.value }}
                         onClick={() => {
                           setFontMenuOpen(false);
                           if (o.previewKey && o.fontUrl) {
@@ -1541,7 +1543,17 @@ function PosterTextControls({
                           updateElement(text.id, { fontFamily: o.value });
                         }}
                       >
-                        {o.label}
+                        {o.previewKey && o.fontUrl ? (
+                          <LazyFontPreviewLabel
+                            label={o.label}
+                            fontFamily={o.value}
+                            previewKey={o.previewKey}
+                            fontUrl={o.fontUrl}
+                            className="block truncate"
+                          />
+                        ) : (
+                          o.label
+                        )}
                       </button>
                       {o.fontId && o.canDelete && (
                         <button

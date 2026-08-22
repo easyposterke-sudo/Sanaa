@@ -12,10 +12,12 @@ import { exportPNG, exportWebP } from '../../core/export/pngExport';
 import {
   addCustomFont,
   ensureFontPreviewFromUrl,
+  familyNameForPreviewKey,
   getCustomFont,
   releaseFontPreview,
   removeCustomFont,
 } from '../../core/font/customFontCache';
+import { LazyFontPreviewLabel } from '../LazyFontPreviewLabel';
 import { FRONT_TEXTURE_PRESETS } from '../../core/textures/frontTextureCache';
 import { generateNormalMapPngBlob } from '../../core/textures/normalMapGenerator';
 import { apiUrl } from '../../lib/apiUrl';
@@ -505,14 +507,6 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
     let cancelled = false;
     (async () => {
       const updates: Record<string, string> = {};
-      for (const f of savedFonts) {
-        const key = savedFontCacheId(f.id);
-        try {
-          updates[key] = await ensureFontPreviewFromUrl(key, f.fontUrl);
-        } catch {
-          // CORS / offline
-        }
-      }
       for (const id of customFontIds) {
         if (!id.startsWith('custom-')) continue;
         const c = getCustomFont(id);
@@ -530,18 +524,20 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
     return () => {
       cancelled = true;
     };
-  }, [expanded, savedFonts, customFontIds]);
+  }, [expanded, customFontIds]);
 
   const applySavedFont = async (entry: SavedFontEntry) => {
     setFontError(null);
     setFontLibMsg(null);
     const cacheId = savedFontCacheId(entry.id);
-    const existing = getCustomFont(cacheId);
-    if (existing) {
-      setState({ selectedCustomFontId: cacheId });
-      return;
-    }
     try {
+      const previewFamily = await ensureFontPreviewFromUrl(cacheId, entry.fontUrl);
+      setCustomFontPreviewFamilies((prev) => ({ ...prev, [cacheId]: previewFamily }));
+      const existing = getCustomFont(cacheId);
+      if (existing) {
+        setState({ selectedCustomFontId: cacheId });
+        return;
+      }
       const res = entry.fontUrl.startsWith('/api/')
         ? await apiFetch(entry.fontUrl)
         : await fetchWithTimeout(entry.fontUrl);
@@ -801,9 +797,13 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
   })();
 
   const customFontTriggerStyle: CSSProperties | undefined =
-    selectedCustomFontId && customFontPreviewFamilies[selectedCustomFontId]
+    selectedCustomFontId
       ? {
-          fontFamily: `${customFontPreviewFamilies[selectedCustomFontId]}, system-ui, sans-serif`,
+          fontFamily: `${
+            selectedCustomFontId.startsWith('cloud-font-')
+              ? familyNameForPreviewKey(selectedCustomFontId)
+              : customFontPreviewFamilies[selectedCustomFontId] || 'system-ui'
+          }, system-ui, sans-serif`,
         }
       : undefined;
 
@@ -1054,6 +1054,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                           className="absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-600 dark:bg-zinc-900"
                           role="listbox"
                           aria-label="Custom fonts"
+                          data-font-preview-scroll
                         >
                           <li>
                             <button
@@ -1076,10 +1077,6 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                           )}
                           {savedFonts.map((f) => {
                             const cacheId = savedFontCacheId(f.id);
-                            const fam = customFontPreviewFamilies[cacheId];
-                            const rowStyle: CSSProperties | undefined = fam
-                              ? { fontFamily: `${fam}, system-ui, sans-serif` }
-                              : undefined;
                             const selected = selectedCustomFontId === cacheId;
                             return (
                               <li key={cacheId}>
@@ -1092,13 +1089,18 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                                     type="button"
                                     role="option"
                                     aria-selected={selected}
-                                    style={rowStyle}
                                     className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
                                     onClick={() => {
                                       void applySavedFont(f).then(() => setCustomFontsMenuOpen(false));
                                     }}
                                   >
-                                    {f.label}
+                                    <LazyFontPreviewLabel
+                                      label={f.label}
+                                      fontFamily={familyNameForPreviewKey(cacheId)}
+                                      previewKey={cacheId}
+                                      fontUrl={f.fontUrl}
+                                      className="block truncate"
+                                    />
                                   </button>
                                   {f.canDelete && (
                                     <button
