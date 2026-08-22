@@ -572,6 +572,63 @@ describe('compilePosterReconstruction', () => {
     expect(star.polygonPoints).toHaveLength(10);
   });
 
+  it('preserves the full length of horizontal and vertical native lines', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'horizontal_divider',
+          kind: 'line',
+          label: 'Horizontal divider',
+          box: { x: 0.1, y: 0.2, width: 0.6, height: 0.01 },
+          angle: 0,
+          fill: null,
+          stroke: '#ff654f',
+          strokeWidthRatio: 0.01,
+        }),
+        element({
+          key: 'vertical_divider',
+          kind: 'line',
+          label: 'Vertical divider',
+          box: { x: 0.75, y: 0.2, width: 0.01, height: 0.5 },
+          angle: 90,
+          fill: null,
+          stroke: '#ffffff',
+          strokeWidthRatio: 0.008,
+          zIndex: 2,
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1000,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'line',
+      left: 100,
+      top: 205,
+      angle: 0,
+      x1: 0,
+      y1: 0,
+      x2: 600,
+      y2: 0,
+      strokeWidth: 10,
+    });
+    expect(compiled.project.elements[1]).toMatchObject({
+      type: 'line',
+      left: 755,
+      top: 200,
+      angle: 0,
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 500,
+      strokeWidth: 8,
+    });
+  });
+
   it('applies detected image masks to reconstructed photo regions', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([

@@ -752,13 +752,11 @@ function compileShapeElement(
     };
   }
   if (item.kind === 'line') {
+    const geometry = resolvedLineGeometry(item.angle, box);
     return {
       ...common,
+      ...geometry,
       type: 'line',
-      x1: 0,
-      y1: box.height / 2,
-      x2: box.width,
-      y2: box.height / 2,
       fill: item.stroke ?? item.fill ?? '#111111',
       strokeWidth: Math.max(1, item.strokeWidthRatio * canvasHeight),
     };
@@ -860,6 +858,55 @@ function regularStarPoints(width: number, height: number): { x: number; y: numbe
       y: centerY + Math.sin(angle) * outerY * scale,
     };
   });
+}
+
+function resolvedLineGeometry(
+  detectedAngle: number,
+  box: PixelBox,
+): Pick<PosterShapeElement, 'left' | 'top' | 'angle' | 'x1' | 'y1' | 'x2' | 'y2'> {
+  const undirectedAngle = ((detectedAngle + 90) % 180 + 180) % 180 - 90;
+  const boxLooksVertical = box.height >= box.width * 1.35;
+  const boxLooksHorizontal = box.width >= box.height * 1.35;
+  const angleLooksVertical = Math.abs(undirectedAngle) >= 75;
+  const angleLooksHorizontal = Math.abs(undirectedAngle) <= 15;
+
+  if (boxLooksVertical || (!boxLooksHorizontal && angleLooksVertical)) {
+    return {
+      left: box.left + box.width / 2,
+      top: box.top,
+      angle: 0,
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: box.height,
+    };
+  }
+
+  if (boxLooksHorizontal || angleLooksHorizontal) {
+    return {
+      left: box.left,
+      top: box.top + box.height / 2,
+      angle: 0,
+      x1: 0,
+      y1: 0,
+      x2: box.width,
+      y2: 0,
+    };
+  }
+
+  // Diagonal lines use their detected bounding-box corners directly. Encoding
+  // orientation in endpoints avoids short rotated segments and keeps the line
+  // editable with the same native line controls as axis-aligned separators.
+  const risesToRight = undirectedAngle < 0;
+  return {
+    left: box.left,
+    top: box.top,
+    angle: 0,
+    x1: 0,
+    y1: risesToRight ? box.height : 0,
+    x2: box.width,
+    y2: risesToRight ? 0 : box.height,
+  };
 }
 
 async function cropReferenceRegion(

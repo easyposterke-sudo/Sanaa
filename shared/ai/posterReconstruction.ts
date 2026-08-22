@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 7 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v7-text-size-native-shapes' as const;
+  'poster-reconstruction-v7-text-size-native-shapes-line-orientation' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
