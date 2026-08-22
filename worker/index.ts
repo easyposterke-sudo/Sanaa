@@ -29,6 +29,7 @@ import {
   cleanFontLabel,
   detectFontFormat,
   fontObjectKey,
+  fontOwnerMatches,
   listFontLibrary,
 } from './fontLibrary';
 
@@ -113,7 +114,7 @@ app.get('/api/health', (context) =>
 );
 
 app.get('/api/fonts', async (context) => {
-  const fonts = await listFontLibrary(context.env.ASSETS);
+  const fonts = await listFontLibrary(context.env.ASSETS, context.get('ownerId'));
   context.header('cache-control', 'private, max-age=30');
   return context.json(fonts);
 });
@@ -187,6 +188,7 @@ app.post('/api/fonts/upload', async (context) => {
       format,
       byteSize: uploaded.size,
       uploadedAt,
+      canDelete: true,
     },
     201,
   );
@@ -213,7 +215,7 @@ app.delete('/api/fonts/:id', async (context) => {
   if (!objectKey) return context.json({ error: 'Font not found.' }, 404);
   const object = await context.env.ASSETS.head(objectKey);
   if (!object) return context.json({ error: 'Font not found.' }, 404);
-  if (object.customMetadata?.ownerId !== context.get('ownerId')) {
+  if (!fontOwnerMatches(context.get('ownerId'), object.customMetadata?.ownerId)) {
     return context.json({ error: 'Only the uploader can remove this font.' }, 403);
   }
   await context.env.ASSETS.delete(objectKey);

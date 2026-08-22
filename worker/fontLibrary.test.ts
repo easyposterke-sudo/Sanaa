@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanFontLabel, detectFontFormat, fontObjectKey } from './fontLibrary';
+import { cleanFontLabel, detectFontFormat, fontObjectKey, fontOwnerMatches } from './fontLibrary';
 
 describe('font library validation', () => {
   it('accepts matching TrueType and OpenType signatures', () => {
@@ -19,5 +19,10 @@ describe('font library validation', () => {
     );
     expect(fontObjectKey('../other-object')).toBeNull();
   });
-});
 
+  it('matches the authenticated font owner without case or surrounding whitespace', () => {
+    expect(fontOwnerMatches('EasyPosterKE@gmail.com', ' easyposterke@gmail.com ')).toBe(true);
+    expect(fontOwnerMatches('other@example.com', 'easyposterke@gmail.com')).toBe(false);
+    expect(fontOwnerMatches('easyposterke@gmail.com', undefined)).toBe(false);
+  });
+});

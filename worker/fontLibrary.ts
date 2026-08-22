@@ -11,6 +11,7 @@ export interface FontLibraryEntry {
   format: FontFormat;
   byteSize: number;
   uploadedAt: string;
+  canDelete: boolean;
 }
 
 export function detectFontFormat(fileName: string, bytes: Uint8Array): FontFormat | null {
@@ -43,7 +44,16 @@ export function fontObjectKey(id: string): string | null {
     : null;
 }
 
-export async function listFontLibrary(bucket: R2Bucket): Promise<FontLibraryEntry[]> {
+export function fontOwnerMatches(ownerId: string, storedOwnerId: string | undefined): boolean {
+  return Boolean(
+    storedOwnerId && storedOwnerId.trim().toLowerCase() === ownerId.trim().toLowerCase(),
+  );
+}
+
+export async function listFontLibrary(
+  bucket: R2Bucket,
+  ownerId: string,
+): Promise<FontLibraryEntry[]> {
   const entries: FontLibraryEntry[] = [];
   let cursor: string | undefined;
 
@@ -67,6 +77,7 @@ export async function listFontLibrary(bucket: R2Bucket): Promise<FontLibraryEntr
         format,
         byteSize: object.size,
         uploadedAt: metadata.uploadedAt || object.uploaded.toISOString(),
+        canDelete: fontOwnerMatches(ownerId, metadata.ownerId),
       });
     }
     cursor = page.truncated ? page.cursor : undefined;

@@ -17,6 +17,8 @@ export interface FontOption {
   isCustom?: boolean;
   previewKey?: string;
   fontUrl?: string;
+  fontId?: string;
+  canDelete?: boolean;
 }
 
 function savedFontCacheId(id: string): string {
@@ -57,6 +59,8 @@ export function usePosterFontOptions(): FontOption[] {
             isCustom: true,
             previewKey: key,
             fontUrl: entry.fontUrl,
+            fontId: entry.id,
+            canDelete: entry.canDelete,
           });
         }
       } catch {

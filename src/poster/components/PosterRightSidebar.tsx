@@ -27,8 +27,9 @@ import { getPosterShapeLocalSize, shapeFillFallbackForType } from '../posterShap
 import { rectHasPerCornerRadii } from '../roundedRectPath';
 import { pathPointsToSvgPathElement } from '../path/penToolMath';
 import { usePosterFontOptions } from '../usePosterFontOptions';
-import { ensureFontPreviewFromUrl } from '../../core/font/customFontCache';
+import { ensureFontPreviewFromUrl, releaseFontPreview } from '../../core/font/customFontCache';
 import {
+  deleteFontFile,
   inspectFontFile,
   notifyFontLibraryChanged,
   uploadFontFile,
@@ -1370,7 +1371,38 @@ function PosterTextControls({
   const fontUploadRef = useRef<HTMLInputElement>(null);
   const [fontUploadStatus, setFontUploadStatus] = useState<string | null>(null);
   const [fontUploading, setFontUploading] = useState(false);
+  const [deletingFontId, setDeletingFontId] = useState<string | null>(null);
   const fontOptions = usePosterFontOptions();
+
+  const deleteSavedFont = async (
+    fontId: string,
+    label: string,
+    fontValue: string,
+    previewKey?: string,
+  ) => {
+    const fontName = label.replace(/\s+\(saved\)$/i, '');
+    const confirmed = window.confirm(
+      `Delete “${fontName}” permanently from the shared font library? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingFontId(fontId);
+    setFontUploadStatus(`Deleting ${fontName}…`);
+    try {
+      await deleteFontFile(fontId);
+      if (previewKey) releaseFontPreview(previewKey);
+      if (text.fontFamily === fontValue) {
+        const fallback = fontOptions.find((option) => !option.isCustom)?.value;
+        updateElement(text.id, { fontFamily: fallback || 'Arial, Helvetica, sans-serif' });
+      }
+      notifyFontLibraryChanged();
+      setFontUploadStatus(`${fontName} was deleted permanently.`);
+    } catch (error) {
+      setFontUploadStatus(error instanceof Error ? error.message : `Could not delete ${fontName}.`);
+    } finally {
+      setDeletingFontId(null);
+    }
+  };
 
   const uploadFonts = async (files: File[]) => {
     if (files.length === 0 || fontUploading) return;
@@ -1487,27 +1519,46 @@ function PosterTextControls({
                 const selected = o.value === text.fontFamily;
                 return (
                   <li key={o.value}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                    <div
+                      className={`flex items-center gap-1 px-1 py-0.5 ${
                         selected ? 'bg-zinc-100 dark:bg-zinc-800' : ''
                       }`}
-                      style={{ fontFamily: o.value }}
-                      onClick={() => {
-                        setFontMenuOpen(false);
-                        if (o.previewKey && o.fontUrl) {
-                          void ensureFontPreviewFromUrl(o.previewKey, o.fontUrl)
-                            .then((family) => updateElement(text.id, { fontFamily: family }))
-                            .catch(() => setFontUploadStatus(`Could not load ${o.label}.`));
-                          return;
-                        }
-                        updateElement(text.id, { fontFamily: o.value });
-                      }}
                     >
-                      {o.label}
-                    </button>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={selected}
+                        className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        style={{ fontFamily: o.value }}
+                        onClick={() => {
+                          setFontMenuOpen(false);
+                          if (o.previewKey && o.fontUrl) {
+                            void ensureFontPreviewFromUrl(o.previewKey, o.fontUrl)
+                              .then((family) => updateElement(text.id, { fontFamily: family }))
+                              .catch(() => setFontUploadStatus(`Could not load ${o.label}.`));
+                            return;
+                          }
+                          updateElement(text.id, { fontFamily: o.value });
+                        }}
+                      >
+                        {o.label}
+                      </button>
+                      {o.fontId && o.canDelete && (
+                        <button
+                          type="button"
+                          title={`Delete ${o.label.replace(/\s+\(saved\)$/i, '')} permanently`}
+                          aria-label={`Delete ${o.label.replace(/\s+\(saved\)$/i, '')} permanently`}
+                          disabled={deletingFontId === o.fontId}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteSavedFont(o.fontId!, o.label, o.value, o.previewKey);
+                          }}
+                          className="shrink-0 rounded px-2 py-1 text-sm font-semibold text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                        >
+                          {deletingFontId === o.fontId ? '…' : '×'}
+                        </button>
+                      )}
+                    </div>
                   </li>
                 );
               })}

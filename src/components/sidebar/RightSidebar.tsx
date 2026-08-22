@@ -28,6 +28,7 @@ import {
 import { useDesignRecorderStore } from '../../recording/recordingStore';
 import { BUILT_IN_3D_FONT_OPTIONS } from '../../core/font/builtIn3DFonts';
 import {
+  deleteFontFile,
   listFontLibrary,
   notifyFontLibraryChanged,
 } from '../../poster/services/fontLibraryApi';
@@ -51,6 +52,7 @@ export interface SavedFontEntry {
   label: string;
   fontUrl: string;
   fileName?: string | null;
+  canDelete: boolean;
 }
 
 export interface CloudTextureEntry {
@@ -462,6 +464,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
   const [fontLibMsg, setFontLibMsg] = useState<string | null>(null);
   const [fontLibUploadLabel, setFontLibUploadLabel] = useState('');
   const [fontLibUploading, setFontLibUploading] = useState(false);
+  const [deletingSavedFontId, setDeletingSavedFontId] = useState<string | null>(null);
   const fontLibFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -557,11 +560,15 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
   };
 
   const deleteSavedFont = async (entry: SavedFontEntry) => {
+    const confirmed = window.confirm(
+      `Delete “${entry.label}” permanently from the shared font library? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
     setFontLibMsg(null);
+    setDeletingSavedFontId(entry.id);
     try {
-      const res = await apiFetch(`/api/fonts/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(j.error || res.statusText);
+      await deleteFontFile(entry.id);
       setSavedFonts((prev) => prev.filter((f) => f.id !== entry.id));
       notifyFontLibraryChanged();
       const cacheId = savedFontCacheId(entry.id);
@@ -576,8 +583,11 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
           selectedCustomFontId: sel === cacheId ? null : sel,
         });
       }
+      setFontLibMsg(`${entry.label} was deleted permanently.`);
     } catch (e) {
       setFontLibMsg(e instanceof Error ? e.message : 'Delete failed');
+    } finally {
+      setDeletingSavedFontId(null);
     }
   };
 
@@ -1090,18 +1100,19 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                                   >
                                     {f.label}
                                   </button>
-                                  {isAdmin && (
+                                  {f.canDelete && (
                                     <button
                                       type="button"
-                                      title="Remove from library"
+                                      title={`Delete ${f.label} permanently`}
+                                      disabled={deletingSavedFontId === f.id}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         void deleteSavedFont(f);
                                       }}
-                                      className="shrink-0 rounded border border-zinc-300 px-2 py-1 text-[11px] text-zinc-600 hover:bg-red-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-red-950/40"
-                                      aria-label={`Delete ${f.label} from library`}
+                                      className="shrink-0 rounded px-2 py-1 text-sm font-semibold text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-wait disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                                      aria-label={`Delete ${f.label} permanently`}
                                     >
-                                      ×
+                                      {deletingSavedFontId === f.id ? '…' : '×'}
                                     </button>
                                   )}
                                 </div>

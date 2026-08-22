@@ -9,13 +9,14 @@ export interface FontLibraryEntry {
   format: 'ttf' | 'otf';
   byteSize: number;
   uploadedAt: string;
+  canDelete: boolean;
 }
 
 export const FONT_LIBRARY_CHANGED_EVENT = 'easyposter:font-library-changed';
 const MAX_FONT_FILE_BYTES = 30 * 1024 * 1024;
 
 export async function listFontLibrary(): Promise<FontLibraryEntry[]> {
-  const response = await apiFetch('/api/fonts');
+  const response = await apiFetch('/api/fonts', { cache: 'no-store' });
   const data = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) throw new Error(readApiError(data, 'Could not load the font library.'));
   return Array.isArray(data) ? (data as FontLibraryEntry[]) : [];
@@ -50,6 +51,12 @@ export async function uploadFontFile(file: File, label: string): Promise<FontLib
   const data = (await response.json().catch(() => null)) as unknown;
   if (!response.ok) throw new Error(readApiError(data, `${file.name}: upload failed.`));
   return data as FontLibraryEntry;
+}
+
+export async function deleteFontFile(id: string): Promise<void> {
+  const response = await apiFetch(`/api/fonts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const data = (await response.json().catch(() => null)) as unknown;
+  if (!response.ok) throw new Error(readApiError(data, 'Could not delete the font.'));
 }
 
 export function notifyFontLibraryChanged(): void {
