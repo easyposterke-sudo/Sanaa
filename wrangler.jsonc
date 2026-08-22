@@ -12,7 +12,7 @@
     {
       "binding": "DB",
       "database_name": "easyposter-studio-db",
-      "database_id": "e7174962-3da2-4886-8304-ce7abb696f57",
+      "database_id": "a9bb1a3f-8a9a-4c2f-a61e-a62518827534",
       "migrations_dir": "migrations"
     }
   ],
