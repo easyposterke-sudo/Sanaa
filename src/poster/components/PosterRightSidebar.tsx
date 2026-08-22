@@ -26,8 +26,14 @@ import { normalizePosterShapeFill } from '../shapeFillFabric';
 import { getPosterShapeLocalSize, shapeFillFallbackForType } from '../posterShapeGeometry';
 import { rectHasPerCornerRadii } from '../roundedRectPath';
 import { pathPointsToSvgPathElement } from '../path/penToolMath';
-import { POSTER_FONT_OPTIONS } from '../posterFonts';
 import { usePosterFontOptions } from '../usePosterFontOptions';
+import { ensureFontPreviewFromUrl } from '../../core/font/customFontCache';
+import {
+  inspectFontFile,
+  notifyFontLibraryChanged,
+  uploadFontFile,
+  type FontLibraryEntry,
+} from '../services/fontLibraryApi';
 import { MaskEditorModal } from './MaskEditorModal';
 import { BUILT_IN_TEXTURES } from '../posterTextures';
 import { removeImageBackgroundLocally } from '../services/localBackgroundRemoval';
@@ -1361,7 +1367,51 @@ function PosterTextControls({
 }) {
   const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const fontMenuRef = useRef<HTMLDivElement>(null);
+  const fontUploadRef = useRef<HTMLInputElement>(null);
+  const [fontUploadStatus, setFontUploadStatus] = useState<string | null>(null);
+  const [fontUploading, setFontUploading] = useState(false);
   const fontOptions = usePosterFontOptions();
+
+  const uploadFonts = async (files: File[]) => {
+    if (files.length === 0 || fontUploading) return;
+    setFontUploading(true);
+    setFontUploadStatus(`Preparing ${files.length} font${files.length === 1 ? '' : 's'}…`);
+    const uploaded: FontLibraryEntry[] = [];
+    const errors: string[] = [];
+
+    for (let index = 0; index < files.length; index += 1) {
+      const file = files[index]!;
+      setFontUploadStatus(`Uploading ${index + 1} of ${files.length}: ${file.name}`);
+      try {
+        const { label } = await inspectFontFile(file);
+        uploaded.push(await uploadFontFile(file, label));
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : `${file.name}: upload failed.`);
+      }
+    }
+
+    if (uploaded.length > 0) {
+      notifyFontLibraryChanged();
+      const first = uploaded[0]!;
+      try {
+        const family = await ensureFontPreviewFromUrl(`cloud-font-${first.id}`, first.fontUrl);
+        updateElement(text.id, { fontFamily: family });
+      } catch {
+        // The refreshed library will retry the preview; the upload itself still succeeded.
+      }
+    }
+
+    if (errors.length === 0) {
+      setFontUploadStatus(
+        `${uploaded.length} font${uploaded.length === 1 ? '' : 's'} added to the shared library.`,
+      );
+    } else if (uploaded.length > 0) {
+      setFontUploadStatus(`${uploaded.length} uploaded. ${errors[0]}`);
+    } else {
+      setFontUploadStatus(errors[0] || 'No fonts were uploaded.');
+    }
+    setFontUploading(false);
+  };
 
   useEffect(() => {
     if (!fontMenuOpen) return;
@@ -1458,6 +1508,36 @@ function PosterTextControls({
             </ul>
           )}
         </div>
+        <input
+          ref={fontUploadRef}
+          type="file"
+          accept=".ttf,.otf,font/ttf,font/otf,application/x-font-ttf,application/x-font-opentype"
+          multiple
+          className="sr-only"
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            event.target.value = '';
+            void uploadFonts(files);
+          }}
+        />
+        <button
+          type="button"
+          disabled={fontUploading}
+          onClick={() => fontUploadRef.current?.click()}
+          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded border border-dashed border-zinc-300 bg-zinc-50 px-2 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:border-accent-500 hover:text-accent-700 disabled:cursor-wait disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-200 dark:hover:border-gold-500 dark:hover:text-gold-400"
+        >
+          <span aria-hidden>{fontUploading ? '↻' : '+'}</span>
+          {fontUploading ? 'Uploading fonts…' : 'Upload TTF / OTF fonts'}
+        </button>
+        {fontUploadStatus && (
+          <p
+            className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400"
+            role="status"
+            aria-live="polite"
+          >
+            {fontUploadStatus}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-1">

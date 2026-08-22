@@ -3,7 +3,7 @@
  * Keys are stable IDs; values are display name and the parsed font.
  */
 import type { OpenTypeFont } from './opentypeToThree';
-import { fetchWithTimeout } from '../../lib/api';
+import { apiFetch, fetchWithTimeout } from '../../lib/api';
 
 export interface CachedFont {
   id: string;
@@ -34,7 +34,7 @@ export async function ensureFontPreviewFromUrl(key: string, url: string): Promis
   if (existing) return existing.family;
 
   const family = familyNameForPreviewKey(key);
-  const res = await fetchWithTimeout(url);
+  const res = url.startsWith('/api/') ? await apiFetch(url) : await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`Font preview fetch failed: ${res.status}`);
   const buf = await res.arrayBuffer();
   const ff = new FontFace(family, buf);

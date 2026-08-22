@@ -24,6 +24,13 @@ import {
 import { parsePosterDocument } from './domain/document';
 import { parseRecordingSession } from './domain/recording';
 import { RemoveBgUpstreamError, removeBackgroundWithRemoveBg } from './integrations/removeBg';
+import {
+  MAX_FONT_FILE_BYTES,
+  cleanFontLabel,
+  detectFontFormat,
+  fontObjectKey,
+  listFontLibrary,
+} from './fontLibrary';
 
 type Variables = {
   ownerId: string;
@@ -104,6 +111,114 @@ app.get('/api/health', (context) =>
     requestId: context.get('requestId'),
   }),
 );
+
+app.get('/api/fonts', async (context) => {
+  const fonts = await listFontLibrary(context.env.ASSETS);
+  context.header('cache-control', 'private, max-age=30');
+  return context.json(fonts);
+});
+
+app.post('/api/fonts/upload', async (context) => {
+  const requestId = context.get('requestId');
+  const contentType = context.req.header('content-type')?.toLowerCase() || '';
+  if (!contentType.startsWith('multipart/form-data;')) {
+    return context.json({ error: 'Upload fonts as multipart form data.', requestId }, 415);
+  }
+
+  const contentLength = parseContentLength(context.req.header('content-length'));
+  const maximumRequestBytes = MAX_FONT_FILE_BYTES + 256 * 1024;
+  if (contentLength === null || contentLength <= 0 || contentLength > maximumRequestBytes) {
+    return context.json(
+      { error: 'Each font upload must be between 1 byte and 10 MB.', requestId },
+      413,
+    );
+  }
+
+  let form: FormData;
+  try {
+    form = await context.req.formData();
+  } catch {
+    return context.json({ error: 'The font upload could not be read.', requestId }, 400);
+  }
+  const uploaded = form.get('font');
+  if (!(uploaded instanceof File)) {
+    return context.json({ error: 'Choose a TTF or OTF font file.', requestId }, 400);
+  }
+  if (uploaded.size <= 0 || uploaded.size > MAX_FONT_FILE_BYTES) {
+    return context.json({ error: 'Each font must be between 1 byte and 10 MB.', requestId }, 413);
+  }
+
+  const bytes = new Uint8Array(await uploaded.arrayBuffer());
+  const format = detectFontFormat(uploaded.name, bytes);
+  if (!format) {
+    return context.json(
+      { error: 'Only valid TrueType (.ttf) and OpenType (.otf) font files are supported.', requestId },
+      415,
+    );
+  }
+
+  const id = crypto.randomUUID();
+  const objectKey = fontObjectKey(id)!;
+  const fileName = cleanFileName(uploaded.name || `font.${format}`);
+  const fallbackLabel = fileName.replace(/\.(ttf|otf)$/i, '') || 'Custom font';
+  const label = cleanFontLabel(String(form.get('label') || ''), fallbackLabel);
+  const uploadedAt = new Date().toISOString();
+  await context.env.ASSETS.put(objectKey, bytes, {
+    httpMetadata: {
+      contentType: format === 'otf' ? 'font/otf' : 'font/ttf',
+      cacheControl: 'private, max-age=31536000, immutable',
+    },
+    customMetadata: {
+      fontId: id,
+      label,
+      fileName,
+      format,
+      ownerId: context.get('ownerId'),
+      uploadedAt,
+    },
+  });
+
+  return context.json(
+    {
+      id,
+      label,
+      fontUrl: `/api/fonts/${encodeURIComponent(id)}/file`,
+      fileName,
+      format,
+      byteSize: uploaded.size,
+      uploadedAt,
+    },
+    201,
+  );
+});
+
+app.get('/api/fonts/:id/file', async (context) => {
+  const objectKey = fontObjectKey(context.req.param('id'));
+  if (!objectKey) return context.json({ error: 'Font not found.' }, 404);
+  const object = await context.env.ASSETS.get(objectKey);
+  if (!object) return context.json({ error: 'Font not found.' }, 404);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=31536000, immutable');
+  const fileName = object.customMetadata?.fileName?.replaceAll('"', '') || 'font';
+  headers.set('content-disposition', `inline; filename="${fileName}"`);
+  headers.set('x-content-type-options', 'nosniff');
+  return new Response(object.body, { headers });
+});
+
+app.delete('/api/fonts/:id', async (context) => {
+  const objectKey = fontObjectKey(context.req.param('id'));
+  if (!objectKey) return context.json({ error: 'Font not found.' }, 404);
+  const object = await context.env.ASSETS.head(objectKey);
+  if (!object) return context.json({ error: 'Font not found.' }, 404);
+  if (object.customMetadata?.ownerId !== context.get('ownerId')) {
+    return context.json({ error: 'Only the uploader can remove this font.' }, 403);
+  }
+  await context.env.ASSETS.delete(objectKey);
+  return context.json({ ok: true, id: context.req.param('id') });
+});
 
 app.post('/api/ai/poster-plan', async (context) => {
   const requestId = context.get('requestId');

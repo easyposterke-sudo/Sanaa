@@ -27,6 +27,10 @@ import {
 } from '../../recording/recordingEvidence';
 import { useDesignRecorderStore } from '../../recording/recordingStore';
 import { BUILT_IN_3D_FONT_OPTIONS } from '../../core/font/builtIn3DFonts';
+import {
+  listFontLibrary,
+  notifyFontLibraryChanged,
+} from '../../poster/services/fontLibraryApi';
 
 const BUILT_IN_HDR_PRESETS = [
   { id: 'silver', label: 'Silver studio', path: '/hdr/silver.hdr' },
@@ -465,14 +469,13 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
     let cancelled = false;
     setSavedFontsLoading(true);
     setFontLibMsg(null);
-    fetchWithTimeout(apiUrl('/api/fonts'))
-      .then((r) => r.json())
+    listFontLibrary()
       .then((data: unknown) => {
         if (cancelled) return;
         setSavedFonts(Array.isArray(data) ? (data as SavedFontEntry[]) : []);
       })
       .catch(() => {
-        if (!cancelled) setFontLibMsg('Font library needs the backend (npm run server) + MongoDB + Cloudinary.');
+        if (!cancelled) setFontLibMsg('Could not load the shared Cloudflare font library.');
       })
       .finally(() => {
         if (!cancelled) setSavedFontsLoading(false);
@@ -536,7 +539,9 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
       return;
     }
     try {
-      const res = await fetchWithTimeout(entry.fontUrl);
+      const res = entry.fontUrl.startsWith('/api/')
+        ? await apiFetch(entry.fontUrl)
+        : await fetchWithTimeout(entry.fontUrl);
       if (!res.ok) throw new Error('Could not download font file');
       const buf = await res.arrayBuffer();
       const font = opentype.parse(buf);
@@ -547,7 +552,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
       const nextIds = ids.includes(cacheId) ? ids : [...ids, cacheId];
       setState({ customFontIds: nextIds, selectedCustomFontId: cacheId });
     } catch {
-      setFontLibMsg('Could not load this font. Check Cloudinary URL / CORS.');
+      setFontLibMsg('Could not load this font from the shared library.');
     }
   };
 
@@ -558,6 +563,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(j.error || res.statusText);
       setSavedFonts((prev) => prev.filter((f) => f.id !== entry.id));
+      notifyFontLibraryChanged();
       const cacheId = savedFontCacheId(entry.id);
       releaseFontPreview(cacheId);
       removeCustomFont(cacheId);
@@ -596,6 +602,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
       const j = (await res.json()) as SavedFontEntry & { error?: string };
       if (!res.ok) throw new Error(j.error || res.statusText);
       setSavedFonts((prev) => [j, ...prev.filter((f) => f.id !== j.id)]);
+      notifyFontLibraryChanged();
       await applySavedFont(j);
       setFontLibUploadLabel('');
       if (fontLibFileRef.current) fontLibFileRef.current.value = '';

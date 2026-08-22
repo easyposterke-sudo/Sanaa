@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { POSTER_FONT_OPTIONS } from './posterFonts';
-import { apiUrl } from '../lib/apiUrl';
-import { fetchWithTimeout } from '../lib/api';
 import { ensureFontPreviewFromUrl } from '../core/font/customFontCache';
 import { getCustomFont } from '../core/font/customFontCache';
 import { useEditorStore } from '../store/editorStore';
+import {
+  FONT_LIBRARY_CHANGED_EVENT,
+  listFontLibrary,
+} from './services/fontLibraryApi';
 
 export interface FontOption {
   label: string;
@@ -24,7 +26,14 @@ const EMPTY_IDS: string[] = [];
 
 export function usePosterFontOptions(): FontOption[] {
   const [customOptions, setCustomOptions] = useState<FontOption[]>([]);
+  const [libraryRevision, setLibraryRevision] = useState(0);
   const customFontIdsKey = useEditorStore((s) => (s.customFontIds ?? EMPTY_IDS).join(','));
+
+  useEffect(() => {
+    const refresh = () => setLibraryRevision((revision) => revision + 1);
+    window.addEventListener(FONT_LIBRARY_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(FONT_LIBRARY_CHANGED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,11 +43,7 @@ export function usePosterFontOptions(): FontOption[] {
       const options: FontOption[] = [];
 
       try {
-        const res = await fetchWithTimeout(apiUrl('/api/fonts'));
-        const data = (await res.json()) as unknown;
-        const savedFonts = Array.isArray(data)
-          ? (data as { id: string; label: string; fontUrl: string }[])
-          : [];
+        const savedFonts = await listFontLibrary();
 
         for (const entry of savedFonts) {
           const key = savedFontCacheId(entry.id);
@@ -79,7 +84,7 @@ export function usePosterFontOptions(): FontOption[] {
     return () => {
       cancelled = true;
     };
-  }, [customFontIdsKey]);
+  }, [customFontIdsKey, libraryRevision]);
 
   return [...POSTER_FONT_OPTIONS, ...customOptions];
 }

@@ -1,7 +1,6 @@
 import opentype from 'opentype.js';
 import type { PosterElement, Poster3DTextElement } from './types';
-import { apiUrl } from '../lib/apiUrl';
-import { fetchWithTimeout } from '../lib/api';
+import { apiFetch, fetchWithTimeout } from '../lib/api';
 import {
   addCustomFont,
   ensureFontPreviewFromUrl,
@@ -10,6 +9,7 @@ import {
   getCustomFont,
 } from '../core/font/customFontCache';
 import { useEditorStore } from '../store/editorStore';
+import { listFontLibrary } from './services/fontLibraryApi';
 
 type SavedFontEntry = { id: string; label: string; fontUrl: string };
 
@@ -50,9 +50,7 @@ export async function loadFontsForPosterElements(elements: PosterElement[]): Pro
   if (neededCustom.size > 0 || customFontIds3D.size > 0) {
     let savedFonts: SavedFontEntry[] = [];
     try {
-      const res = await fetchWithTimeout(apiUrl('/api/fonts'));
-      const data = (await res.json()) as unknown;
-      savedFonts = Array.isArray(data) ? (data as SavedFontEntry[]) : [];
+      savedFonts = await listFontLibrary();
     } catch {
       /* offline / 503 */
     }
@@ -66,7 +64,9 @@ export async function loadFontsForPosterElements(elements: PosterElement[]): Pro
       try {
         await ensureFontPreviewFromUrl(key, entry.fontUrl);
         if (isNeededFor3D && !getCustomFont(key)) {
-          const fres = await fetchWithTimeout(entry.fontUrl);
+          const fres = entry.fontUrl.startsWith('/api/')
+            ? await apiFetch(entry.fontUrl)
+            : await fetchWithTimeout(entry.fontUrl);
           if (fres.ok) {
             const buf = await fres.arrayBuffer();
             const font = opentype.parse(buf);
