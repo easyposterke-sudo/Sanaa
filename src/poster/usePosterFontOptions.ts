@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { POSTER_FONT_OPTIONS } from './posterFonts';
-import { ensureFontPreviewFromUrl } from '../core/font/customFontCache';
-import { getCustomFont } from '../core/font/customFontCache';
+import {
+  ensureFontPreviewFromUrl,
+  familyNameForPreviewKey,
+  getCustomFont,
+} from '../core/font/customFontCache';
 import { useEditorStore } from '../store/editorStore';
 import {
   FONT_LIBRARY_CHANGED_EVENT,
@@ -12,6 +15,8 @@ export interface FontOption {
   label: string;
   value: string;
   isCustom?: boolean;
+  previewKey?: string;
+  fontUrl?: string;
 }
 
 function savedFontCacheId(id: string): string {
@@ -44,19 +49,15 @@ export function usePosterFontOptions(): FontOption[] {
 
       try {
         const savedFonts = await listFontLibrary();
-
         for (const entry of savedFonts) {
           const key = savedFontCacheId(entry.id);
-          try {
-            const family = await ensureFontPreviewFromUrl(key, entry.fontUrl);
-            options.push({
-              label: `${entry.label} (saved)`,
-              value: family,
-              isCustom: true,
-            });
-          } catch {
-            /* CORS / load failed */
-          }
+          options.push({
+            label: `${entry.label} (saved)`,
+            value: familyNameForPreviewKey(key),
+            isCustom: true,
+            previewKey: key,
+            fontUrl: entry.fontUrl,
+          });
         }
       } catch {
         /* Backend not available */

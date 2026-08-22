@@ -1496,8 +1496,14 @@ function PosterTextControls({
                       }`}
                       style={{ fontFamily: o.value }}
                       onClick={() => {
-                        updateElement(text.id, { fontFamily: o.value });
                         setFontMenuOpen(false);
+                        if (o.previewKey && o.fontUrl) {
+                          void ensureFontPreviewFromUrl(o.previewKey, o.fontUrl)
+                            .then((family) => updateElement(text.id, { fontFamily: family }))
+                            .catch(() => setFontUploadStatus(`Could not load ${o.label}.`));
+                          return;
+                        }
+                        updateElement(text.id, { fontFamily: o.value });
                       }}
                     >
                       {o.label}
