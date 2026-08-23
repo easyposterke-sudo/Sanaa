@@ -58,10 +58,10 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
 
   if (!open) return null;
 
-  const handleImages = async (files: FileList | null) => {
-    if (!files?.length) return;
+  const handleImages = async (files: readonly File[]) => {
+    if (files.length === 0) return;
     const remaining = Math.max(0, 8 - images.length);
-    const selected = Array.from(files).slice(0, remaining);
+    const selected = files.slice(0, remaining);
     if (selected.length === 0) {
       setError('You can add up to 8 images.');
       return;
@@ -281,8 +281,9 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
                     className="hidden"
                     disabled={preparingImages || submitting || images.length >= 8}
                     onChange={(event) => {
-                      const files = event.target.files;
-                      event.target.value = '';
+                      const input = event.currentTarget;
+                      const files = Array.from(input.files ?? []);
+                      input.value = '';
                       void handleImages(files);
                     }}
                   />
