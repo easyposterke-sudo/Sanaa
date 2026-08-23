@@ -135,6 +135,7 @@ interface PosterStore {
   /** Field bindings from template (key/label/sourceElementId). Null when loading from file or no template. */
   fieldBindings: PosterTemplateFieldBinding[] | null;
   addElement: (el: PosterElementInput) => void;
+  addElementToBack: (el: PosterElementInput) => void;
   /** One undo step: optional background image, cropped regions, then text layers (for Magic import). */
   batchImportMagicPoster: (payload: {
     background?: PosterElementInput;
@@ -365,6 +366,14 @@ export const usePosterStore = create<PosterStore>((set, get) => ({
     const id = generateId();
     const element: PosterElement = { ...el, id, zIndex: maxZ + 1 } as PosterElement;
     set((s) => ({ elements: [...s.elements, element], selectedIds: [id] }));
+  },
+
+  addElementToBack: (el) => {
+    get().pushHistory();
+    const minZ = Math.min(0, ...get().elements.map((element) => element.zIndex));
+    const id = generateId();
+    const element: PosterElement = { ...el, id, zIndex: minZ - 1 } as PosterElement;
+    set((state) => ({ elements: [...state.elements, element], selectedIds: [id] }));
   },
 
   batchImportMagicPoster: (payload) => {

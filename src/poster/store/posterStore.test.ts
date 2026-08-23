@@ -66,6 +66,29 @@ describe('addElement', () => {
   });
 });
 
+describe('addElementToBack', () => {
+  it('adds a selected element below every existing layer', () => {
+    usePosterStore.getState().addElement(makeTextEl({ text: 'Foreground' }));
+    usePosterStore.getState().addElementToBack({
+      type: 'image',
+      src: '/api/poster-backgrounds/bg-1/file',
+      left: 0,
+      top: 0,
+      scaleX: 1,
+      scaleY: 1,
+      angle: 0,
+      opacity: 1,
+      locked: true,
+    });
+
+    const state = usePosterStore.getState();
+    const background = state.elements.find((element) => element.type === 'image');
+    const foreground = state.elements.find((element) => element.type === 'text');
+    expect(background?.zIndex).toBeLessThan(foreground?.zIndex ?? 0);
+    expect(state.selectedIds).toEqual([background?.id]);
+  });
+});
+
 describe('updateElement', () => {
   it('updates properties of an existing element', () => {
     usePosterStore.getState().addElement(makeTextEl());

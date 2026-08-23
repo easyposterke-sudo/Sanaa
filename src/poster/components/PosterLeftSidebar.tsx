@@ -5,7 +5,9 @@ import { usePosterStore } from '../store/posterStore';
 import { getFabricCanvasRef } from '../canvasRef';
 import { posterShapePresetToElement } from '../posterShapePresets';
 import { PosterShapesModal } from './PosterShapesModal';
+import { PosterBackgroundsModal } from './PosterBackgroundsModal';
 import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
+import type { PosterBackgroundLibraryItem } from '../services/posterBackgroundsApi';
 import type {
   PosterElement,
   PosterImageElement,
@@ -96,12 +98,14 @@ export function PosterLeftSidebar({
 }: PosterLeftSidebarProps) {
   const navigate = useNavigate();
   const addElement = usePosterStore((s) => s.addElement);
+  const addElementToBack = usePosterStore((s) => s.addElementToBack);
   const elements = usePosterStore((s) => s.elements);
   const selectedIds = usePosterStore((s) => s.selectedIds);
   const setSelected = usePosterStore((s) => s.setSelected);
   const reorderLayersFrontToBack = usePosterStore((s) => s.reorderLayersFrontToBack);
   const updateElement = usePosterStore((s) => s.updateElement);
   const [shapesModalOpen, setShapesModalOpen] = useState(false);
+  const [backgroundsModalOpen, setBackgroundsModalOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [layerDragFromIndex, setLayerDragFromIndex] = useState<number | null>(null);
   const [layerDragOverIndex, setLayerDragOverIndex] = useState<number | null>(null);
@@ -222,6 +226,24 @@ export function PosterLeftSidebar({
     } as NewPosterImagePayload);
   };
 
+  const handleUseBackground = async (background: PosterBackgroundLibraryItem) => {
+    const dimensions = await readImageDimensions(background.url);
+    const { canvasWidth, canvasHeight } = usePosterStore.getState();
+    const scale = Math.max(canvasWidth / dimensions.width, canvasHeight / dimensions.height);
+    const displayedWidth = dimensions.width * scale;
+    const displayedHeight = dimensions.height * scale;
+    addElementToBack({
+      ...newImageDefaults(),
+      src: background.url,
+      left: (canvasWidth - displayedWidth) / 2,
+      top: (canvasHeight - displayedHeight) / 2,
+      scaleX: scale,
+      scaleY: scale,
+      locked: true,
+      layerName: `Background: ${background.label}`,
+    } as NewPosterImagePayload);
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {onOpenTemplateCreator && (
@@ -276,6 +298,13 @@ export function PosterLeftSidebar({
           >
             Shapes
           </button>
+          <button
+            type="button"
+            onClick={guard(() => setBackgroundsModalOpen(true))}
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+          >
+            Backgrounds
+          </button>
         </div>
       </div>
 
@@ -283,6 +312,12 @@ export function PosterLeftSidebar({
         open={shapesModalOpen}
         onClose={() => setShapesModalOpen(false)}
         onPick={(id) => addElement(posterShapePresetToElement(id) as PosterElementInput)}
+      />
+
+      <PosterBackgroundsModal
+        open={backgroundsModalOpen}
+        onClose={() => setBackgroundsModalOpen(false)}
+        onPick={handleUseBackground}
       />
 
       <div>

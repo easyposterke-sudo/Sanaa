@@ -21,6 +21,13 @@ import {
   OpenAiPosterReconstructionError,
   reconstructPosterWithOpenAI,
 } from './ai/openAiPosterReconstructor';
+import {
+  MAX_POSTER_BACKGROUND_BYTES,
+  cleanPosterBackgroundLabel,
+  isPosterBackgroundMediaType,
+  matchesPosterBackgroundSignature,
+  posterBackgroundObjectKey,
+} from './backgroundLibrary';
 import { parsePosterDocument } from './domain/document';
 import {
   createPosterTemplateSchema,
@@ -84,6 +91,16 @@ type PosterTemplateRow = {
   r2_key: string;
   thumbnail_r2_key: string | null;
   updated_at: string;
+};
+
+type PosterBackgroundRow = {
+  id: string;
+  label: string;
+  r2_key: string;
+  file_name: string;
+  media_type: string;
+  byte_size: number;
+  created_at: string;
 };
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -239,6 +256,139 @@ app.delete('/api/fonts/:id', async (context) => {
   }
   await context.env.ASSETS.delete(objectKey);
   return context.json({ ok: true, id: context.req.param('id') });
+});
+
+app.get('/api/poster-backgrounds', async (context) => {
+  const result = await context.env.DB.prepare(
+    `SELECT id, label, r2_key, file_name, media_type, byte_size, created_at
+     FROM poster_backgrounds
+     WHERE owner_id = ? AND archived_at IS NULL
+     ORDER BY created_at DESC
+     LIMIT 200`,
+  )
+    .bind(context.get('ownerId'))
+    .all<PosterBackgroundRow>();
+
+  context.header('cache-control', 'private, no-store');
+  return context.json(
+    result.results.map((row) => ({
+      id: row.id,
+      label: row.label,
+      url: `/api/poster-backgrounds/${encodeURIComponent(row.id)}/file`,
+      originalName: row.file_name,
+      mediaType: row.media_type,
+      byteSize: row.byte_size,
+      createdAt: row.created_at,
+    })),
+  );
+});
+
+app.post('/api/poster-backgrounds', async (context) => {
+  const requestId = context.get('requestId');
+  const contentLength = parseContentLength(context.req.header('content-length'));
+  if (contentLength !== null && contentLength > MAX_POSTER_BACKGROUND_BYTES) {
+    return context.json({ error: 'Background images must be 20 MB or smaller.', requestId }, 413);
+  }
+
+  const mediaType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase() || '';
+  if (!isPosterBackgroundMediaType(mediaType)) {
+    return context.json(
+      { error: 'Backgrounds must be PNG, JPEG, or WebP images.', requestId },
+      415,
+    );
+  }
+
+  const bytes = new Uint8Array(
+    await readBoundedBytes(
+      context.req.raw,
+      MAX_POSTER_BACKGROUND_BYTES,
+      'Background images must be 20 MB or smaller.',
+    ),
+  );
+  if (bytes.byteLength === 0) {
+    return context.json({ error: 'Choose a background image to upload.', requestId }, 400);
+  }
+  if (!matchesPosterBackgroundSignature(mediaType, bytes)) {
+    return context.json({ error: 'The uploaded background is not a valid image.', requestId }, 400);
+  }
+
+  const ownerId = context.get('ownerId');
+  const id = crypto.randomUUID();
+  const fileName = cleanFileName(context.req.header('x-file-name') || `background.${mediaType.slice(6)}`);
+  const fallbackLabel = fileName.replace(/\.[^.]+$/, '') || 'Poster background';
+  const label = cleanPosterBackgroundLabel(
+    context.req.header('x-background-label') || '',
+    fallbackLabel,
+  );
+  const r2Key = posterBackgroundObjectKey(ownerId, id, fileName);
+  await context.env.ASSETS.put(r2Key, bytes, {
+    httpMetadata: {
+      contentType: mediaType,
+      cacheControl: 'private, max-age=31536000, immutable',
+    },
+    customMetadata: { backgroundId: id, ownerId, label, fileName },
+  });
+
+  const createdAt = new Date().toISOString();
+  try {
+    await context.env.DB.prepare(
+      `INSERT INTO poster_backgrounds (
+         id, owner_id, label, r2_key, file_name, media_type, byte_size, created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(id, ownerId, label, r2Key, fileName, mediaType, bytes.byteLength, createdAt)
+      .run();
+  } catch (error) {
+    await context.env.ASSETS.delete(r2Key);
+    throw error;
+  }
+
+  return context.json(
+    {
+      id,
+      label,
+      url: `/api/poster-backgrounds/${encodeURIComponent(id)}/file`,
+      originalName: fileName,
+      mediaType,
+      byteSize: bytes.byteLength,
+      createdAt,
+      requestId,
+    },
+    201,
+  );
+});
+
+app.get('/api/poster-backgrounds/:id/file', async (context) => {
+  const row = await context.env.DB.prepare(
+    `SELECT id, label, r2_key, file_name, media_type, byte_size, created_at
+     FROM poster_backgrounds
+     WHERE id = ?`,
+  )
+    .bind(context.req.param('id'))
+    .first<PosterBackgroundRow>();
+  if (!row) return context.json({ error: 'Background not found.' }, 404);
+
+  const object = await context.env.ASSETS.get(row.r2_key);
+  if (!object) return context.json({ error: 'Background image is unavailable.' }, 503);
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=31536000, immutable');
+  headers.set('content-disposition', `inline; filename="${row.file_name.replaceAll('"', '')}"`);
+  headers.set('x-content-type-options', 'nosniff');
+  return new Response(object.body, { headers });
+});
+
+app.delete('/api/poster-backgrounds/:id', async (context) => {
+  const result = await context.env.DB.prepare(
+    `UPDATE poster_backgrounds
+     SET archived_at = ?
+     WHERE id = ? AND owner_id = ? AND archived_at IS NULL`,
+  )
+    .bind(new Date().toISOString(), context.req.param('id'), context.get('ownerId'))
+    .run();
+  if (result.meta.changes === 0) return context.json({ error: 'Background not found.' }, 404);
+  return context.body(null, 204);
 });
 
 app.post('/api/ai/poster-plan', async (context) => {
@@ -1488,10 +1638,14 @@ function maxBackgroundRemovalBytes(env: Env): number {
   return Number.isFinite(configured) && configured > 0 ? configured : 22 * 1024 * 1024;
 }
 
-async function readBoundedBytes(request: Request, maximumBytes: number): Promise<ArrayBuffer> {
+async function readBoundedBytes(
+  request: Request,
+  maximumBytes: number,
+  tooLargeMessage = 'Background-removal upload is too large.',
+): Promise<ArrayBuffer> {
   const contentLength = parseContentLength(request.headers.get('content-length'));
   if (contentLength !== null && contentLength > maximumBytes) {
-    throw new RangeError('Background-removal upload is too large.');
+    throw new RangeError(tooLargeMessage);
   }
   if (!request.body) return new ArrayBuffer(0);
   const reader = request.body.getReader();
@@ -1503,8 +1657,8 @@ async function readBoundedBytes(request: Request, maximumBytes: number): Promise
       if (chunk.done) break;
       totalBytes += chunk.value.byteLength;
       if (totalBytes > maximumBytes) {
-        await reader.cancel('Background-removal upload is too large.');
-        throw new RangeError('Background-removal upload is too large.');
+        await reader.cancel(tooLargeMessage);
+        throw new RangeError(tooLargeMessage);
       }
       chunks.push(chunk.value);
     }
