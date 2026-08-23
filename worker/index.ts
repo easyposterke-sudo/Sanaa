@@ -22,6 +22,14 @@ import {
   reconstructPosterWithOpenAI,
 } from './ai/openAiPosterReconstructor';
 import { parsePosterDocument } from './domain/document';
+import {
+  createPosterTemplateSchema,
+  parsePosterTemplateThumbnail,
+  storedPosterTemplateSchema,
+  updatePosterTemplateSchema,
+  validateTemplateFieldSources,
+  type StoredPosterTemplate,
+} from './domain/posterTemplate';
 import { parseRecordingSession } from './domain/recording';
 import { RemoveBgUpstreamError, removeBackgroundWithRemoveBg } from './integrations/removeBg';
 import {
@@ -65,6 +73,17 @@ type RecordingRow = {
 type AiPosterPlanRow = {
   spec_json: string;
   model: string;
+};
+
+type PosterTemplateRow = {
+  id: string;
+  owner_id: string;
+  name: string;
+  category: StoredPosterTemplate['category'];
+  description: string | null;
+  r2_key: string;
+  thumbnail_r2_key: string | null;
+  updated_at: string;
 };
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -776,6 +795,257 @@ app.post('/api/images/remove-background', async (context) => {
   }
 });
 
+app.get('/api/poster-templates', async (context) => {
+  const result = await context.env.DB.prepare(
+    `SELECT id, owner_id, name, category, description, r2_key, thumbnail_r2_key, updated_at
+     FROM poster_templates
+     ORDER BY updated_at DESC
+     LIMIT 100`,
+  ).all<PosterTemplateRow>();
+
+  context.header('cache-control', 'private, no-store');
+  return context.json(
+    result.results.map((row) => ({
+      id: row.id,
+      name: row.name,
+      category: row.category,
+      ...(row.description ? { description: row.description } : {}),
+      ...(row.thumbnail_r2_key ? { thumbnail: posterTemplateThumbnailUrl(row.id) } : {}),
+    })),
+  );
+});
+
+app.get('/api/poster-templates/:id/thumbnail', async (context) => {
+  const id = context.req.param('id');
+  const row = await context.env.DB.prepare(
+    'SELECT thumbnail_r2_key FROM poster_templates WHERE id = ?',
+  )
+    .bind(id)
+    .first<{ thumbnail_r2_key: string | null }>();
+  if (!row?.thumbnail_r2_key) return context.json({ error: 'Template thumbnail not found.' }, 404);
+
+  const object = await context.env.PROJECTS.get(row.thumbnail_r2_key);
+  if (!object) return context.json({ error: 'Template thumbnail is unavailable.' }, 503);
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=300');
+  headers.set('x-content-type-options', 'nosniff');
+  return new Response(object.body, { headers });
+});
+
+app.get('/api/poster-templates/:id', async (context) => {
+  const id = context.req.param('id');
+  const row = await context.env.DB.prepare(
+    `SELECT id, owner_id, name, category, description, r2_key, thumbnail_r2_key, updated_at
+     FROM poster_templates
+     WHERE id = ?`,
+  )
+    .bind(id)
+    .first<PosterTemplateRow>();
+  if (!row) return context.json({ error: 'Template not found.' }, 404);
+
+  const template = await readStoredPosterTemplate(context.env.PROJECTS, row, context.get('requestId'));
+  if (!template) return context.json({ error: 'Template data is temporarily unavailable.' }, 503);
+
+  context.header('cache-control', 'private, no-store');
+  return context.json({
+    ...template,
+    ...(row.thumbnail_r2_key ? { thumbnail: posterTemplateThumbnailUrl(row.id) } : {}),
+  });
+});
+
+app.post('/api/poster-templates', async (context) => {
+  const requestId = context.get('requestId');
+  const input = createPosterTemplateSchema.safeParse(
+    JSON.parse(await readBoundedText(context.req.raw, maxProjectBytes(context.env))),
+  );
+  if (!input.success) {
+    return context.json({ error: 'The template payload is invalid.', requestId }, 400);
+  }
+
+  const thumbnail = parsePosterTemplateThumbnail(input.data.thumbnail);
+  if (input.data.thumbnail !== undefined && !thumbnail) {
+    return context.json({ error: 'The template thumbnail is invalid.', requestId }, 400);
+  }
+
+  const id = `cloud_${crypto.randomUUID()}`;
+  const ownerId = context.get('ownerId');
+  const template = storedPosterTemplateSchema.parse({
+    id,
+    name: input.data.name,
+    category: input.data.category,
+    description: input.data.description,
+    fields: input.data.fields,
+    project: input.data.project,
+  });
+  if (!validateTemplateFieldSources(template)) {
+    return context.json({ error: 'A template field points to a missing layer.', requestId }, 400);
+  }
+
+  const revision = crypto.randomUUID();
+  const r2Key = posterTemplateDocumentKey(ownerId, id, revision);
+  const thumbnailR2Key = thumbnail
+    ? posterTemplateThumbnailKey(ownerId, id, revision, thumbnail.mediaType)
+    : null;
+  await context.env.PROJECTS.put(r2Key, JSON.stringify(template), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { templateId: id, ownerId },
+  });
+  if (thumbnail && thumbnailR2Key) {
+    await context.env.PROJECTS.put(thumbnailR2Key, thumbnail.bytes, {
+      httpMetadata: { contentType: thumbnail.mediaType },
+      customMetadata: { templateId: id, ownerId },
+    });
+  }
+
+  const now = new Date().toISOString();
+  try {
+    await context.env.DB.prepare(
+      `INSERT INTO poster_templates (
+         id, owner_id, name, category, description, r2_key, thumbnail_r2_key, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        ownerId,
+        template.name,
+        template.category,
+        template.description ?? null,
+        r2Key,
+        thumbnailR2Key,
+        now,
+        now,
+      )
+      .run();
+  } catch (error) {
+    await context.env.PROJECTS.delete(
+      thumbnailR2Key ? [r2Key, thumbnailR2Key] : [r2Key],
+    );
+    throw error;
+  }
+
+  return context.json({ id, requestId }, 201);
+});
+
+app.patch('/api/poster-templates/:id', async (context) => {
+  const requestId = context.get('requestId');
+  const id = context.req.param('id');
+  const ownerId = context.get('ownerId');
+  const row = await context.env.DB.prepare(
+    `SELECT id, owner_id, name, category, description, r2_key, thumbnail_r2_key, updated_at
+     FROM poster_templates
+     WHERE id = ? AND owner_id = ?`,
+  )
+    .bind(id, ownerId)
+    .first<PosterTemplateRow>();
+  if (!row) return context.json({ error: 'Template not found.' }, 404);
+
+  const changes = updatePosterTemplateSchema.safeParse(
+    JSON.parse(await readBoundedText(context.req.raw, maxProjectBytes(context.env))),
+  );
+  if (!changes.success) {
+    return context.json({ error: 'The template update is invalid.', requestId }, 400);
+  }
+  const existing = await readStoredPosterTemplate(context.env.PROJECTS, row, requestId);
+  if (!existing) {
+    return context.json({ error: 'Template data is temporarily unavailable.', requestId }, 503);
+  }
+
+  const { thumbnail: thumbnailInput, ...templateChanges } = changes.data;
+  const merged = storedPosterTemplateSchema.safeParse({
+    ...existing,
+    ...templateChanges,
+    id,
+  });
+  if (!merged.success || !validateTemplateFieldSources(merged.data)) {
+    return context.json({ error: 'The updated template contains invalid fields or layers.', requestId }, 400);
+  }
+
+  const thumbnail = parsePosterTemplateThumbnail(thumbnailInput);
+  if (thumbnailInput !== undefined && !thumbnail) {
+    return context.json({ error: 'The template thumbnail is invalid.', requestId }, 400);
+  }
+
+  const revision = crypto.randomUUID();
+  const r2Key = posterTemplateDocumentKey(ownerId, id, revision);
+  const thumbnailR2Key = thumbnail
+    ? posterTemplateThumbnailKey(ownerId, id, revision, thumbnail.mediaType)
+    : row.thumbnail_r2_key;
+  await context.env.PROJECTS.put(r2Key, JSON.stringify(merged.data), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    customMetadata: { templateId: id, ownerId },
+  });
+  if (thumbnail && thumbnailR2Key) {
+    await context.env.PROJECTS.put(thumbnailR2Key, thumbnail.bytes, {
+      httpMetadata: { contentType: thumbnail.mediaType },
+      customMetadata: { templateId: id, ownerId },
+    });
+  }
+
+  try {
+    await context.env.DB.prepare(
+      `UPDATE poster_templates
+       SET name = ?, category = ?, description = ?, r2_key = ?, thumbnail_r2_key = ?, updated_at = ?
+       WHERE id = ? AND owner_id = ?`,
+    )
+      .bind(
+        merged.data.name,
+        merged.data.category,
+        merged.data.description ?? null,
+        r2Key,
+        thumbnailR2Key,
+        new Date().toISOString(),
+        id,
+        ownerId,
+      )
+      .run();
+  } catch (error) {
+    await context.env.PROJECTS.delete(
+      thumbnail && thumbnailR2Key ? [r2Key, thumbnailR2Key] : [r2Key],
+    );
+    throw error;
+  }
+
+  const obsoleteKeys = [row.r2_key];
+  if (thumbnail && row.thumbnail_r2_key) obsoleteKeys.push(row.thumbnail_r2_key);
+  await context.env.PROJECTS.delete(obsoleteKeys);
+  return context.json({ ok: true, id, requestId });
+});
+
+app.delete('/api/poster-templates/:id', async (context) => {
+  const id = context.req.param('id');
+  const ownerId = context.get('ownerId');
+  const row = await context.env.DB.prepare(
+    'SELECT r2_key, thumbnail_r2_key FROM poster_templates WHERE id = ? AND owner_id = ?',
+  )
+    .bind(id, ownerId)
+    .first<{ r2_key: string; thumbnail_r2_key: string | null }>();
+  if (!row) return context.json({ error: 'Template not found.' }, 404);
+
+  await context.env.DB.prepare(
+    'DELETE FROM poster_templates WHERE id = ? AND owner_id = ?',
+  )
+    .bind(id, ownerId)
+    .run();
+  try {
+    await context.env.PROJECTS.delete(
+      row.thumbnail_r2_key ? [row.r2_key, row.thumbnail_r2_key] : [row.r2_key],
+    );
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        message: 'deleted template left inaccessible R2 objects',
+        templateId: id,
+        error: error instanceof Error ? error.message : String(error),
+        requestId: context.get('requestId'),
+      }),
+    );
+  }
+  return context.body(null, 204);
+});
+
 app.get('/api/projects', async (context) => {
   const ownerId = context.get('ownerId');
   const result = await context.env.DB.prepare(
@@ -1149,6 +1419,57 @@ app.onError((error, context) => {
   }
   return context.json({ error: 'Internal server error.', requestId }, 500);
 });
+
+function posterTemplateThumbnailUrl(id: string): string {
+  return `/api/poster-templates/${encodeURIComponent(id)}/thumbnail`;
+}
+
+function posterTemplateDocumentKey(ownerId: string, id: string, revision: string): string {
+  return `owners/${encodeURIComponent(ownerId)}/templates/${id}/${revision}/template.json`;
+}
+
+function posterTemplateThumbnailKey(
+  ownerId: string,
+  id: string,
+  revision: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp',
+): string {
+  const extension = mediaType === 'image/jpeg' ? 'jpg' : mediaType.slice('image/'.length);
+  return `owners/${encodeURIComponent(ownerId)}/templates/${id}/${revision}/thumbnail.${extension}`;
+}
+
+async function readStoredPosterTemplate(
+  bucket: R2Bucket,
+  row: Pick<PosterTemplateRow, 'id' | 'r2_key'>,
+  requestId: string,
+): Promise<StoredPosterTemplate | null> {
+  const object = await bucket.get(row.r2_key);
+  if (!object) {
+    console.error(
+      JSON.stringify({
+        message: 'template metadata points to a missing R2 object',
+        templateId: row.id,
+        requestId,
+      }),
+    );
+    return null;
+  }
+
+  try {
+    const parsed = storedPosterTemplateSchema.safeParse(JSON.parse(await object.text()));
+    if (parsed.success) return parsed.data;
+  } catch {
+    // The structured error below is more useful than leaking a JSON parsing detail.
+  }
+  console.error(
+    JSON.stringify({
+      message: 'template R2 object contains an invalid document',
+      templateId: row.id,
+      requestId,
+    }),
+  );
+  return null;
+}
 
 function maxProjectBytes(env: Env): number {
   const configured = Number(env.MAX_PROJECT_BYTES);

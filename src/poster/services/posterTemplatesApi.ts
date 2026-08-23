@@ -1,7 +1,6 @@
 import type { PosterTemplateDefinition } from '../templateTypes';
 import type { User } from '../../auth/authStore';
-import { apiFetch, fetchWithTimeout } from '../../lib/api';
-import { apiUrl } from '../../lib/apiUrl';
+import { apiFetch } from '../../lib/api';
 
 export type PosterTemplateListItem = Pick<
   PosterTemplateDefinition,
@@ -11,14 +10,14 @@ export type PosterTemplateListItem = Pick<
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export async function fetchPosterTemplateList(): Promise<PosterTemplateListItem[]> {
-  const res = await fetchWithTimeout(apiUrl('/api/poster-templates'));
+  const res = await apiFetch('/api/poster-templates');
   if (!res.ok) throw new Error(`Failed to load templates (${res.status})`);
   const data = (await res.json()) as PosterTemplateListItem[];
   return Array.isArray(data) ? data : [];
 }
 
 export async function fetchPosterTemplateById(id: string): Promise<PosterTemplateDefinition> {
-  const res = await fetchWithTimeout(apiUrl(`/api/poster-templates/${encodeURIComponent(id)}`));
+  const res = await apiFetch(`/api/poster-templates/${encodeURIComponent(id)}`);
   if (!res.ok) {
     if (res.status === 404) throw new Error('Template not found');
     throw new Error(`Failed to load template (${res.status})`);
