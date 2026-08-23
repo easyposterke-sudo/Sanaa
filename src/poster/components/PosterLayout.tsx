@@ -15,7 +15,6 @@ import { TemplateElementLabelModal } from './TemplateElementLabelModal';
 import { SavePosterTemplateModal } from './SavePosterTemplateModal';
 import { AIPosterWizard } from './AIPosterWizard';
 import { TemplateCreatorWizard } from './TemplateCreatorWizard';
-import type { CompiledPosterPlan } from '../ai/compilePosterPlan';
 import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
 import { usePosterStore } from '../store/posterStore';
 import { useAuthStore } from '../../auth/authStore';
@@ -736,7 +735,7 @@ export function PosterLayout() {
     : 'max-lg:top-[calc(env(safe-area-inset-top,0px)+3rem)]';
 
   const applyAIPoster = useCallback(
-    (compiled: CompiledPosterPlan) => {
+    (compiled: { project: PosterProject; fieldBindings: PosterTemplateFieldBinding[] }) => {
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.removeItem('poster_edit_my_project_id');
         sessionStorage.removeItem('poster_edit_my_project_updated_at');

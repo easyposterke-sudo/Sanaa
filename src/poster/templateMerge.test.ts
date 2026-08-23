@@ -3,7 +3,7 @@ import {
   compileTwoLayer3DTextState,
   renderTwoLayer3DTextPreview,
 } from './ai/twoLayer3DTextSkill';
-import { applyFieldBindings } from './templateMerge';
+import { applyFieldBindings, instantiateTemplate } from './templateMerge';
 import type { Poster3DTextElement } from './types';
 
 function svgSize(svg: string): { width: number; height: number } {
@@ -55,3 +55,42 @@ describe('applyFieldBindings', () => {
   });
 });
 
+describe('instantiateTemplate AI clearing', () => {
+  it('clears the entire bound text layer when an AI field is missing', async () => {
+    const result = await instantiateTemplate(
+      {
+        id: 'template-1',
+        name: 'Event',
+        category: 'event',
+        fields: [
+          { key: 'guest_name', label: 'Guest name', sourceElementId: 'guest' },
+        ],
+        project: {
+          canvasWidth: 800,
+          canvasHeight: 600,
+          elements: [
+            {
+              id: 'guest',
+              type: 'text',
+              left: 10,
+              top: 10,
+              text: 'Guest: {{guest_name}}',
+              fontSize: 20,
+              fontFamily: 'Arial',
+              fill: '#000000',
+              scaleX: 1,
+              scaleY: 1,
+              angle: 0,
+              opacity: 1,
+              zIndex: 1,
+            },
+          ],
+        },
+      },
+      { guest_name: '' },
+      { clearMissingTextFields: true },
+    );
+
+    expect(result.project.elements[0]).toMatchObject({ type: 'text', text: '', width: 742 });
+  });
+});

@@ -77,7 +77,8 @@ export function applyFieldBindings(
   elements: PosterElement[],
   bindings: PosterTemplateFieldBinding[],
   idMap: Record<string, string>,
-  data: Record<string, string>
+  data: Record<string, string>,
+  options: { clearMissingTextFields?: boolean } = {},
 ): PosterElement[] {
   const byNewId = new Map<string, PosterTemplateFieldBinding[]>();
   for (const b of bindings) {
@@ -93,7 +94,10 @@ export function applyFieldBindings(
     if (!bs?.length) return el;
     if (el.type === 'text') {
       const t = el as PosterTextElement;
-      return { ...t, text: applyBoundText(t.text, bs, data) };
+      return {
+        ...t,
+        text: applyBoundText(t.text, bs, data, options.clearMissingTextFields ?? false),
+      };
     }
     if (el.type === '3d-text') {
       return applyTwoLayer3DTextBinding(el as Poster3DTextElement, bs, data);
@@ -106,7 +110,15 @@ function applyBoundText(
   original: string,
   bindings: PosterTemplateFieldBinding[],
   data: Record<string, string>,
+  clearMissingTextFields = false,
 ): string {
+  if (
+    clearMissingTextFields &&
+    bindings.length === 1 &&
+    String(data[bindings[0].key] ?? '').trim() === ''
+  ) {
+    return '';
+  }
   let text = original;
   for (const binding of bindings) {
     const value = data[binding.key] != null ? String(data[binding.key]) : '';
@@ -259,7 +271,8 @@ function humanizeFieldLabel(key: string): string {
  */
 export async function instantiateTemplate(
   template: PosterTemplateDefinition,
-  data: Record<string, string>
+  data: Record<string, string>,
+  options: { clearMissingTextFields?: boolean } = {},
 ): Promise<{ project: PosterProject; fieldBindings: PosterTemplateFieldBinding[] }> {
   const clone = deepCloneProject(template.project);
   const { elements, idMap } = regenerateElementIdsWithMap(clone.elements);
@@ -270,11 +283,37 @@ export async function instantiateTemplate(
   }));
 
   if (template.fields && template.fields.length > 0) {
-    clone.elements = applyFieldBindings(elements, template.fields, idMap, data);
+    clone.elements = applyFieldBindings(elements, template.fields, idMap, data, options);
     clone.elements = await applyImageFieldBindings(clone.elements, template.fields, idMap, data);
     clone.elements = applyPlaceholders(clone.elements, data);
+    clone.elements = addMissingBoundTextWidths(
+      clone.elements,
+      fieldBindings,
+      clone.canvasWidth,
+    );
   } else {
     clone.elements = applyPlaceholders(elements, data);
   }
   return { project: clone, fieldBindings };
+}
+
+function addMissingBoundTextWidths(
+  elements: PosterElement[],
+  bindings: PosterTemplateFieldBinding[],
+  canvasWidth: number,
+): PosterElement[] {
+  const boundElementIds = new Set(bindings.map((binding) => binding.sourceElementId));
+  return elements.map((element) => {
+    if (
+      element.type !== 'text' ||
+      !boundElementIds.has(element.id) ||
+      element.width !== undefined
+    ) {
+      return element;
+    }
+    return {
+      ...element,
+      width: Math.max(120, canvasWidth - element.left - 48),
+    };
+  });
 }

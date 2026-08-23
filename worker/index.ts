@@ -16,11 +16,20 @@ import {
   createFallbackReconstructionPlan,
   type PosterReconstructionRequest,
 } from '../shared/ai/posterReconstruction';
+import {
+  TEMPLATE_POSTER_PROMPT_VERSION,
+  TemplatePosterRequestSchema,
+  createFallbackTemplatePosterSelection,
+} from '../shared/ai/templatePoster';
 import { OpenAiPlannerError, planPosterWithOpenAI } from './ai/openAiPosterPlanner';
 import {
   OpenAiPosterReconstructionError,
   reconstructPosterWithOpenAI,
 } from './ai/openAiPosterReconstructor';
+import {
+  OpenAiTemplatePosterError,
+  selectTemplatePosterWithOpenAI,
+} from './ai/openAiTemplatePoster';
 import {
   MAX_POSTER_BACKGROUND_BYTES,
   cleanPosterBackgroundLabel,
@@ -389,6 +398,113 @@ app.delete('/api/poster-backgrounds/:id', async (context) => {
     .run();
   if (result.meta.changes === 0) return context.json({ error: 'Background not found.' }, 404);
   return context.body(null, 204);
+});
+
+app.post('/api/ai/template-poster', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const contentType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return context.json(
+      { error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(await readBoundedText(context.req.raw, maxAiRequestBytes(context.env)));
+  } catch (error) {
+    if (error instanceof RangeError) throw error;
+    return context.json(
+      { error: 'The poster brief is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const parsed = TemplatePosterRequestSchema.safeParse(json);
+  if (!parsed.success) {
+    return context.json(
+      { error: 'The poster brief or template catalog is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const request = parsed.data;
+  const developmentMode = String(context.env.APP_ENV) === 'development';
+  const apiKey = context.env.OPENAI_API_KEY?.trim();
+  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-5.6-luna';
+
+  if (!apiKey) {
+    if (!developmentMode) {
+      return context.json(
+        {
+          error: 'AI template matching is not configured yet.',
+          code: 'AI_NOT_CONFIGURED',
+          requestId,
+        },
+        503,
+      );
+    }
+    return context.json({
+      selection: createFallbackTemplatePosterSelection(request),
+      source: 'fallback',
+      model: null,
+      requestId,
+    });
+  }
+
+  const quota = maxAiGenerationsPerDay(context.env);
+  const reserved = await reserveAiGeneration(
+    context.env.DB,
+    context.get('ownerId'),
+    quota,
+  );
+  if (!reserved) {
+    return context.json(
+      {
+        error: `The daily AI poster limit of ${quota} has been reached.`,
+        code: 'AI_DAILY_LIMIT',
+        requestId,
+      },
+      429,
+    );
+  }
+
+  try {
+    const result = await selectTemplatePosterWithOpenAI({ apiKey, model, request });
+    console.log(
+      JSON.stringify({
+        message: 'AI template poster selected',
+        requestId,
+        promptVersion: TEMPLATE_POSTER_PROMPT_VERSION,
+        model,
+        openAiRequestId: result.openAiRequestId,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+      }),
+    );
+    return context.json({
+      selection: result.selection,
+      source: 'openai',
+      model,
+      requestId,
+    });
+  } catch (error) {
+    if (error instanceof OpenAiTemplatePosterError) {
+      console.warn(
+        JSON.stringify({
+          message: 'OpenAI template poster selection failed',
+          code: error.code,
+          status: error.status,
+          requestId,
+        }),
+      );
+      return context.json(
+        { error: error.message, code: error.code, requestId },
+        error.status as 422 | 429 | 502 | 503 | 504,
+      );
+    }
+    throw error;
+  }
 });
 
 app.post('/api/ai/poster-plan', async (context) => {
@@ -1677,6 +1793,27 @@ async function readBoundedBytes(
 function maxAiGenerationsPerDay(env: Env): number {
   const configured = Number(env.MAX_AI_GENERATIONS_PER_DAY);
   return Number.isSafeInteger(configured) && configured > 0 ? configured : 20;
+}
+
+async function reserveAiGeneration(
+  database: D1Database,
+  ownerId: string,
+  quota: number,
+): Promise<boolean> {
+  const now = new Date();
+  const usageDate = now.toISOString().slice(0, 10);
+  const reserved = await database.prepare(
+    `INSERT INTO ai_usage_daily (owner_id, usage_date, generation_count, updated_at)
+     VALUES (?, ?, 1, ?)
+     ON CONFLICT(owner_id, usage_date) DO UPDATE SET
+       generation_count = ai_usage_daily.generation_count + 1,
+       updated_at = excluded.updated_at
+     WHERE ai_usage_daily.generation_count < ?
+     RETURNING generation_count`,
+  )
+    .bind(ownerId, usageDate, now.toISOString(), quota)
+    .first<{ generation_count: number }>();
+  return Boolean(reserved);
 }
 
 async function readBoundedText(request: Request, maximumBytes: number): Promise<string> {
