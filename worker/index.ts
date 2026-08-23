@@ -102,6 +102,10 @@ type PosterTemplateRow = {
   updated_at: string;
 };
 
+type OwnedPosterTemplateListRow = PosterTemplateRow & {
+  created_at: string;
+};
+
 type PosterBackgroundRow = {
   id: string;
   label: string;
@@ -1077,6 +1081,32 @@ app.get('/api/poster-templates', async (context) => {
       category: row.category,
       ...(row.description ? { description: row.description } : {}),
       ...(row.thumbnail_r2_key ? { thumbnail: posterTemplateThumbnailUrl(row.id) } : {}),
+    })),
+  );
+});
+
+app.get('/api/poster-templates/mine', async (context) => {
+  const ownerId = context.get('ownerId');
+  const result = await context.env.DB.prepare(
+    `SELECT id, owner_id, name, category, description, r2_key, thumbnail_r2_key, created_at, updated_at
+     FROM poster_templates
+     WHERE owner_id = ?
+     ORDER BY updated_at DESC
+     LIMIT 100`,
+  )
+    .bind(ownerId)
+    .all<OwnedPosterTemplateListRow>();
+
+  context.header('cache-control', 'private, no-store');
+  return context.json(
+    result.results.map((row) => ({
+      id: row.id,
+      name: row.name,
+      category: row.category,
+      ...(row.description ? { description: row.description } : {}),
+      ...(row.thumbnail_r2_key ? { thumbnail: posterTemplateThumbnailUrl(row.id) } : {}),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     })),
   );
 });

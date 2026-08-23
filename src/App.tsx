@@ -7,6 +7,11 @@ const AppLayout = lazy(() =>
 const PosterLayout = lazy(() =>
   import('./poster/components/PosterLayout').then((m) => ({ default: m.PosterLayout }))
 );
+const TemplateManagementPage = lazy(() =>
+  import('./poster/components/TemplateManagementPage').then((m) => ({
+    default: m.TemplateManagementPage,
+  }))
+);
 function LoadingFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
@@ -24,7 +29,13 @@ function App() {
 
   return (
     <Suspense fallback={<LoadingFallback />}>
-      {pathname === '/3d' ? <AppLayout /> : <PosterLayout />}
+      {pathname === '/3d' ? (
+        <AppLayout />
+      ) : pathname === '/poster/templates' ? (
+        <TemplateManagementPage />
+      ) : (
+        <PosterLayout />
+      )}
     </Suspense>
   );
 }

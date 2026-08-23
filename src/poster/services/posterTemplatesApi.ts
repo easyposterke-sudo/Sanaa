@@ -7,6 +7,11 @@ export type PosterTemplateListItem = Pick<
   'id' | 'name' | 'category' | 'description' | 'thumbnail' | 'creatorId'
 >;
 
+export type MyPosterTemplateListItem = PosterTemplateListItem & {
+  createdAt: string;
+  updatedAt: string;
+};
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 export async function fetchPosterTemplateList(): Promise<PosterTemplateListItem[]> {
@@ -14,6 +19,25 @@ export async function fetchPosterTemplateList(): Promise<PosterTemplateListItem[
   if (!res.ok) throw new Error(`Failed to load templates (${res.status})`);
   const data = (await res.json()) as PosterTemplateListItem[];
   return Array.isArray(data) ? data : [];
+}
+
+export async function fetchMyPosterTemplateList(): Promise<MyPosterTemplateListItem[]> {
+  const res = await apiFetch('/api/poster-templates/mine');
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new PosterTemplateAccessError();
+    }
+    throw new Error(`Failed to load your templates (${res.status})`);
+  }
+  const data = (await res.json()) as MyPosterTemplateListItem[];
+  return Array.isArray(data) ? data : [];
+}
+
+export class PosterTemplateAccessError extends Error {
+  constructor() {
+    super('Private template access is required.');
+    this.name = 'PosterTemplateAccessError';
+  }
 }
 
 export async function fetchPosterTemplateById(id: string): Promise<PosterTemplateDefinition> {

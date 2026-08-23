@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Textbox } from 'fabric';
 import { usePosterStore } from '../store/posterStore';
@@ -8,6 +8,7 @@ import { PosterShapesModal } from './PosterShapesModal';
 import { PosterBackgroundsModal } from './PosterBackgroundsModal';
 import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
 import type { PosterBackgroundLibraryItem } from '../services/posterBackgroundsApi';
+import { fetchMyPosterTemplateList } from '../services/posterTemplatesApi';
 import type {
   PosterElement,
   PosterImageElement,
@@ -111,6 +112,21 @@ export function PosterLeftSidebar({
   const [layerDragOverIndex, setLayerDragOverIndex] = useState<number | null>(null);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [editingLayerName, setEditingLayerName] = useState('');
+  const [canManageTemplates, setCanManageTemplates] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetchMyPosterTemplateList()
+      .then(() => {
+        if (active) setCanManageTemplates(true);
+      })
+      .catch(() => {
+        if (active) setCanManageTemplates(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const layersFrontToBack = [...elements].sort((a, b) => b.zIndex - a.zIndex);
 
@@ -262,6 +278,15 @@ export function PosterLeftSidebar({
             Create template from poster
           </button>
         </div>
+      )}
+      {canManageTemplates && (
+        <button
+          type="button"
+          onClick={() => navigate('/poster/templates')}
+          className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2.5 text-sm font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:bg-zinc-900 dark:text-violet-300 dark:hover:bg-violet-950/40"
+        >
+          Manage my templates
+        </button>
       )}
       {onOpenAIWizard && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">

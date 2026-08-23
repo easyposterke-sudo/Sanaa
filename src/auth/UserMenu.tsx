@@ -108,7 +108,7 @@ export function UserMenu({ compact = false, compactUntilMd = false }: UserMenuPr
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
             >
-              Poster templates
+              Manage poster templates
             </Link>
             <Link
               to="/"

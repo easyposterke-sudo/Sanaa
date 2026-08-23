@@ -138,7 +138,7 @@ export function AdminTemplateEditModal({
       >
         <div className="shrink-0 border-b border-zinc-200 px-4 py-3 dark:border-zinc-700">
           <h2 id="admin-edit-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            {saving ? 'Updating template…' : 'Edit template (Admin)'}
+            {saving ? 'Updating template…' : 'Edit template'}
           </h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
             {saving
