@@ -99,6 +99,10 @@ export type PosterImageFadeDirection = 'radial' | 'bottom';
 export interface PosterImageElement extends PosterElementBase, ImageAdjustments {
   type: 'image';
   src: string;
+  /** Marks an image as a reusable poster background when a template is saved. */
+  assetRole?: 'background';
+  /** Friendly name used when this image is copied into the background library. */
+  backgroundLibraryLabel?: string;
   /** When set, tied to `/api/user-poster-images/:id` (e.g. library pick); updated on cloud save after edits. */
   userPosterImageId?: string;
   /** Original source before baking a mask; used for re-editing in mask editor. */

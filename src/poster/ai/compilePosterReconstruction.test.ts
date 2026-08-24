@@ -234,6 +234,8 @@ describe('compilePosterReconstruction', () => {
     expect(photo).toMatchObject({
       type: 'image',
       layerName: 'REPLACE IMAGE: Praying hands background',
+      assetRole: 'background',
+      backgroundLibraryLabel: 'Praying hands background',
       left: 100,
       top: 180,
     });

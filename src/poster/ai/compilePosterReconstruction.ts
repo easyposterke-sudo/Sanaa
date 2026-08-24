@@ -207,6 +207,12 @@ export async function compilePosterReconstruction(input: {
         layerName: image.layerName ?? base.layerName,
         type: 'image',
         src: image.dataUrl,
+        ...(item.imageRole === 'background_photo'
+          ? {
+              assetRole: 'background' as const,
+              backgroundLibraryLabel: item.label,
+            }
+          : {}),
         mask: reconstructionImageMask(item.imageMask),
         ...(item.imageMask === 'rounded_rect'
           ? { maskCornerRadius: resolvedMaskCornerRadius(item.cornerStyle, item.cornerRadiusRatio) }

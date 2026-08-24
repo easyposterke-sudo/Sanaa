@@ -33,8 +33,11 @@ import {
 import {
   MAX_POSTER_BACKGROUND_BYTES,
   cleanPosterBackgroundLabel,
+  findTemplateBackgroundCandidates,
   isPosterBackgroundMediaType,
   matchesPosterBackgroundSignature,
+  parsePosterBackgroundDataUrl,
+  posterBackgroundContentId,
   posterBackgroundObjectKey,
 } from './backgroundLibrary';
 import { parsePosterDocument } from './domain/document';
@@ -1222,7 +1225,13 @@ app.post('/api/poster-templates', async (context) => {
     throw error;
   }
 
-  return context.json({ id, requestId }, 201);
+  const backgroundsAdded = await syncTemplateBackgroundsSafely(
+    context.env,
+    ownerId,
+    template,
+    requestId,
+  );
+  return context.json({ id, backgroundsAdded, requestId }, 201);
 });
 
 app.patch('/api/poster-templates/:id', async (context) => {
@@ -1307,7 +1316,13 @@ app.patch('/api/poster-templates/:id', async (context) => {
   const obsoleteKeys = [row.r2_key];
   if (thumbnail && row.thumbnail_r2_key) obsoleteKeys.push(row.thumbnail_r2_key);
   await context.env.PROJECTS.delete(obsoleteKeys);
-  return context.json({ ok: true, id, requestId });
+  const backgroundsAdded = await syncTemplateBackgroundsSafely(
+    context.env,
+    ownerId,
+    merged.data,
+    requestId,
+  );
+  return context.json({ ok: true, id, backgroundsAdded, requestId });
 });
 
 app.delete('/api/poster-templates/:id', async (context) => {
@@ -1732,6 +1747,134 @@ function posterTemplateThumbnailKey(
 ): string {
   const extension = mediaType === 'image/jpeg' ? 'jpg' : mediaType.slice('image/'.length);
   return `owners/${encodeURIComponent(ownerId)}/templates/${id}/${revision}/thumbnail.${extension}`;
+}
+
+async function syncTemplateBackgroundsSafely(
+  env: Env,
+  ownerId: string,
+  template: StoredPosterTemplate,
+  requestId: string,
+): Promise<number> {
+  try {
+    return await syncTemplateBackgrounds(env, ownerId, template);
+  } catch (error) {
+    // Template publishing must remain successful even if the reusable-library
+    // copy has a temporary R2 or D1 problem. A later update retries the sync.
+    console.error(
+      JSON.stringify({
+        message: 'template background library sync failed',
+        templateId: template.id,
+        error: error instanceof Error ? error.message : String(error),
+        requestId,
+      }),
+    );
+    return 0;
+  }
+}
+
+async function syncTemplateBackgrounds(
+  env: Env,
+  ownerId: string,
+  template: StoredPosterTemplate,
+): Promise<number> {
+  const candidates = findTemplateBackgroundCandidates(template.project);
+  const processedIds = new Set<string>();
+  let added = 0;
+
+  for (const candidate of candidates) {
+    const image = parsePosterBackgroundDataUrl(candidate.src);
+    if (!image || image.bytes.byteLength > MAX_POSTER_BACKGROUND_BYTES) continue;
+    const id = await posterBackgroundContentId(ownerId, image.bytes);
+    if (processedIds.has(id)) continue;
+    processedIds.add(id);
+
+    const existing = await env.DB.prepare(
+      `SELECT id, r2_key, file_name, archived_at
+       FROM poster_backgrounds
+       WHERE id = ? AND owner_id = ?`,
+    )
+      .bind(id, ownerId)
+      .first<{ id: string; r2_key: string; file_name: string; archived_at: string | null }>();
+
+    if (existing) {
+      const storedObject = await env.ASSETS.head(existing.r2_key);
+      if (!storedObject) {
+        await putTemplateBackgroundObject(
+          env.ASSETS,
+          existing.r2_key,
+          id,
+          ownerId,
+          cleanPosterBackgroundLabel(candidate.label, 'Template background'),
+          existing.file_name,
+          image,
+        );
+      }
+      if (existing.archived_at) {
+        await env.DB.prepare(
+          `UPDATE poster_backgrounds
+           SET archived_at = NULL
+           WHERE id = ? AND owner_id = ?`,
+        )
+          .bind(id, ownerId)
+          .run();
+        added += 1;
+      }
+      continue;
+    }
+
+    const extension = image.mediaType === 'image/jpeg' ? 'jpg' : image.mediaType.slice(6);
+    const fileName = `template-background.${extension}`;
+    const label = cleanPosterBackgroundLabel(candidate.label, 'Template background');
+    const r2Key = posterBackgroundObjectKey(ownerId, id, fileName);
+    await putTemplateBackgroundObject(
+      env.ASSETS,
+      r2Key,
+      id,
+      ownerId,
+      label,
+      fileName,
+      image,
+    );
+
+    const createdAt = new Date().toISOString();
+    const insert = await env.DB.prepare(
+      `INSERT OR IGNORE INTO poster_backgrounds (
+         id, owner_id, label, r2_key, file_name, media_type, byte_size, created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        id,
+        ownerId,
+        label,
+        r2Key,
+        fileName,
+        image.mediaType,
+        image.bytes.byteLength,
+        createdAt,
+      )
+      .run();
+    if (insert.meta.changes > 0) added += 1;
+  }
+
+  return added;
+}
+
+async function putTemplateBackgroundObject(
+  bucket: R2Bucket,
+  r2Key: string,
+  id: string,
+  ownerId: string,
+  label: string,
+  fileName: string,
+  image: { mediaType: 'image/png' | 'image/jpeg' | 'image/webp'; bytes: Uint8Array },
+): Promise<void> {
+  await bucket.put(r2Key, image.bytes, {
+    httpMetadata: {
+      contentType: image.mediaType,
+      cacheControl: 'private, max-age=31536000, immutable',
+    },
+    customMetadata: { backgroundId: id, ownerId, label, fileName },
+  });
 }
 
 async function readStoredPosterTemplate(

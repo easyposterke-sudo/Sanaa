@@ -263,6 +263,8 @@ export function PosterLeftSidebar({
       scaleY: scale,
       locked: true,
       layerName: `Background: ${background.label}`,
+      assetRole: 'background',
+      backgroundLibraryLabel: background.label,
     } as NewPosterImagePayload);
   };
 
