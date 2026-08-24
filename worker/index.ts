@@ -21,6 +21,11 @@ import {
   TemplatePosterRequestSchema,
   createFallbackTemplatePosterSelection,
 } from '../shared/ai/templatePoster';
+import {
+  POSTER_ASSISTANT_PROMPT_VERSION,
+  PosterAssistantRequestSchema,
+  createFallbackPosterAssistantAction,
+} from '../shared/ai/posterAssistant';
 import { OpenAiPlannerError, planPosterWithOpenAI } from './ai/openAiPosterPlanner';
 import {
   OpenAiPosterReconstructionError,
@@ -30,6 +35,10 @@ import {
   OpenAiTemplatePosterError,
   selectTemplatePosterWithOpenAI,
 } from './ai/openAiTemplatePoster';
+import {
+  OpenAiPosterAssistantError,
+  interpretPosterAssistantWithOpenAI,
+} from './ai/openAiPosterAssistant';
 import {
   MAX_POSTER_BACKGROUND_BYTES,
   cleanPosterBackgroundLabel,
@@ -508,6 +517,91 @@ app.post('/api/ai/template-poster', async (context) => {
       return context.json(
         { error: error.message, code: error.code, requestId },
         error.status as 422 | 429 | 502 | 503 | 504,
+      );
+    }
+    throw error;
+  }
+});
+
+app.post('/api/ai/poster-assistant', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const contentType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return context.json(
+      { error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(await readBoundedText(context.req.raw, maxAiRequestBytes(context.env)));
+  } catch (error) {
+    if (error instanceof RangeError) throw error;
+    return context.json(
+      { error: 'The assistant request is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const parsed = PosterAssistantRequestSchema.safeParse(json);
+  if (!parsed.success) {
+    return context.json(
+      { error: 'Describe the poster change more clearly.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+
+  const developmentMode = String(context.env.APP_ENV) === 'development';
+  const apiKey = context.env.OPENAI_API_KEY?.trim();
+  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-5.6-luna';
+  if (!apiKey) {
+    if (!developmentMode) {
+      return context.json(
+        { error: 'The AI assistant is not configured yet.', code: 'AI_NOT_CONFIGURED', requestId },
+        503,
+      );
+    }
+    return context.json({
+      action: createFallbackPosterAssistantAction(parsed.data),
+      source: 'fallback',
+      model: null,
+      requestId,
+    });
+  }
+
+  const quota = maxAiGenerationsPerDay(context.env);
+  const reserved = await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota);
+  if (!reserved) {
+    return context.json(
+      { error: `The daily AI poster limit of ${quota} has been reached.`, code: 'AI_DAILY_LIMIT', requestId },
+      429,
+    );
+  }
+
+  try {
+    const result = await interpretPosterAssistantWithOpenAI({
+      apiKey,
+      model,
+      request: parsed.data,
+    });
+    console.log(
+      JSON.stringify({
+        message: 'AI poster assistant action prepared',
+        requestId,
+        promptVersion: POSTER_ASSISTANT_PROMPT_VERSION,
+        model,
+        openAiRequestId: result.openAiRequestId,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+      }),
+    );
+    return context.json({ action: result.action, source: 'openai', model, requestId });
+  } catch (error) {
+    if (error instanceof OpenAiPosterAssistantError) {
+      return context.json(
+        { error: error.message, code: error.code, requestId },
+        error.status as 429 | 502 | 503 | 504,
       );
     }
     throw error;

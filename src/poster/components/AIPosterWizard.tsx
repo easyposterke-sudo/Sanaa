@@ -6,8 +6,10 @@ import { findPosterTemplateById, getAllPosterTemplates } from '../posterTemplate
 import { fetchPosterTemplateById } from '../services/posterTemplatesApi';
 import { requestTemplatePoster, TemplatePosterError } from '../services/templatePosterApi';
 import { instantiateTemplate } from '../templateMerge';
-import type { PosterTemplateFieldBinding } from '../templateTypes';
+import type { PosterTemplateDefinition, PosterTemplateFieldBinding } from '../templateTypes';
 import type { PosterProject } from '../types';
+import type { AIPosterSession } from '../ai/aiPosterSession';
+import { findMissingTemplateTextFields } from '../ai/missingTemplateDetails';
 
 interface GeneratedTemplatePoster {
   project: PosterProject;
@@ -19,7 +21,7 @@ interface AIPosterWizardProps {
   onClose: () => void;
   onApply: (
     generated: GeneratedTemplatePoster,
-    meta: { source: TemplatePosterSource; model: string | null },
+    meta: { source: TemplatePosterSource; model: string | null; session: AIPosterSession },
   ) => void;
 }
 
@@ -28,6 +30,15 @@ interface BriefImage {
   name: string;
   role: string;
   asset: PreparedPosterImage;
+}
+
+interface PendingPoster {
+  selectedTemplate: PosterTemplateDefinition;
+  values: Record<string, string>;
+  missingFields: PosterTemplateFieldBinding[];
+  source: TemplatePosterSource;
+  model: string | null;
+  templateId: string;
 }
 
 export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) {
@@ -39,6 +50,8 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [excludedTemplateIds, setExcludedTemplateIds] = useState<string[]>([]);
+  const [pendingPoster, setPendingPoster] = useState<PendingPoster | null>(null);
+  const [missingValues, setMissingValues] = useState<Record<string, string>>({});
   const [result, setResult] = useState<{
     source: TemplatePosterSource;
     model: string | null;
@@ -53,6 +66,8 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
     if (!open) return;
     setError(null);
     setResult(null);
+    setPendingPoster(null);
+    setMissingValues({});
     setExcludedTemplateIds([]);
   }, [open]);
 
@@ -89,6 +104,70 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
     setImages((current) =>
       current.map((image) => (image.id === id ? { ...image, ...changes } : image)),
     );
+  };
+
+  const applyPendingPoster = async (
+    pending: PendingPoster,
+    suppliedValues: Record<string, string>,
+  ) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const values = { ...pending.values, ...suppliedValues };
+      const instantiated = await instantiateTemplate(pending.selectedTemplate, values, {
+        clearMissingTextFields: true,
+      });
+      const generated = {
+        ...instantiated,
+        project: themeEnabled
+          ? applyTemplateTheme(instantiated.project, themeColor)
+          : instantiated.project,
+      };
+      const additionalDetails = pending.missingFields
+        .map((field) => ({ label: field.label, value: suppliedValues[field.key]?.trim() ?? '' }))
+        .filter((detail) => detail.value)
+        .map((detail) => `${detail.label}: ${detail.value}`);
+      const sessionBrief = [
+        brief.trim(),
+        additionalDetails.length > 0 ? `Additional details:\n${additionalDetails.join('\n')}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n')
+        .slice(0, 4_000);
+      const nextExcluded = Array.from(
+        new Set([...excludedTemplateIds, pending.templateId]),
+      );
+      onApply(generated, {
+        source: pending.source,
+        model: pending.model,
+        session: {
+          brief: sessionBrief,
+          images: images.map((image) => ({
+            name: image.name.trim(),
+            role: image.role.trim(),
+            dataUrl: image.asset.dataUrl,
+            width: image.asset.width,
+            height: image.asset.height,
+          })),
+          themeColor: themeEnabled ? themeColor : null,
+          excludedTemplateIds: nextExcluded,
+          currentTemplateId: pending.templateId,
+          typographyMood: null,
+        },
+      });
+      setExcludedTemplateIds(nextExcluded);
+      setPendingPoster(null);
+      setMissingValues({});
+      setResult({
+        source: pending.source,
+        model: pending.model,
+        templateId: pending.templateId,
+      });
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -150,32 +229,88 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
         }
       }
 
-      const instantiated = await instantiateTemplate(selectedTemplate, values, {
-        clearMissingTextFields: true,
-      });
-      const generated = {
-        ...instantiated,
-        project: themeEnabled
-          ? applyTemplateTheme(instantiated.project, themeColor)
-          : instantiated.project,
-      };
-      onApply(generated, { source: response.source, model: response.model });
-      setExcludedTemplateIds((current) =>
-        current.includes(response.selection.templateId)
-          ? current
-          : [...current, response.selection.templateId],
-      );
-      setResult({
+      const missingFields = findMissingTemplateTextFields(selectedTemplate, values);
+      const pending: PendingPoster = {
+        selectedTemplate,
+        values,
+        missingFields,
         source: response.source,
         model: response.model,
         templateId: response.selection.templateId,
-      });
+      };
+      if (missingFields.length > 0) {
+        setPendingPoster(pending);
+        setMissingValues({});
+      } else {
+        await applyPendingPoster(pending, {});
+      }
     } catch (caught) {
       setError(messageFromError(caught));
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (pendingPoster) {
+    return (
+      <div
+        className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-black/65 p-3 sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="missing-poster-details-title"
+      >
+        <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
+            <h2 id="missing-poster-details-title" className="text-lg font-semibold text-zinc-900 dark:text-white">
+              A few details may be missing
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Add any details you want shown. Every field is optional, and the selected design stays hidden.
+            </p>
+          </div>
+          <div className="max-h-[60vh] space-y-4 overflow-y-auto p-5">
+            {pendingPoster.missingFields.map((field) => (
+              <label key={field.key} className="block">
+                <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{field.label}</span>
+                <input
+                  value={missingValues[field.key] ?? ''}
+                  onChange={(event) =>
+                    setMissingValues((current) => ({ ...current, [field.key]: event.target.value }))
+                  }
+                  maxLength={500}
+                  placeholder="Optional"
+                  className={inputClass}
+                />
+              </label>
+            ))}
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-700">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void applyPendingPoster(pendingPoster, {})}
+              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              Leave blank and create
+            </button>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void applyPendingPoster(pendingPoster, missingValues)}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {submitting ? 'Creating…' : 'Add details and create'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (result) {
     return (

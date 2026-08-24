@@ -89,6 +89,7 @@ interface PosterLeftSidebarProps {
   readOnly?: boolean;
   onOpen3DModal?: (mode: 'add') => void;
   onOpenAIWizard?: () => void;
+  onOpenAIAssistant?: () => void;
   onOpenTemplateCreator?: () => void;
 }
 
@@ -96,6 +97,7 @@ export function PosterLeftSidebar({
   readOnly = false,
   onOpen3DModal,
   onOpenAIWizard,
+  onOpenAIAssistant,
   onOpenTemplateCreator,
 }: PosterLeftSidebarProps) {
   const navigate = useNavigate();
@@ -310,6 +312,23 @@ export function PosterLeftSidebar({
             className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
           >
             Create with AI
+          </button>
+        </div>
+      )}
+      {onOpenAIAssistant && (
+        <div className="rounded-xl border border-emerald-200 bg-white p-3 dark:border-emerald-900 dark:bg-zinc-900">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
+            AI design assistant
+          </h3>
+          <p className="mt-1 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            Change colors or fonts, or ask for another design while keeping your event details.
+          </p>
+          <button
+            type="button"
+            onClick={guard(onOpenAIAssistant)}
+            className="mt-3 w-full rounded-lg border border-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+          >
+            Ask AI to edit
           </button>
         </div>
       )}
