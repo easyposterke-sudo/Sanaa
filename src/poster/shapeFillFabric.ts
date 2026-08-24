@@ -32,6 +32,13 @@ export function normalizePosterShapeFill(
   fallbackColor: string
 ): PosterShapeFill {
   if (input && typeof input === 'object' && 'type' in input) {
+    if (input.type === 'glass') {
+      return {
+        type: 'glass',
+        color: /^#[0-9a-fA-F]{6}$/.test(input.color) ? input.color : fallbackColor,
+        blur: Math.max(0, Math.min(40, Number.isFinite(input.blur) ? input.blur : 12)),
+      };
+    }
     return input as PosterShapeFill;
   }
   if (typeof input === 'string' && input.trim()) {
@@ -42,7 +49,7 @@ export function normalizePosterShapeFill(
 
 /** Build Fabric fill (color string or Gradient) in shape local pixel space (0..w, 0..h). */
 export function posterShapeFillToFabric(
-  fill: Exclude<PosterShapeFill, { type: 'pattern' }>,
+  fill: Exclude<PosterShapeFill, { type: 'pattern' } | { type: 'glass' }>,
   w: number,
   h: number,
   fillOpacity = 1

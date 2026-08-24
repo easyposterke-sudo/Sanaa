@@ -531,17 +531,63 @@ function PathStyleControls({
   updateElement: (id: string, updates: Partial<PosterElement>) => void;
 }) {
   const fillNorm = normalizePosterShapeFill(path.fill, '#14b8a6');
-  const fillColor = fillNorm.type === 'solid' ? fillNorm.color : '#14b8a6';
+  const fillColor =
+    fillNorm.type === 'solid' || fillNorm.type === 'glass' ? fillNorm.color : '#14b8a6';
   return (
     <div className="flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
       <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Path style</p>
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-zinc-500">Fill type</label>
+        <select
+          value={fillNorm.type === 'glass' ? 'glass' : 'solid'}
+          onChange={(event) => {
+            if (event.target.value === 'glass') {
+              updateElement(path.id, {
+                fill: { type: 'glass', color: fillColor, blur: 12 },
+              });
+            } else {
+              updateElement(path.id, { fill: { type: 'solid', color: fillColor } });
+            }
+          }}
+          className="rounded border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+        >
+          <option value="solid">Solid</option>
+          <option value="glass">Glass</option>
+        </select>
+      </div>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-zinc-500">Fill</span>
+        <span className="text-xs text-zinc-500">
+          {fillNorm.type === 'glass' ? 'Glass tint' : 'Fill'}
+        </span>
         <ColorPickerPopover
           color={/^#[0-9A-Fa-f]{6}$/i.test(fillColor) ? fillColor : '#14b8a6'}
-          onChange={(c) => updateElement(path.id, { fill: { type: 'solid', color: c } })}
+          onChange={(color) =>
+            updateElement(path.id, {
+              fill:
+                fillNorm.type === 'glass'
+                  ? { ...fillNorm, color }
+                  : { type: 'solid', color },
+            })
+          }
         />
       </div>
+      {fillNorm.type === 'glass' && (
+        <>
+          <PosterSlider
+            label={`Glass blur (${fillNorm.blur}px)`}
+            min={0}
+            max={40}
+            step={1}
+            value={fillNorm.blur}
+            onChange={(blur) =>
+              updateElement(path.id, { fill: { ...fillNorm, blur } })
+            }
+          />
+          <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+            The blur is clipped to the editable path, including holes.
+          </p>
+        </>
+      )}
       <div className="flex items-center gap-2">
         <span className="text-xs text-zinc-500">Stroke</span>
         <ColorPickerPopover
@@ -563,7 +609,7 @@ function PathStyleControls({
         }}
       />
       <PosterSlider
-        label={`Fill opacity (${Math.round((path.fillOpacity ?? 1) * 100)}%)`}
+        label={`${fillNorm.type === 'glass' ? 'Translucency' : 'Fill opacity'} (${Math.round((path.fillOpacity ?? 1) * 100)}%)`}
         min={0}
         max={100}
         step={5}
@@ -718,7 +764,7 @@ function ShapeFillAndRoundnessControls({
         shape.type === 'ellipse' ||
         shape.type === 'polygon') && (
         <PosterSlider
-          label={`Fill opacity (${Math.round((shape.fillOpacity ?? 1) * 100)}%)`}
+          label={`${fillNorm.type === 'glass' ? 'Translucency' : 'Fill opacity'} (${Math.round((shape.fillOpacity ?? 1) * 100)}%)`}
           min={0}
           max={100}
           step={5}
@@ -743,10 +789,20 @@ function ShapeFillAndRoundnessControls({
               const c =
                 fillNorm.type === 'solid'
                   ? fillNorm.color
+                  : fillNorm.type === 'glass'
+                    ? fillNorm.color
                   : fillNorm.type === 'linear' || fillNorm.type === 'radial'
                     ? (fillNorm.stops[0]?.color ?? '#3b82f6')
                     : '#3b82f6';
               setFill({ type: 'solid', color: c });
+            } else if (t === 'glass') {
+              const color =
+                fillNorm.type === 'solid' || fillNorm.type === 'glass'
+                  ? fillNorm.color
+                  : fillNorm.type === 'linear' || fillNorm.type === 'radial'
+                    ? (fillNorm.stops[0]?.color ?? '#ffffff')
+                    : '#ffffff';
+              setFill({ type: 'glass', color, blur: 12 });
             } else if (t === 'linear') {
               setFill({ type: 'linear', angle: 90, stops: [...DEFAULT_GRADIENT_STOPS] });
             } else if (t === 'radial') {
@@ -764,6 +820,7 @@ function ShapeFillAndRoundnessControls({
           className="rounded border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
         >
           <option value="solid">Solid</option>
+          {shape.type !== 'line' && <option value="glass">Glass</option>}
           <option value="linear">Linear gradient</option>
           <option value="radial">Radial gradient</option>
           <option value="pattern">Texture</option>
@@ -809,6 +866,29 @@ function ShapeFillAndRoundnessControls({
             color={/^#[0-9A-Fa-f]{6}$/.test(fillNorm.color) ? fillNorm.color : '#3b82f6'}
             onChange={(c) => setFill({ type: 'solid', color: c })}
           />
+        )}
+
+        {fillNorm.type === 'glass' && shape.type !== 'line' && (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-500">Glass tint</span>
+              <ColorPickerPopover
+                color={/^#[0-9A-Fa-f]{6}$/.test(fillNorm.color) ? fillNorm.color : '#ffffff'}
+                onChange={(color) => setFill({ ...fillNorm, color })}
+              />
+            </div>
+            <PosterSlider
+              label={`Glass blur (${fillNorm.blur}px)`}
+              min={0}
+              max={40}
+              step={1}
+              value={fillNorm.blur}
+              onChange={(blur) => setFill({ ...fillNorm, blur })}
+            />
+            <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+              Blurs the poster layers behind this shape. Use fill opacity above to control the tint.
+            </p>
+          </>
         )}
 
         {fillNorm.type === 'linear' && (
@@ -1785,6 +1865,7 @@ function PosterTextControls({
             {fontUploadStatus}
           </p>
         )}
+
       </div>
 
       <div className="flex flex-col gap-1">

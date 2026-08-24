@@ -273,12 +273,13 @@ export interface GradientStop {
 /** Pattern repeat mode for texture fills. */
 export type PatternRepeat = 'repeat' | 'repeat-x' | 'repeat-y' | 'no-repeat';
 
-/** Fill for poster rectangles/circles (solid, gradient, or pattern in shape space). */
+/** Fill for poster vectors, including a backdrop-blurred translucent glass tint. */
 export type PosterShapeFill =
   | { type: 'solid'; color: string }
   | { type: 'linear'; angle: number; stops: GradientStop[] }
   | { type: 'radial'; cx: number; cy: number; r: number; stops: GradientStop[] }
-  | { type: 'pattern'; textureId: string; repeat?: PatternRepeat; scale?: number };
+  | { type: 'pattern'; textureId: string; repeat?: PatternRepeat; scale?: number }
+  | { type: 'glass'; color: string; blur: number };
 
 export interface PosterShapeElement extends PosterElementBase {
   type: 'rect' | 'circle' | 'triangle' | 'ellipse' | 'line' | 'polygon';

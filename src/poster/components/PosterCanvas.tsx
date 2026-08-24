@@ -69,6 +69,7 @@ import {
 } from '../posterFabricReflectGuard';
 import { buildPosterTextEffectStyles, posterTextEffectPadding } from '../textEffects';
 import { DynamicBackgroundTextbox } from '../DynamicBackgroundTextbox';
+import { setFabricObjectGlassFill } from '../glassShapeFabric';
 
 /** Stable signature of text font stacks for poster font preload + Fabric sync gating. */
 function posterFontSignature(elements: PosterElement[]): string {
@@ -934,7 +935,9 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
           const fill =
             fillNorm.type === 'pattern'
               ? existing.fill
-              : posterShapeFillToFabric(fillNorm, pathSize.w, pathSize.h, fillOpacity);
+              : fillNorm.type === 'glass'
+                ? 'transparent'
+                : posterShapeFillToFabric(fillNorm, pathSize.w, pathSize.h, fillOpacity);
           existing.set({
             left: p.left,
             top: p.top,
@@ -951,6 +954,11 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
             fillRule: p.fillRule ?? 'nonzero',
             objectCaching: false,
           });
+          setFabricObjectGlassFill(
+            existing,
+            fillNorm.type === 'glass' ? fillNorm : undefined,
+            fillOpacity,
+          );
           existing.setCoords();
           if (geomChanged && refLocal && refCanvasBefore) {
             const newMatrix = existing.calcTransformMatrix() as [number, number, number, number, number, number];
@@ -1109,7 +1117,9 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
               const fillOpacity = shape.fillOpacity ?? 1;
               const stroke = shape.stroke && (shape.strokeWidth ?? 0) > 0 ? shape.stroke : '';
               const strokeWidth = stroke ? (shape.strokeWidth ?? 2) : 0;
-              if (norm.type === 'pattern') {
+              if (norm.type === 'glass') {
+                updates.fill = 'transparent';
+              } else if (norm.type === 'pattern') {
                 posterPatternFillToFabric(
                   norm.textureId,
                   norm.repeat ?? 'repeat',
@@ -1122,6 +1132,11 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
               } else {
                 updates.fill = posterShapeFillToFabric(norm, w, h, fillOpacity);
               }
+              setFabricObjectGlassFill(
+                existing,
+                norm.type === 'glass' ? norm : undefined,
+                fillOpacity,
+              );
               updates.stroke = stroke;
               updates.strokeWidth = strokeWidth;
               if (shape.type === 'rect') {
@@ -1156,7 +1171,9 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
             const stroke = pathEl.stroke && (pathEl.strokeWidth ?? 0) > 0 ? pathEl.stroke : '';
             const strokeWidth = stroke ? (pathEl.strokeWidth ?? 2) : 0;
             const size = getPathLocalSize(pathEl.pathPoints, pathEl.islands);
-            if (fillNorm.type === 'pattern') {
+            if (fillNorm.type === 'glass') {
+              updates.fill = 'transparent';
+            } else if (fillNorm.type === 'pattern') {
               posterPatternFillToFabric(
                 fillNorm.textureId,
                 fillNorm.repeat ?? 'repeat',
@@ -1169,6 +1186,11 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
             } else {
               updates.fill = posterShapeFillToFabric(fillNorm, size.w, size.h, fillOpacity);
             }
+            setFabricObjectGlassFill(
+              existing,
+              fillNorm.type === 'glass' ? fillNorm : undefined,
+              fillOpacity,
+            );
             updates.stroke = stroke;
             updates.strokeWidth = strokeWidth;
             updates.fillRule = pathEl.fillRule ?? 'nonzero';
@@ -1239,6 +1261,32 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
                   ...(adjKey !== undefined ? { adjustmentsKey: adjKey } : {}),
                   ...(pathGeomKey !== undefined ? { pathGeomKey } : {}),
                 };
+                if (el.type === 'path') {
+                  const path = el as PosterPathElement;
+                  const fill = normalizePosterShapeFill(path.fill, '#14b8a6');
+                  setFabricObjectGlassFill(
+                    obj,
+                    fill.type === 'glass' ? fill : undefined,
+                    path.fillOpacity ?? 1,
+                  );
+                } else if (
+                  el.type === 'rect' ||
+                  el.type === 'circle' ||
+                  el.type === 'triangle' ||
+                  el.type === 'ellipse' ||
+                  el.type === 'polygon'
+                ) {
+                  const shape = el as PosterShapeElement;
+                  const fill = normalizePosterShapeFill(
+                    shape.fill,
+                    shapeFillFallbackForType(shape.type),
+                  );
+                  setFabricObjectGlassFill(
+                    obj,
+                    fill.type === 'glass' ? fill : undefined,
+                    shape.fillOpacity ?? 1,
+                  );
+                }
                 if (elIsImageLike) {
                   applyImageAdjustmentFilters(
                     obj as FabricImage,
@@ -2599,6 +2647,7 @@ async function createFabricObject(
   ): Promise<ReturnType<typeof posterShapeFillToFabric>> {
     const norm = normalizePosterShapeFill(shape.fill, shapeFillFallbackForType(shape.type));
     const fillOpacity = shape.fillOpacity ?? 1;
+    if (norm.type === 'glass') return 'transparent';
     if (norm.type === 'pattern') {
       return posterPatternFillToFabric(
         norm.textureId,
@@ -2740,13 +2789,16 @@ async function createFabricObject(
       const size = getPathLocalSize(pathEl.pathPoints, pathEl.islands);
       const fillNorm = normalizePosterShapeFill(pathEl.fill, '#14b8a6');
       const fillOpacity = pathEl.fillOpacity ?? 1;
-      const fillValue = fillNorm.type === 'pattern'
-        ? await posterPatternFillToFabric(
-            fillNorm.textureId,
-            fillNorm.repeat ?? 'repeat',
-            fillNorm.scale ?? 1
-          )
-        : posterShapeFillToFabric(fillNorm, size.w, size.h, fillOpacity);
+      const fillValue =
+        fillNorm.type === 'glass'
+          ? 'transparent'
+          : fillNorm.type === 'pattern'
+            ? await posterPatternFillToFabric(
+                fillNorm.textureId,
+                fillNorm.repeat ?? 'repeat',
+                fillNorm.scale ?? 1
+              )
+            : posterShapeFillToFabric(fillNorm, size.w, size.h, fillOpacity);
       const stroke = pathEl.stroke && (pathEl.strokeWidth ?? 0) > 0 ? pathEl.stroke : '';
       const strokeWidth = stroke ? (pathEl.strokeWidth ?? 2) : 0;
       return new Path(d, {
@@ -2782,7 +2834,6 @@ async function createFabricObject(
       const { activeTool } = usePosterStore.getState();
       const text = new DynamicBackgroundTextbox(t.text, {
         ...common,
-        editable: !readOnly && (activeTool === 'text' || activeTool === 'select'),
         fontSize: t.fontSize,
         fontFamily: t.fontFamily,
         fill: textFill,
@@ -2806,6 +2857,7 @@ async function createFabricObject(
         padding: posterTextEffectPadding(t.fontSize, t.curve ?? 0),
         objectCaching: false,
       });
+      text.editable = !readOnly && (activeTool === 'text' || activeTool === 'select');
       text.setPosterTextBackground(
         t.textBackground,
         posterTextEffectPadding(t.fontSize, t.curve ?? 0),

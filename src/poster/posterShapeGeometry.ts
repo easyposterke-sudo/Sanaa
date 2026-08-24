@@ -59,6 +59,7 @@ export function shapeFillFallbackForType(t: PosterShapeElement['type']): string 
 export function lineStrokeFromFill(fill: PosterShapeElement['fill'], fallback: string): string {
   const n = normalizePosterShapeFill(fill, fallback);
   if (n.type === 'solid') return n.color;
+  if (n.type === 'glass') return n.color;
   if (n.type === 'linear' || n.type === 'radial') return n.stops[0]?.color ?? fallback;
   return fallback;
 }

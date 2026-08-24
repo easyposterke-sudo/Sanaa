@@ -65,7 +65,9 @@ function isShapeElement(element: PosterElement): element is PosterShapeElement {
 function recolorFill(fill: string | PosterShapeFill, theme: Hsl): string | PosterShapeFill {
   if (typeof fill === 'string') return recolorColor(fill, theme, false);
   if (fill.type === 'pattern') return fill;
-  if (fill.type === 'solid') return { ...fill, color: recolorColor(fill.color, theme, false) };
+  if (fill.type === 'solid' || fill.type === 'glass') {
+    return { ...fill, color: recolorColor(fill.color, theme, false) };
+  }
   return {
     ...fill,
     stops: fill.stops.map((stop) => ({
