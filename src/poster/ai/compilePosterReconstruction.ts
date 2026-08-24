@@ -86,12 +86,13 @@ const FONT_STACKS: Record<PosterReconstructionPlan['elements'][number]['fontFami
 export async function compilePosterReconstruction(input: {
   plan: PosterReconstructionPlan;
   reference: { dataUrl: string; width: number; height: number };
+  canvasSize?: { width: number; height: number };
   referenceGuideOpacity?: number;
   imageReplacements?: Readonly<Record<string, ReconstructionImageReplacement>>;
 }): Promise<CompiledPosterReconstruction> {
   const plan = PosterReconstructionPlanSchema.parse(input.plan);
-  const canvasWidth = input.reference.width;
-  const canvasHeight = input.reference.height;
+  const canvasWidth = normalizeCanvasDimension(input.canvasSize?.width, input.reference.width);
+  const canvasHeight = normalizeCanvasDimension(input.canvasSize?.height, input.reference.height);
   const elements: PosterElement[] = [];
   const fields: PosterTemplateFieldBinding[] = [];
   const warnings = [...plan.warnings];
@@ -108,8 +109,8 @@ export async function compilePosterReconstruction(input: {
       src: input.reference.dataUrl,
       left: 0,
       top: 0,
-      scaleX: 1,
-      scaleY: 1,
+      scaleX: canvasWidth / Math.max(1, input.reference.width),
+      scaleY: canvasHeight / Math.max(1, input.reference.height),
       angle: 0,
       opacity: guideOpacity,
       zIndex: nextZ++,
@@ -264,6 +265,11 @@ export async function compilePosterReconstruction(input: {
     description: plan.summary,
     warnings: [...new Set(warnings)],
   };
+}
+
+function normalizeCanvasDimension(value: number | undefined, fallback: number): number {
+  const candidate = Number.isFinite(value) ? Math.round(value as number) : Math.round(fallback);
+  return Math.max(64, Math.min(4096, candidate));
 }
 
 function compilePathElement(

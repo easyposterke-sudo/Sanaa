@@ -159,6 +159,37 @@ describe('compilePosterReconstruction', () => {
     expect(compiled.warnings.join(' ')).toContain('No editable layers');
   });
 
+  it('compiles a small reference into the chosen high-resolution canvas', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          box: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 528,
+        height: 528,
+      },
+      canvasSize: { width: 1080, height: 1080 },
+      referenceGuideOpacity: 0.2,
+    });
+
+    expect(compiled.project.canvasWidth).toBe(1080);
+    expect(compiled.project.canvasHeight).toBe(1080);
+    expect(compiled.project.elements.find((item) => item.type === 'rect')).toMatchObject({
+      left: 270,
+      top: 270,
+      width: 540,
+      height: 540,
+    });
+    expect(compiled.project.elements.find((item) => item.type === 'image')).toMatchObject({
+      scaleX: 1080 / 528,
+      scaleY: 1080 / 528,
+      excludeFromExport: true,
+    });
+  });
+
   it('turns clearly dimensional headline blocks into editable two-layer 3D elements', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([

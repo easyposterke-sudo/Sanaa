@@ -19,6 +19,18 @@ import {
   StockPhotoError,
   type StockPhotoCandidate,
 } from '../services/stockPhotosApi';
+import {
+  normalizeTemplateCanvasDimension,
+  recommendTemplateCanvasSize,
+  TEMPLATE_CANVAS_SIZE_PRESETS,
+  templateCanvasOrientation,
+} from '../templateCanvasSize';
+
+interface CanvasSizeSelection {
+  id: string;
+  width: number;
+  height: number;
+}
 
 interface TemplateCreatorWizardProps {
   open: boolean;
@@ -31,6 +43,9 @@ interface TemplateCreatorWizardProps {
 
 export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreatorWizardProps) {
   const [reference, setReference] = useState<PreparedPosterImage | null>(null);
+  const [canvasSize, setCanvasSize] = useState<CanvasSizeSelection | null>(null);
+  const [customWidth, setCustomWidth] = useState('1080');
+  const [customHeight, setCustomHeight] = useState('1080');
   const [guideOpacity, setGuideOpacity] = useState(0.22);
   const [preparing, setPreparing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -47,16 +62,39 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
 
   if (!open) return null;
 
+  const recommendedPreset = reference
+    ? recommendTemplateCanvasSize(reference.sourceWidth, reference.sourceHeight)
+    : null;
+  const originalCanvasSize = reference
+    ? {
+        width: normalizeTemplateCanvasDimension(reference.sourceWidth, reference.width),
+        height: normalizeTemplateCanvasDimension(reference.sourceHeight, reference.height),
+      }
+    : null;
+
   const handleReference = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
     setAnalysis(null);
+    setCanvasSize(null);
     setCandidates({});
     setReplacementMessages({});
     setReplacements({});
     setPreparing(true);
     try {
-      setReference(await prepareTemplateReference(file));
+      const prepared = await prepareTemplateReference(file);
+      const recommended = recommendTemplateCanvasSize(
+        prepared.sourceWidth,
+        prepared.sourceHeight,
+      );
+      setReference(prepared);
+      setCanvasSize({
+        id: recommended.id,
+        width: recommended.width,
+        height: recommended.height,
+      });
+      setCustomWidth(String(recommended.width));
+      setCustomHeight(String(recommended.height));
     } catch (caught) {
       setError(messageFromError(caught));
     } finally {
@@ -69,10 +107,11 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
     source: PosterReconstructionSource;
     model: string | null;
   }) => {
-    if (!reference) return;
+    if (!reference || !canvasSize) return;
     const compiled = await compilePosterReconstruction({
       plan: current.plan,
       reference,
+      canvasSize,
       referenceGuideOpacity: guideOpacity,
       imageReplacements: replacements,
     });
@@ -111,6 +150,10 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
   const handleCreate = async () => {
     if (!reference) {
       setError('Upload a flat poster first.');
+      return;
+    }
+    if (!canvasSize) {
+      setError('Choose the final poster size before creating the draft.');
       return;
     }
     setError(null);
@@ -241,8 +284,154 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
           </section>
 
           <section className="space-y-5">
+            {!reference && (
+              <div className="rounded-xl border border-dashed border-zinc-200 p-3 dark:border-zinc-700">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  2. Choose the final poster size
+                </h3>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Upload the reference first. Its shape will be detected and the closest standard
+                  high-resolution size will be recommended.
+                </p>
+              </div>
+            )}
+            {reference && recommendedPreset && originalCanvasSize && (
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  2. Choose the final poster size
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Detected {reference.sourceWidth}×{reference.sourceHeight} ({templateCanvasOrientation(
+                    reference.sourceWidth,
+                    reference.sourceHeight,
+                  ).toLowerCase()}). The closest standard size is{' '}
+                  <strong className="text-zinc-700 dark:text-zinc-200">
+                    {recommendedPreset.width}×{recommendedPreset.height}
+                  </strong>.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {TEMPLATE_CANVAS_SIZE_PRESETS.map((preset) => {
+                    const selected = canvasSize?.id === preset.id;
+                    const recommended = preset.id === recommendedPreset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setCanvasSize({
+                            id: preset.id,
+                            width: preset.width,
+                            height: preset.height,
+                          })
+                        }
+                        disabled={submitting}
+                        className={`rounded-xl border p-2.5 text-left transition-colors disabled:opacity-50 ${
+                          selected
+                            ? 'border-violet-500 bg-violet-50 ring-1 ring-violet-500 dark:bg-violet-950/30'
+                            : 'border-zinc-200 hover:border-violet-300 dark:border-zinc-700 dark:hover:border-violet-700'
+                        }`}
+                      >
+                        <span className="flex items-center justify-between gap-2 text-xs font-semibold text-zinc-900 dark:text-white">
+                          {preset.label}
+                          {recommended && (
+                            <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+                              Recommended
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-1 block text-xs font-medium text-violet-700 dark:text-violet-300">
+                          {preset.width}×{preset.height}
+                        </span>
+                        <span className="mt-0.5 block text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                          {preset.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  aria-pressed={canvasSize?.id === 'original'}
+                  onClick={() =>
+                    setCanvasSize({
+                      id: 'original',
+                      width: originalCanvasSize.width,
+                      height: originalCanvasSize.height,
+                    })
+                  }
+                  disabled={submitting}
+                  className={`mt-2 w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors disabled:opacity-50 ${
+                    canvasSize?.id === 'original'
+                      ? 'border-violet-500 bg-violet-50 dark:bg-violet-950/30'
+                      : 'border-zinc-200 hover:border-violet-300 dark:border-zinc-700 dark:hover:border-violet-700'
+                  }`}
+                >
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-100">
+                    Keep uploaded dimensions — {originalCanvasSize.width}×{originalCanvasSize.height}
+                  </span>
+                  {(originalCanvasSize.width < recommendedPreset.width ||
+                    originalCanvasSize.height < recommendedPreset.height) && (
+                    <span className="mt-0.5 block text-amber-700 dark:text-amber-300">
+                      This may produce a lower-resolution download.
+                    </span>
+                  )}
+                </button>
+
+                <div className="mt-2 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-700">
+                  <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">Custom size</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={64}
+                      max={4096}
+                      value={customWidth}
+                      aria-label="Custom poster width"
+                      onChange={(event) => setCustomWidth(event.target.value)}
+                      className="min-w-0 flex-1 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                    />
+                    <span className="text-xs text-zinc-400">×</span>
+                    <input
+                      type="number"
+                      min={64}
+                      max={4096}
+                      value={customHeight}
+                      aria-label="Custom poster height"
+                      onChange={(event) => setCustomHeight(event.target.value)}
+                      className="min-w-0 flex-1 rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                    />
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => {
+                        const width = normalizeTemplateCanvasDimension(
+                          Number(customWidth),
+                          recommendedPreset.width,
+                        );
+                        const height = normalizeTemplateCanvasDimension(
+                          Number(customHeight),
+                          recommendedPreset.height,
+                        );
+                        setCustomWidth(String(width));
+                        setCustomHeight(String(height));
+                        setCanvasSize({ id: 'custom', width, height });
+                      }}
+                      className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                        canvasSize?.id === 'custom'
+                          ? 'bg-violet-600 text-white'
+                          : 'border border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      Use
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">2. Tracing guide</h3>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">3. Tracing guide</h3>
               <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
                 The original poster is placed behind the reconstructed layers as a locked guide.
                 Replace or delete it before publishing so old names and photographs do not remain.
@@ -283,7 +472,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
         {analysis && (
           <section className="max-h-[48vh] overflow-y-auto border-t border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
             <div className="mb-3">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">3. Review unsafe image crops</h3>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Review unsafe image crops</h3>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                 These regions contain overlapping poster artwork or incomplete subjects. Choose a clean replacement,
                 upload one, or continue with a clearly labeled placeholder. The contaminated crop will not be inserted.
@@ -401,7 +590,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
             <button
               type="button"
               onClick={() => void handleCreate()}
-              disabled={!reference || preparing || submitting || Boolean(preparingReplacement)}
+              disabled={!reference || !canvasSize || preparing || submitting || Boolean(preparingReplacement)}
               className="rounded-lg bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting

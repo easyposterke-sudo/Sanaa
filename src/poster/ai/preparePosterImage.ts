@@ -2,6 +2,9 @@ export interface PreparedPosterImage {
   dataUrl: string;
   width: number;
   height: number;
+  /** Original decoded file dimensions before the AI working copy is resized. */
+  sourceWidth: number;
+  sourceHeight: number;
   fileName: string;
 }
 
@@ -46,6 +49,8 @@ async function resizePosterImage(
       dataUrl: await blobToDataUrl(blob),
       width,
       height,
+      sourceWidth: naturalWidth,
+      sourceHeight: naturalHeight,
       fileName: file.name,
     };
   } finally {
