@@ -68,6 +68,7 @@ import {
   isFabricReflectSuppressed,
 } from '../posterFabricReflectGuard';
 import { buildPosterTextEffectStyles, posterTextEffectPadding } from '../textEffects';
+import { DynamicBackgroundTextbox } from '../DynamicBackgroundTextbox';
 
 /** Stable signature of text font stacks for poster font preload + Fabric sync gating. */
 function posterFontSignature(elements: PosterElement[]): string {
@@ -1175,6 +1176,13 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
           existing.set(updates);
           if (el.type === 'text' && existing instanceof Textbox && !existing.isEditing) {
             existing.initDimensions();
+          }
+          if (el.type === 'text' && existing instanceof DynamicBackgroundTextbox) {
+            const textElement = el as PosterTextElement;
+            existing.setPosterTextBackground(
+              textElement.textBackground,
+              posterTextEffectPadding(textElement.fontSize, textElement.curve ?? 0),
+            );
           }
           if (
             el.type === 'rect' &&
@@ -2772,7 +2780,7 @@ async function createFabricObject(
       const stroke = t.stroke && (t.strokeWidth ?? 0) > 0 ? t.stroke : undefined;
       const strokeWidth = stroke ? (t.strokeWidth ?? 2) : 0;
       const { activeTool } = usePosterStore.getState();
-      const text = new Textbox(t.text, {
+      const text = new DynamicBackgroundTextbox(t.text, {
         ...common,
         editable: !readOnly && (activeTool === 'text' || activeTool === 'select'),
         fontSize: t.fontSize,
@@ -2798,6 +2806,10 @@ async function createFabricObject(
         padding: posterTextEffectPadding(t.fontSize, t.curve ?? 0),
         objectCaching: false,
       });
+      text.setPosterTextBackground(
+        t.textBackground,
+        posterTextEffectPadding(t.fontSize, t.curve ?? 0),
+      );
       return text;
     }
     case 'image':

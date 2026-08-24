@@ -185,6 +185,28 @@ export type PosterRasterStyleFields = Partial<
 
 export type PosterTextAlign = 'left' | 'center' | 'right';
 
+export type PosterTextBackgroundShape = 'rectangle' | 'rounded' | 'pill' | 'circle';
+export type PosterTextBackgroundFill = 'solid' | 'glass' | 'none';
+
+export interface PosterTextBackground {
+  enabled: boolean;
+  shape: PosterTextBackgroundShape;
+  fill: PosterTextBackgroundFill;
+  color: string;
+  /** Fill/translucency strength from 0 to 1. */
+  opacity: number;
+  outlineColor: string;
+  outlineWidth: number;
+  /** Horizontal padding as a percentage of the font size, per side. */
+  paddingX: number;
+  /** Vertical padding as a percentage of the font size, per side. */
+  paddingY: number;
+  /** Rounded-rectangle corner radius as a percentage of the background height. */
+  cornerRadius: number;
+  /** Frosted-glass softness in canvas pixels. */
+  blur: number;
+}
+
 export interface PosterTextElement extends PosterElementBase {
   type: 'text';
   text: string;
@@ -227,6 +249,8 @@ export interface PosterTextElement extends PosterElementBase {
   strokeWidth?: number;
   /** Fill opacity 0–1. Use 0 for outline-only text. Default 1. */
   fillOpacity?: number;
+  /** Optional dynamic shape rendered behind this text and resized from its measured lines. */
+  textBackground?: PosterTextBackground;
 }
 
 export interface Poster3DTextElement extends PosterElementBase, ImageAdjustments, PosterRasterStyleFields {

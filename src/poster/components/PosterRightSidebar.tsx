@@ -45,6 +45,7 @@ import {
   TEXT_TAPER_MAX,
   TEXT_TAPER_MIN,
 } from '../textEffects';
+import { normalizePosterTextBackground } from '../textBackground';
 
 interface PosterRightSidebarProps {
   readOnly?: boolean;
@@ -1366,6 +1367,177 @@ const toggleBtnOn =
 const toggleBtnOff =
   'bg-white text-zinc-700 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700';
 
+function TextBackgroundControls({
+  text,
+  updateElement,
+}: {
+  text: PosterTextElement;
+  updateElement: (id: string, updates: Partial<PosterElement>) => void;
+}) {
+  const background = normalizePosterTextBackground(text.textBackground);
+  const updateBackground = (changes: Partial<typeof background>) =>
+    updateElement(text.id, { textBackground: { ...background, ...changes } });
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Text background</p>
+          <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+            Resizes automatically with the rendered words and lines.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => updateBackground({ enabled: !background.enabled })}
+          className={`${toggleBtn} text-[10px] ${background.enabled ? toggleBtnOn : toggleBtnOff}`}
+        >
+          {background.enabled ? 'On' : 'Off'}
+        </button>
+      </div>
+
+      {background.enabled && (
+        <>
+          <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Shape
+            <select
+              value={background.shape}
+              onChange={(event) =>
+                updateBackground({
+                  shape: event.target.value as typeof background.shape,
+                })
+              }
+              className="rounded border border-zinc-200 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+            >
+              <option value="rectangle">Rectangle</option>
+              <option value="rounded">Rounded rectangle</option>
+              <option value="pill">Pill</option>
+              <option value="circle">Circle</option>
+            </select>
+          </label>
+
+          <div className="flex flex-wrap gap-1">
+            {([
+              ['solid', 'Fill'],
+              ['none', 'Outline only'],
+              ['glass', 'Glass'],
+            ] as const).map(([fill, label]) => (
+              <button
+                key={fill}
+                type="button"
+                onClick={() =>
+                  updateBackground({
+                    fill,
+                    outlineWidth:
+                      fill === 'none' && background.outlineWidth <= 0
+                        ? 2
+                        : background.outlineWidth,
+                  })
+                }
+                className={`${toggleBtn} ${background.fill === fill ? toggleBtnOn : toggleBtnOff}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {background.fill !== 'none' && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-zinc-600 dark:text-zinc-400">
+                {background.fill === 'glass' ? 'Glass tint' : 'Background color'}
+              </label>
+              <ColorPickerPopover
+                color={background.color}
+                onChange={(color) => updateBackground({ color })}
+              />
+              <PosterSlider
+                label={`${background.fill === 'glass' ? 'Translucency' : 'Opacity'} (${Math.round(background.opacity * 100)}%)`}
+                min={5}
+                max={100}
+                step={5}
+                value={Math.round(background.opacity * 100)}
+                onChange={(value) => updateBackground({ opacity: value / 100 })}
+              />
+            </div>
+          )}
+
+          {background.fill === 'glass' && (
+            <PosterSlider
+              label={`Glass blur (${background.blur}px)`}
+              min={0}
+              max={40}
+              step={1}
+              value={background.blur}
+              onChange={(blur) => updateBackground({ blur })}
+            />
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <PosterSlider
+              label={`Horizontal padding (${background.paddingX}%)`}
+              min={0}
+              max={160}
+              step={5}
+              value={background.paddingX}
+              onChange={(paddingX) => updateBackground({ paddingX })}
+            />
+            <PosterSlider
+              label={`Vertical padding (${background.paddingY}%)`}
+              min={0}
+              max={120}
+              step={5}
+              value={background.paddingY}
+              onChange={(paddingY) => updateBackground({ paddingY })}
+            />
+          </div>
+
+          {background.shape === 'rounded' && (
+            <PosterSlider
+              label={`Corner roundness (${background.cornerRadius}%)`}
+              min={0}
+              max={50}
+              step={1}
+              value={background.cornerRadius}
+              onChange={(cornerRadius) => updateBackground({ cornerRadius })}
+            />
+          )}
+
+          <div className="flex flex-col gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-zinc-600 dark:text-zinc-400">Background outline</label>
+              <button
+                type="button"
+                onClick={() =>
+                  updateBackground({ outlineWidth: background.outlineWidth > 0 ? 0 : 2 })
+                }
+                className={`${toggleBtn} text-[10px] ${background.outlineWidth > 0 ? toggleBtnOn : toggleBtnOff}`}
+              >
+                {background.outlineWidth > 0 ? 'On' : 'Off'}
+              </button>
+            </div>
+            {background.outlineWidth > 0 && (
+              <>
+                <ColorPickerPopover
+                  color={background.outlineColor}
+                  onChange={(outlineColor) => updateBackground({ outlineColor })}
+                />
+                <PosterSlider
+                  label={`Outline width (${background.outlineWidth}px)`}
+                  min={0.5}
+                  max={20}
+                  step={0.5}
+                  value={background.outlineWidth}
+                  onChange={(outlineWidth) => updateBackground({ outlineWidth })}
+                />
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PosterTextControls({
   text,
   updateElement,
@@ -1811,6 +1983,8 @@ function PosterTextControls({
           <span>Large → small</span>
         </div>
       </div>
+
+      <TextBackgroundControls text={text} updateElement={updateElement} />
 
       <div className="flex flex-col gap-2">
         <label className="text-xs text-zinc-600 dark:text-zinc-400">Fill</label>
