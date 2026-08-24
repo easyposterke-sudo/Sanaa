@@ -30,8 +30,9 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
   const [category, setCategory] = useState<PosterTemplateCategory>(template.category);
   const [description, setDescription] = useState(template.description ?? '');
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishAction, setPublishAction] = useState<'create' | 'update' | null>(null);
   const [publishFeedback, setPublishFeedback] = useState<string | null>(null);
+  const publishBusy = publishAction !== null;
 
   const fieldList = template.fields ?? [];
   const isEditingCloudTemplate =
@@ -52,7 +53,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
     setDescription(template.description ?? '');
     setSaveError(null);
     setPublishFeedback(null);
-    if (!wasOpen) setPublishBusy(false); // Only reset when modal first opens, not on parent re-renders
+    if (!wasOpen) setPublishAction(null); // Only reset when modal first opens, not on parent re-renders
   }, [open, template]);
 
   if (!open) return null;
@@ -67,7 +68,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
       setSaveError('Labeled layers no longer exist on the canvas. Update labels or cancel.');
       return;
     }
-    setPublishBusy(true);
+    setPublishAction('update');
     await new Promise((r) => setTimeout(r, 0)); // Yield so React paints "Updating…" before API call
     try {
       const fabricCanvas = getFabricCanvasRef();
@@ -93,7 +94,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
     } catch (e) {
       setPublishFeedback(`ERROR: ${e instanceof Error ? e.message : 'Update failed'}`);
     } finally {
-      setPublishBusy(false);
+      setPublishAction(null);
     }
   };
 
@@ -107,7 +108,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
       setSaveError('Labeled layers no longer exist on the canvas. Update labels or cancel.');
       return;
     }
-    setPublishBusy(true);
+    setPublishAction('create');
     await new Promise((r) => setTimeout(r, 0)); // Yield so React paints "Saving…" before thumbnail capture
     try {
       // Put layers back on the canvas root so blob→data fallbacks can find / rasterize them
@@ -141,7 +142,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
     } catch (e) {
       setPublishFeedback(`ERROR: ${e instanceof Error ? e.message : 'Publish failed'}`);
     } finally {
-      setPublishBusy(false);
+      setPublishAction(null);
     }
   };
 
@@ -150,12 +151,20 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
       <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
         <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            {publishBusy ? (isEditingCloudTemplate ? 'Updating template…' : 'Saving to cloud…') : 'Save template'}
+            {publishAction === 'update'
+              ? 'Updating template…'
+              : publishAction === 'create'
+                ? isEditingCloudTemplate
+                  ? 'Saving new template…'
+                  : 'Saving to cloud…'
+                : 'Save template'}
           </h2>
           <p className="mt-1 text-xs text-zinc-500">
             {publishBusy
               ? 'Please wait — do not close or click again.'
-              : 'Save to the cloud library for the Poster templates page.'}
+              : isEditingCloudTemplate
+                ? 'Update this template, or save the edited version as a separate new template.'
+                : 'Save to the cloud library for the Poster templates page.'}
           </p>
         </div>
 
@@ -233,14 +242,24 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
             Cancel
           </button>
           {isEditingCloudTemplate ? (
-            <button
-              type="button"
-              disabled={publishBusy}
-              onClick={handleUpdateCloud}
-              className="rounded bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {publishBusy ? 'Updating…' : 'Update template'}
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={publishBusy}
+                onClick={handlePublishCloud}
+                className="rounded border border-accent-600 px-4 py-1.5 text-sm font-medium text-accent-700 hover:bg-accent-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-accent-300 dark:hover:bg-accent-950/40"
+              >
+                {publishAction === 'create' ? 'Saving new…' : 'Save as new template'}
+              </button>
+              <button
+                type="button"
+                disabled={publishBusy}
+                onClick={handleUpdateCloud}
+                className="rounded bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {publishAction === 'update' ? 'Updating…' : 'Update template'}
+              </button>
+            </>
           ) : (
             <button
               type="button"
@@ -248,7 +267,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
               onClick={handlePublishCloud}
               className="rounded bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {publishBusy ? 'Saving…' : 'Save to cloud'}
+              {publishAction === 'create' ? 'Saving…' : 'Save to cloud'}
             </button>
           )}
         </div>
