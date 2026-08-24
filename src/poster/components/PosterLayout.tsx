@@ -96,7 +96,6 @@ export function PosterLayout() {
   const [templateAuthoring, setTemplateAuthoring] = useState<TemplateAuthoringState | null>(null);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
   const [labelTargetId, setLabelTargetId] = useState<string | null>(null);
-  const skipAutoOpenForIdRef = useRef<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 });
   const mainRef = useRef<HTMLElement>(null);
 
@@ -471,7 +470,6 @@ export function PosterLayout() {
       description: undefined,
       fields: [],
     });
-    skipAutoOpenForIdRef.current = null;
     setLabelTargetId(null);
   }, []);
 
@@ -479,35 +477,11 @@ export function PosterLayout() {
     setTemplateAuthoring(null);
     setSaveTemplateModalOpen(false);
     setLabelTargetId(null);
-    skipAutoOpenForIdRef.current = null;
   }, []);
 
   const closeLabelModal = useCallback(() => {
-    const id = labelTargetId;
     setLabelTargetId(null);
-    if (id) skipAutoOpenForIdRef.current = id;
-  }, [labelTargetId]);
-
-  useEffect(() => {
-    if (!templateAuthoring) {
-      skipAutoOpenForIdRef.current = null;
-      return;
-    }
-    if (labelTargetId !== null) return;
-
-    if (selectedIds.length !== 1) {
-      skipAutoOpenForIdRef.current = null;
-      return;
-    }
-
-    const id = selectedIds[0];
-    if (skipAutoOpenForIdRef.current === id) return;
-
-    const el = elements.find((e) => e.id === id);
-    if (!el || (el.type !== 'text' && el.type !== '3d-text' && el.type !== 'image')) return;
-
-    setLabelTargetId(id);
-  }, [templateAuthoring, selectedIds, elements, labelTargetId]);
+  }, []);
 
   const labelTargetEl =
     labelTargetId != null ? elements.find((e) => e.id === labelTargetId) : undefined;
@@ -729,6 +703,10 @@ export function PosterLayout() {
     () => templateAuthoring?.fields?.find((f) => f.sourceElementId === labelTargetId),
     [templateAuthoring?.fields, labelTargetId]
   );
+  const selectedTemplateFieldLabel = useMemo(() => {
+    if (!templateAuthoring || selectedIds.length !== 1) return undefined;
+    return templateAuthoring.fields.find((field) => field.sourceElementId === selectedIds[0])?.label;
+  }, [templateAuthoring, selectedIds]);
 
   /** Mobile: fixed top stack (read-only strip + toolbar). Spacer + drawer top match this height. */
   const mobileTopStackSpacer = readOnly
@@ -748,7 +726,6 @@ export function PosterLayout() {
       coldAutosaveBaselineRef.current = null;
       setTemplateAuthoring(null);
       setLabelTargetId(null);
-      skipAutoOpenForIdRef.current = null;
       setShowCanvasSizeModal(false);
       loadProject(compiled.project, { fieldBindings: compiled.fieldBindings });
       setAutomatic3DRenderIds(
@@ -771,7 +748,6 @@ export function PosterLayout() {
       lastCloudSaveRef.current = null;
       coldAutosaveBaselineRef.current = null;
       setLabelTargetId(null);
-      skipAutoOpenForIdRef.current = null;
       setShowCanvasSizeModal(false);
       loadProject(compiled.project, { fieldBindings: compiled.fieldBindings });
       setAutomatic3DRenderIds(
@@ -831,7 +807,6 @@ export function PosterLayout() {
           notice={templateAuthoring.notice}
           onCancel={cancelTemplateAuthoring}
           onSaveTemplate={() => {
-            if (labelTargetId) skipAutoOpenForIdRef.current = labelTargetId;
             setLabelTargetId(null);
             setSaveTemplateModalOpen(true);
           }}
@@ -845,7 +820,6 @@ export function PosterLayout() {
             setSaveTemplateModalOpen(false);
             setTemplateAuthoring(null);
             setLabelTargetId(null);
-            skipAutoOpenForIdRef.current = null;
           }}
           template={{
             id: templateAuthoring.templateId,
@@ -937,12 +911,22 @@ export function PosterLayout() {
 
         {/* Right sidebar — hidden on mobile, inline on desktop */}
         <aside className="hidden overflow-y-auto overscroll-y-contain border-l border-zinc-200 bg-white lg:flex lg:w-64 lg:shrink-0 lg:flex-col dark:border-zinc-800 dark:bg-zinc-900">
-          <PosterRightSidebar readOnly={readOnly} onOpenEdit3D={(id) => setThreeTextModal({ editId: id })} />
+          <PosterRightSidebar
+            readOnly={readOnly}
+            onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
+            onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
+            templateFieldLabel={selectedTemplateFieldLabel}
+          />
         </aside>
       </div>
 
       {/* Mobile bottom property bar — full right sidebar in a bottom sheet */}
-      <MobilePropertyBar readOnly={readOnly} onOpenEdit3D={(id) => setThreeTextModal({ editId: id })} />
+      <MobilePropertyBar
+        readOnly={readOnly}
+        onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
+        onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
+        templateFieldLabel={selectedTemplateFieldLabel}
+      />
       {threeTextModal && (
         <ThreeTextModal
           mode={threeTextModal}

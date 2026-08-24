@@ -50,6 +50,9 @@ import { normalizePosterTextBackground } from '../textBackground';
 interface PosterRightSidebarProps {
   readOnly?: boolean;
   onOpenEdit3D?: (id: string) => void;
+  /** Available only while preparing a reusable template. */
+  onOpenTemplateField?: (id: string) => void;
+  templateFieldLabel?: string;
 }
 
 function PosterSlider({
@@ -2441,7 +2444,12 @@ function ShadowControls({
   );
 }
 
-export function PosterRightSidebar({ readOnly = false, onOpenEdit3D }: PosterRightSidebarProps) {
+export function PosterRightSidebar({
+  readOnly = false,
+  onOpenEdit3D,
+  onOpenTemplateField,
+  templateFieldLabel,
+}: PosterRightSidebarProps) {
   const navigate = useNavigate();
   const elements = usePosterStore((s) => s.elements);
   const selectedIds = usePosterStore((s) => s.selectedIds);
@@ -2648,6 +2656,26 @@ export function PosterRightSidebar({ readOnly = false, onOpenEdit3D }: PosterRig
 
       {single && (
         <>
+          {onOpenTemplateField &&
+            (single.type === 'text' || single.type === '3d-text' || single.type === 'image') && (
+              <div className="rounded-lg border border-accent-200 bg-accent-50/70 p-3 dark:border-accent-900 dark:bg-accent-950/30">
+                <p className="text-xs font-semibold text-accent-800 dark:text-accent-200">
+                  Template field
+                </p>
+                <p className="mt-1 text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
+                  {templateFieldLabel
+                    ? `This layer is saved as “${templateFieldLabel}”.`
+                    : 'Choose what users should enter when they reuse this template.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onOpenTemplateField(single.id)}
+                  className="mt-2 w-full rounded-md bg-accent-600 px-3 py-2 text-xs font-semibold text-white hover:bg-accent-500"
+                >
+                  {templateFieldLabel ? 'Edit template field' : 'Add template field'}
+                </button>
+              </div>
+            )}
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Lock</p>
             <button

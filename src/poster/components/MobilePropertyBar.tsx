@@ -5,9 +5,16 @@ import { PosterRightSidebar } from './PosterRightSidebar';
 interface MobilePropertyBarProps {
   readOnly?: boolean;
   onOpenEdit3D?: (id: string) => void;
+  onOpenTemplateField?: (id: string) => void;
+  templateFieldLabel?: string;
 }
 
-export function MobilePropertyBar({ readOnly = false, onOpenEdit3D }: MobilePropertyBarProps) {
+export function MobilePropertyBar({
+  readOnly = false,
+  onOpenEdit3D,
+  onOpenTemplateField,
+  templateFieldLabel,
+}: MobilePropertyBarProps) {
   const selectedIds = usePosterStore((s) => s.selectedIds);
   const elements = usePosterStore((s) => s.elements);
   const [expanded, setExpanded] = useState(false);
@@ -40,7 +47,12 @@ export function MobilePropertyBar({ readOnly = false, onOpenEdit3D }: MobileProp
         <div
           className="max-h-[45vh] overflow-y-auto overscroll-y-contain border-t border-zinc-700 bg-white dark:bg-zinc-900"
         >
-          <PosterRightSidebar readOnly={readOnly} onOpenEdit3D={onOpenEdit3D} />
+          <PosterRightSidebar
+            readOnly={readOnly}
+            onOpenEdit3D={onOpenEdit3D}
+            onOpenTemplateField={onOpenTemplateField}
+            templateFieldLabel={templateFieldLabel}
+          />
         </div>
       )}
     </div>

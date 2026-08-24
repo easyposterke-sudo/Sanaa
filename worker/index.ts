@@ -706,19 +706,7 @@ app.post('/api/ai/poster-plan', async (context) => {
   }
 
   const quota = maxAiGenerationsPerDay(context.env);
-  const now = new Date();
-  const usageDate = now.toISOString().slice(0, 10);
-  const reserved = await context.env.DB.prepare(
-    `INSERT INTO ai_usage_daily (owner_id, usage_date, generation_count, updated_at)
-     VALUES (?, ?, 1, ?)
-     ON CONFLICT(owner_id, usage_date) DO UPDATE SET
-       generation_count = ai_usage_daily.generation_count + 1,
-       updated_at = excluded.updated_at
-     WHERE ai_usage_daily.generation_count < ?
-     RETURNING generation_count`,
-  )
-    .bind(context.get('ownerId'), usageDate, now.toISOString(), quota)
-    .first<{ generation_count: number }>();
+  const reserved = await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota);
   if (!reserved) {
     return context.json(
       {
@@ -878,19 +866,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
   }
 
   const quota = maxAiGenerationsPerDay(context.env);
-  const now = new Date();
-  const usageDate = now.toISOString().slice(0, 10);
-  const reserved = await context.env.DB.prepare(
-    `INSERT INTO ai_usage_daily (owner_id, usage_date, generation_count, updated_at)
-     VALUES (?, ?, 1, ?)
-     ON CONFLICT(owner_id, usage_date) DO UPDATE SET
-       generation_count = ai_usage_daily.generation_count + 1,
-       updated_at = excluded.updated_at
-     WHERE ai_usage_daily.generation_count < ?
-     RETURNING generation_count`,
-  )
-    .bind(context.get('ownerId'), usageDate, now.toISOString(), quota)
-    .first<{ generation_count: number }>();
+  const reserved = await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota);
   if (!reserved) {
     return context.json(
       {
@@ -2057,16 +2033,18 @@ async function readBoundedBytes(
   return combined.buffer;
 }
 
-function maxAiGenerationsPerDay(env: Env): number {
+function maxAiGenerationsPerDay(env: Env): number | null {
   const configured = Number(env.MAX_AI_GENERATIONS_PER_DAY);
+  if (configured === 0 || String(env.APP_ENV) === 'development') return null;
   return Number.isSafeInteger(configured) && configured > 0 ? configured : 20;
 }
 
 async function reserveAiGeneration(
   database: D1Database,
   ownerId: string,
-  quota: number,
+  quota: number | null,
 ): Promise<boolean> {
+  if (quota === null) return true;
   const now = new Date();
   const usageDate = now.toISOString().slice(0, 10);
   const reserved = await database.prepare(
