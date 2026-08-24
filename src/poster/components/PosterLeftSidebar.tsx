@@ -9,6 +9,7 @@ import { PosterBackgroundsModal } from './PosterBackgroundsModal';
 import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
 import type { PosterBackgroundLibraryItem } from '../services/posterBackgroundsApi';
 import { fetchMyPosterTemplateList } from '../services/posterTemplatesApi';
+import { compressImageToWebp } from '../utils/compressImageToWebp';
 import type {
   PosterElement,
   PosterImageElement,
@@ -113,6 +114,8 @@ export function PosterLeftSidebar({
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [editingLayerName, setEditingLayerName] = useState('');
   const [canManageTemplates, setCanManageTemplates] = useState(false);
+  const [imageUploadBusy, setImageUploadBusy] = useState(false);
+  const [imageUploadMessage, setImageUploadMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -226,20 +229,23 @@ export function PosterLeftSidebar({
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      alert('Choose an image file.');
-      return;
+    setImageUploadBusy(true);
+    setImageUploadMessage(null);
+    try {
+      const prepared = await compressImageToWebp(file, { maxLongEdge: 4096, quality: 0.86 });
+      const fitScale = Math.min(1, 480 / prepared.width, 480 / prepared.height);
+      addElement({
+        ...newImageDefaults(),
+        src: prepared.dataUrl,
+        scaleX: fitScale,
+        scaleY: fitScale,
+      } as NewPosterImagePayload);
+      setImageUploadMessage(compressionMessage(prepared.originalBytes, prepared.compressedBytes));
+    } catch (error) {
+      setImageUploadMessage(error instanceof Error ? error.message : 'The image could not be added.');
+    } finally {
+      setImageUploadBusy(false);
     }
-
-    const src = await readFileAsDataUrl(file);
-    const dimensions = await readImageDimensions(src);
-    const fitScale = Math.min(1, 480 / dimensions.width, 480 / dimensions.height);
-    addElement({
-      ...newImageDefaults(),
-      src,
-      scaleX: fitScale,
-      scaleY: fitScale,
-    } as NewPosterImagePayload);
   };
 
   const handleUseBackground = async (background: PosterBackgroundLibraryItem) => {
@@ -516,20 +522,27 @@ export function PosterLeftSidebar({
         <button
           type="button"
           onClick={guard(() => imageInputRef.current?.click())}
+          disabled={imageUploadBusy}
           className="w-full rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-sm text-zinc-600 hover:border-zinc-400 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:bg-zinc-700"
         >
-          Upload Image
+          {imageUploadBusy ? 'Compressing to WebP…' : 'Upload Image'}
         </button>
         <input
           ref={imageInputRef}
           type="file"
-          accept="image/*"
+          accept="image/png,image/jpeg,image/webp"
           className="hidden"
+          disabled={imageUploadBusy}
           onChange={(event) => void handleLocalImageUpload(event)}
         />
         <p className="mt-2 text-[11px] text-zinc-400 dark:text-zinc-500">
-          Adds the image directly to this poster and keeps it in downloaded project JSON.
+          PNG and JPEG uploads are compressed to WebP before being added to the poster.
         </p>
+        {imageUploadMessage && (
+          <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400" role="status">
+            {imageUploadMessage}
+          </p>
+        )}
       </div>
 
       {onOpen3DModal && (
@@ -550,15 +563,6 @@ export function PosterLeftSidebar({
   );
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read image.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 function readImageDimensions(src: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -570,4 +574,16 @@ function readImageDimensions(src: string): Promise<{ width: number; height: numb
     image.onerror = () => reject(new Error('Could not decode image.'));
     image.src = src;
   });
+}
+
+function compressionMessage(originalBytes: number, compressedBytes: number): string {
+  if (compressedBytes >= originalBytes) return `Added as WebP (${formatBytes(compressedBytes)}).`;
+  const savedPercent = Math.max(1, Math.round((1 - compressedBytes / originalBytes) * 100));
+  return `Added as WebP — ${savedPercent}% smaller (${formatBytes(compressedBytes)}).`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }

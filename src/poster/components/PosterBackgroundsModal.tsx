@@ -5,6 +5,7 @@ import {
   uploadPosterBackground,
   type PosterBackgroundLibraryItem,
 } from '../services/posterBackgroundsApi';
+import { compressImageToWebp } from '../utils/compressImageToWebp';
 
 interface PosterBackgroundsModalProps {
   open: boolean;
@@ -58,7 +59,8 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
     setUploading(true);
     setUploadError(null);
     try {
-      const uploaded = await uploadPosterBackground(file, finalLabel);
+      const prepared = await compressImageToWebp(file, { maxLongEdge: 4096, quality: 0.84 });
+      const uploaded = await uploadPosterBackground(prepared.file, finalLabel);
       setBackgrounds((current) => [uploaded, ...current]);
       setFile(null);
       setLabel('');
@@ -120,7 +122,7 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
             Backgrounds
           </h2>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Upload once, then reuse the background in posters and templates.
+            Upload once, then reuse it in posters and templates. Images are stored as compressed WebP.
           </p>
 
           <div className="mt-4 grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
@@ -156,7 +158,7 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
               disabled={!file || uploading}
               className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {uploading ? 'Uploading…' : 'Upload'}
+              {uploading ? 'Compressing & uploading…' : 'Upload'}
             </button>
           </div>
           {uploadError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{uploadError}</p>}
