@@ -11,6 +11,11 @@ import type { PosterProject } from '../types';
 import type { AIPosterSession } from '../ai/aiPosterSession';
 import { findMissingTemplateTextFields } from '../ai/missingTemplateDetails';
 import { buildTemplatePosterCatalogFields } from '../ai/templateFieldCatalog';
+import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
+import type {
+  PosterTemplateCategoryDefinition,
+  PosterTemplateCategoryInput,
+} from '../../../shared/poster/templateCategory';
 
 interface GeneratedTemplatePoster {
   project: PosterProject;
@@ -31,6 +36,7 @@ interface BriefImage {
   name: string;
   role: string;
   asset: PreparedPosterImage;
+  sourceInputId?: string;
 }
 
 interface PendingPoster {
@@ -40,10 +46,15 @@ interface PendingPoster {
   source: TemplatePosterSource;
   model: string | null;
   templateId: string;
+  brief: string;
+  categoryId: string | null;
 }
 
 export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) {
+  const { categories, loading: categoriesLoading } = usePosterTemplateCategories();
   const [brief, setBrief] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
+  const [guidedValues, setGuidedValues] = useState<Record<string, string>>({});
   const [images, setImages] = useState<BriefImage[]>([]);
   const [themeEnabled, setThemeEnabled] = useState(false);
   const [themeColor, setThemeColor] = useState('#6d28d9');
@@ -59,8 +70,12 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
     templateId: string;
   } | null>(null);
 
+  const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
+  const guidedBrief = buildGuidedBrief(brief, selectedCategory, guidedValues);
   const templateCount = getAllPosterTemplates().filter(
-    (template) => (template.fields?.length ?? 0) > 0,
+    (template) =>
+      (template.fields?.length ?? 0) > 0 &&
+      (!selectedCategoryId || template.category === selectedCategoryId),
   ).length;
 
   useEffect(() => {
@@ -101,6 +116,34 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
     }
   };
 
+  const handleGuidedImage = async (input: PosterTemplateCategoryInput, file: File | undefined) => {
+    if (!file) return;
+    const replacing = images.some((image) => image.sourceInputId === input.id);
+    if (!replacing && images.length >= 8) {
+      setError('You can add up to 8 images.');
+      return;
+    }
+    setPreparingImages(true);
+    setError(null);
+    try {
+      const prepared: BriefImage = {
+        id: crypto.randomUUID(),
+        name: readableFileName(file.name),
+        role: input.label,
+        sourceInputId: input.id,
+        asset: await preparePortrait(file),
+      };
+      setImages((current) => [
+        ...current.filter((image) => image.sourceInputId !== input.id),
+        prepared,
+      ]);
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setPreparingImages(false);
+    }
+  };
+
   const updateImage = (id: string, changes: Partial<Pick<BriefImage, 'name' | 'role'>>) => {
     setImages((current) =>
       current.map((image) => (image.id === id ? { ...image, ...changes } : image)),
@@ -129,7 +172,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
         .filter((detail) => detail.value)
         .map((detail) => `${detail.label}: ${detail.value}`);
       const sessionBrief = [
-        brief.trim(),
+        pending.brief,
         additionalDetails.length > 0 ? `Additional details:\n${additionalDetails.join('\n')}` : '',
       ]
         .filter(Boolean)
@@ -154,6 +197,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
           excludedTemplateIds: nextExcluded,
           currentTemplateId: pending.templateId,
           typographyMood: null,
+          categoryId: pending.categoryId,
         },
       });
       setExcludedTemplateIds(nextExcluded);
@@ -173,8 +217,8 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
 
   const handleGenerate = async () => {
     setError(null);
-    if (brief.trim().length < 10) {
-      setError('Describe what you want to create, including the important event details.');
+    if (guidedBrief.length < 10) {
+      setError('Describe what you want to create or choose a category and add any details you know.');
       return;
     }
     if (themeEnabled && !/^#[0-9a-fA-F]{6}$/.test(themeColor)) {
@@ -183,17 +227,21 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
     }
 
     const templates = getAllPosterTemplates().filter(
-      (template) => (template.fields?.length ?? 0) > 0,
+      (template) =>
+        (template.fields?.length ?? 0) > 0 &&
+        (!selectedCategoryId || template.category === selectedCategoryId),
     );
     if (templates.length === 0) {
-      setError('No fillable templates are available yet. Create and label a template first.');
+      setError(selectedCategoryId
+        ? 'No fillable templates are assigned to this category yet.'
+        : 'No fillable templates are available yet. Create and label a template first.');
       return;
     }
 
     setSubmitting(true);
     try {
       const response = await requestTemplatePoster({
-        brief: brief.trim(),
+        brief: guidedBrief,
         themeColor: themeEnabled ? themeColor : null,
         images: images.map((image, index) => ({
           index,
@@ -234,6 +282,8 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
         source: response.source,
         model: response.model,
         templateId: response.selection.templateId,
+        brief: guidedBrief,
+        categoryId: selectedCategoryId || null,
       };
       if (missingFields.length > 0) {
         setPendingPoster(pending);
@@ -379,20 +429,86 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
 
         <div className="grid gap-6 p-5 lg:grid-cols-[1.2fr_0.8fr]">
           <section>
+            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+              <label className="block text-sm font-semibold text-zinc-900 dark:text-white" htmlFor="ai-poster-category">
+                What are we creating? <span className="font-normal text-zinc-500">(optional)</span>
+              </label>
+              <select
+                id="ai-poster-category"
+                value={selectedCategoryId}
+                disabled={categoriesLoading || submitting}
+                onChange={(event) => {
+                  setSelectedCategoryId(event.target.value);
+                  setGuidedValues({});
+                  setImages((current) => current.filter((image) => !image.sourceInputId));
+                }}
+                className={inputClass}
+              >
+                <option value="">Let AI understand my description</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Choose a type to see helpful reminders, or leave this on automatic and write naturally below.
+              </p>
+
+              {selectedCategory && selectedCategory.inputs.length > 0 && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {selectedCategory.inputs.map((input) => input.kind === 'text' ? (
+                    <label key={input.id} className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      {input.label} <span className="font-normal text-zinc-400">(optional)</span>
+                      <input
+                        value={guidedValues[input.key] ?? ''}
+                        onChange={(event) => setGuidedValues((current) => ({
+                          ...current,
+                          [input.key]: event.target.value,
+                        }))}
+                        maxLength={500}
+                        placeholder={input.hint || `Add ${input.label.toLowerCase()}`}
+                        className={smallInputClass}
+                      />
+                    </label>
+                  ) : (
+                    <label key={input.id} className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      {input.label} <span className="font-normal text-zinc-400">(optional picture)</span>
+                      <span className="mt-1 flex min-h-9 cursor-pointer items-center justify-between gap-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-xs dark:border-zinc-700 dark:bg-zinc-800">
+                        <span className="truncate">
+                          {images.find((image) => image.sourceInputId === input.id)?.name || input.hint || 'Choose picture'}
+                        </span>
+                        <span className="font-semibold text-emerald-700 dark:text-emerald-300">Browse</span>
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        disabled={preparingImages || submitting}
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          event.currentTarget.value = '';
+                          void handleGuidedImage(input, file);
+                        }}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <label className="block text-sm font-semibold text-zinc-900 dark:text-white" htmlFor="ai-poster-brief">
-              Poster brief
+              Describe it in your own words <span className="font-normal text-zinc-500">(optional if you used the prompts above)</span>
             </label>
             <textarea
               id="ai-poster-brief"
               value={brief}
               onChange={(event) => setBrief(event.target.value)}
-              rows={13}
+              rows={8}
               maxLength={4_000}
               placeholder="Example: Create a worship experience poster for Sunday 20 September at 10:00 AM, at Grace Chapel. Theme: Arise and Worship. Scripture: Psalm 95:6. Hosted by Pastor Miriam, with guest minister John Kamau…"
               className={`${inputClass} resize-y`}
             />
             <div className="mt-2 flex justify-between gap-4 text-xs text-zinc-500 dark:text-zinc-400">
-              <span>Include the title, date, time, venue, theme, verse, hosts, guests, and any contact details you want shown.</span>
+              <span>A special title is optional. Add only the details you want shown.</span>
               <span className="shrink-0">{brief.length}/4000</span>
             </div>
 
@@ -542,7 +658,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
             <button
               type="button"
               onClick={() => void handleGenerate()}
-              disabled={submitting || preparingImages || brief.trim().length < 10}
+              disabled={submitting || preparingImages || guidedBrief.length < 10}
               className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? 'Finding and creating your poster…' : 'Create my poster'}
@@ -567,4 +683,26 @@ function messageFromError(error: unknown): string {
   if (error instanceof TemplatePosterError) return error.message;
   if (error instanceof Error) return error.message;
   return 'The poster could not be generated.';
+}
+
+function buildGuidedBrief(
+  brief: string,
+  category: PosterTemplateCategoryDefinition | undefined,
+  values: Readonly<Record<string, string>>,
+): string {
+  const details = category?.inputs
+    .filter((input) => input.kind === 'text')
+    .map((input) => ({ label: input.label, value: values[input.key]?.trim() ?? '' }))
+    .filter((detail) => detail.value)
+    .map((detail) => `${detail.label}: ${detail.value}`) ?? [];
+  return [
+    brief.trim(),
+    category
+      ? `Category selection (routing metadata only; never print as poster copy or a special title): ${category.name}`
+      : '',
+    details.length > 0 ? `Provided details:\n${details.join('\n')}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 4_000);
 }

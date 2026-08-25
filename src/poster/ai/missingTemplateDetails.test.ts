@@ -19,4 +19,11 @@ describe('missing template details', () => {
     ];
     expect(findMissingTemplateTextFields({ fields }, {})).toEqual([]);
   });
+
+  it('does not ask for an optional title field', () => {
+    const fields = [
+      { key: 'event_title', label: 'Special event title', sourceElementId: 'title', kind: 'text' as const },
+    ];
+    expect(findMissingTemplateTextFields({ fields }, {})).toEqual([]);
+  });
 });

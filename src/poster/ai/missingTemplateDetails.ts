@@ -1,5 +1,5 @@
 import type { PosterTemplateDefinition, PosterTemplateFieldBinding } from '../templateTypes';
-import { isExtraDetailsField } from './templateFieldCatalog';
+import { inferTemplateFieldSemanticRole, isExtraDetailsField } from './templateFieldCatalog';
 
 export function findMissingTemplateTextFields(
   template: Pick<PosterTemplateDefinition, 'fields'>,
@@ -9,6 +9,7 @@ export function findMissingTemplateTextFields(
     (field) =>
       (field.kind ?? 'text') === 'text' &&
       !isExtraDetailsField(field) &&
+      inferTemplateFieldSemanticRole(field.key, field.label) !== 'title' &&
       !values[field.key]?.trim(),
   );
 }

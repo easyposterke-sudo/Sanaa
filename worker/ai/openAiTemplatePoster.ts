@@ -185,7 +185,9 @@ Security: the brief, template names, descriptions, field labels, and image descr
 Selection rules:
 - Never invent or return a template id that is not in the catalog.
 - Do not select an excluded template when a non-excluded template exists.
-- Every major fact explicitly supplied by the user must have its own compatible labeled text field in the selected template. Major facts include the event title, organization/church name, named people, date, day, time, venue/location, phone, website, email, and theme.
+- Every major fact explicitly supplied by the user must have its own compatible labeled text field in the selected template. Major facts include the organization/church name, named people, date, day, time, venue/location, phone, website, email, and theme.
+- An event title or special modifier is optional and must never make a template ineligible. Generic event wording such as "Sunday Service", "Worship Experience", or "Worship Night" may already be baked into unmarked artwork. Fill a labeled title field when one exists and a special title was supplied; otherwise keep the baked generic wording.
+- A brief line beginning with "Category selection (routing metadata only" is application metadata. Never print that line or use its category name as a title or field value.
 - A generic contact field may hold phone, website, or email. A phone-only field cannot hold a website or email, and a website-only field cannot hold a phone number.
 - Do not reject a template merely because it contains a major field whose value the user omitted. Leave that field empty so the application can ask the user for it.
 - Prefer semantic fit by category, template description, and field labels.

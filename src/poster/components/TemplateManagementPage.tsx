@@ -9,16 +9,10 @@ import {
   type MyPosterTemplateListItem,
 } from '../services/posterTemplatesApi';
 import { usePosterStore } from '../store/posterStore';
-import {
-  POSTER_TEMPLATE_CATEGORIES,
-  type PosterTemplateCategory,
-  type PosterTemplateDefinition,
-} from '../templateTypes';
+import type { PosterTemplateCategory, PosterTemplateDefinition } from '../templateTypes';
+import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
 import { AdminTemplateEditModal } from './AdminTemplateEditModal';
-
-const categoryLabel = new Map(
-  POSTER_TEMPLATE_CATEGORIES.map((category) => [category.value, category.label]),
-);
+import { TemplateCategoryManagerModal } from './TemplateCategoryManagerModal';
 
 function formatUpdatedAt(value: string) {
   const date = new Date(value);
@@ -32,6 +26,7 @@ function formatUpdatedAt(value: string) {
 
 export function TemplateManagementPage() {
   const refreshRemotePosterTemplates = usePosterStore((state) => state.refreshRemotePosterTemplates);
+  const { categories, error: categoryError, refresh: refreshCategories } = usePosterTemplateCategories();
   const [templates, setTemplates] = useState<MyPosterTemplateListItem[]>([]);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +35,12 @@ export function TemplateManagementPage() {
   const [editingTemplate, setEditingTemplate] = useState<PosterTemplateDefinition | null>(null);
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+
+  const categoryLabel = useMemo(
+    () => new Map(categories.map((item) => [item.id, item.name])),
+    [categories],
+  );
 
   const loadTemplates = useCallback(async () => {
     setLoadState('loading');
@@ -139,12 +140,21 @@ export function TemplateManagementPage() {
                 : 'Loading your private library…'}
             </p>
           </div>
-          <Link
-            to="/poster"
-            className="inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
-          >
-            Create a new template
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setCategoryManagerOpen(true)}
+              className="inline-flex items-center justify-center rounded-lg border border-violet-300 px-4 py-2.5 text-sm font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/30"
+            >
+              Add or edit categories
+            </button>
+            <Link
+              to="/poster"
+              className="inline-flex items-center justify-center rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+            >
+              Create a new template
+            </Link>
+          </div>
         </div>
 
         {error && (
@@ -154,6 +164,12 @@ export function TemplateManagementPage() {
               Try again
             </button>
           </div>
+        )}
+
+        {categoryError && (
+          <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+            Custom categories are temporarily unavailable. Built-in categories can still be used.
+          </p>
         )}
 
         {loadState === 'loading' ? (
@@ -200,8 +216,8 @@ export function TemplateManagementPage() {
                   className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500 dark:border-zinc-700 dark:bg-zinc-950 sm:w-56"
                 >
                   <option value="all">All categories</option>
-                  {POSTER_TEMPLATE_CATEGORIES.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
+                  {categories.map((option) => (
+                    <option key={option.id} value={option.id}>{option.name}</option>
                   ))}
                 </select>
               </label>
@@ -266,6 +282,12 @@ export function TemplateManagementPage() {
         template={editingTemplate}
         onClose={() => setEditingTemplate(null)}
         onSaved={() => void loadTemplates()}
+      />
+      <TemplateCategoryManagerModal
+        open={categoryManagerOpen}
+        categories={categories}
+        onClose={() => setCategoryManagerOpen(false)}
+        onChanged={refreshCategories}
       />
     </div>
   );

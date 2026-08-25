@@ -1,7 +1,13 @@
 import type { PosterProject } from './types';
+import type {
+  PosterTemplateCategoryDefinition,
+  PosterTemplateCategoryInput,
+} from '../../shared/poster/templateCategory';
 
 /** Categories for filtering templates and AI context. */
-export type PosterTemplateCategory = 'church' | 'conference' | 'business' | 'event' | 'general';
+export type PosterTemplateCategory = string;
+
+export type { PosterTemplateCategoryDefinition, PosterTemplateCategoryInput };
 
 export const POSTER_TEMPLATE_CATEGORIES: { value: PosterTemplateCategory; label: string }[] = [
   { value: 'church', label: 'Church / worship' },
@@ -10,6 +16,22 @@ export const POSTER_TEMPLATE_CATEGORIES: { value: PosterTemplateCategory; label:
   { value: 'event', label: 'Event / party' },
   { value: 'general', label: 'General' },
 ];
+
+export const BUILT_IN_POSTER_TEMPLATE_CATEGORY_DEFINITIONS: PosterTemplateCategoryDefinition[] =
+  POSTER_TEMPLATE_CATEGORIES.map((category) => ({
+    id: category.value,
+    name: category.label,
+    inputs: [],
+  }));
+
+export function mergePosterTemplateCategoryDefinitions(
+  custom: readonly PosterTemplateCategoryDefinition[],
+): PosterTemplateCategoryDefinition[] {
+  const byId = new Map<string, PosterTemplateCategoryDefinition>();
+  for (const category of BUILT_IN_POSTER_TEMPLATE_CATEGORY_DEFINITIONS) byId.set(category.id, category);
+  for (const category of custom) byId.set(category.id, category);
+  return [...byId.values()];
+}
 
 /** What gets filled when using the template. */
 export type PosterTemplateFieldKind = 'text' | 'image';

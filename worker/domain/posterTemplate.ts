@@ -1,12 +1,7 @@
 import { z } from 'zod';
+import { PosterTemplateCategoryIdSchema } from '../../shared/poster/templateCategory';
 
-export const posterTemplateCategorySchema = z.enum([
-  'church',
-  'conference',
-  'business',
-  'event',
-  'general',
-]);
+export const posterTemplateCategorySchema = PosterTemplateCategoryIdSchema;
 
 const fieldBindingSchema = z.object({
   key: z.string().trim().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).max(100),

@@ -83,6 +83,17 @@ describe('major-fact template compatibility', () => {
     ]);
   });
 
+  it('never treats an optional event title or modifier as a compatibility requirement', () => {
+    const request = makeRequest('Create a Sunday service poster titled Men\'s Sunday Service. Venue: Main Hall.');
+
+    expect(detectProvidedMajorTemplateFacts(request.brief)).toEqual(['venue']);
+    expect(getSelectableTemplatePosterCatalog(request).map((template) => template.id)).toEqual([
+      'complete',
+      'missing-theme',
+      'phone-only',
+    ]);
+  });
+
   it('does not treat a phone-only field as a place for a supplied website', () => {
     const request = makeRequest('Create a worship poster. Website: gracechapel.org');
     expect(getSelectableTemplatePosterCatalog(request).map((template) => template.id)).toEqual([

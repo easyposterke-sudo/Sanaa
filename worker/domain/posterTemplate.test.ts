@@ -27,9 +27,13 @@ describe('poster template validation', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects invalid categories and empty updates', () => {
+  it('accepts custom category ids and rejects malformed ids and empty updates', () => {
     expect(
-      createPosterTemplateSchema.safeParse({ name: 'Poster', category: 'unknown', project })
+      createPosterTemplateSchema.safeParse({ name: 'Poster', category: 'custom-sunday', project })
+        .success,
+    ).toBe(true);
+    expect(
+      createPosterTemplateSchema.safeParse({ name: 'Poster', category: 'Unknown category!', project })
         .success,
     ).toBe(false);
     expect(updatePosterTemplateSchema.safeParse({}).success).toBe(false);

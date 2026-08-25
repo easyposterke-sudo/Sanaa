@@ -78,6 +78,12 @@ import {
   isCustomElementMediaType,
   matchesCustomElementSignature,
 } from './customElementLibrary';
+import {
+  CreatePosterTemplateCategorySchema,
+  PosterTemplateCategoryInputSchema,
+  UpdatePosterTemplateCategorySchema,
+  type PosterTemplateCategoryInput,
+} from '../shared/poster/templateCategory';
 
 type Variables = {
   ownerId: string;
@@ -126,6 +132,15 @@ type PosterTemplateRow = {
 
 type OwnedPosterTemplateListRow = PosterTemplateRow & {
   created_at: string;
+};
+
+type PosterTemplateCategoryRow = {
+  id: string;
+  owner_id: string;
+  name: string;
+  inputs_json: string;
+  created_at: string;
+  updated_at: string;
 };
 
 type PosterBackgroundRow = {
@@ -1311,6 +1326,136 @@ app.post('/api/images/remove-background', async (context) => {
   }
 });
 
+app.get('/api/poster-template-categories', async (context) => {
+  const result = await context.env.DB.prepare(
+    `SELECT id, owner_id, name, inputs_json, created_at, updated_at
+     FROM poster_template_categories
+     ORDER BY name COLLATE NOCASE ASC
+     LIMIT 200`,
+  ).all<PosterTemplateCategoryRow>();
+
+  context.header('cache-control', 'private, no-store');
+  return context.json(
+    result.results.flatMap((row) => {
+      const inputs = parseStoredCategoryInputs(row.inputs_json);
+      if (!inputs) return [];
+      return [{
+        id: row.id,
+        name: row.name,
+        inputs,
+        canEdit: row.owner_id === context.get('ownerId'),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }];
+    }),
+  );
+});
+
+app.post('/api/poster-template-categories', async (context) => {
+  const requestId = context.get('requestId');
+  const input = CreatePosterTemplateCategorySchema.safeParse(
+    JSON.parse(await readBoundedText(context.req.raw, 64_000)),
+  );
+  if (!input.success || !hasUniqueCategoryInputKeys(input.data?.inputs ?? [])) {
+    return context.json({ error: 'The category definition is invalid.', requestId }, 400);
+  }
+
+  const id = `custom-${crypto.randomUUID()}`;
+  const ownerId = context.get('ownerId');
+  const now = new Date().toISOString();
+  await context.env.DB.prepare(
+    `INSERT INTO poster_template_categories (
+       id, owner_id, name, inputs_json, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(id, ownerId, input.data.name, JSON.stringify(input.data.inputs), now, now)
+    .run();
+
+  return context.json({
+    id,
+    name: input.data.name,
+    inputs: input.data.inputs,
+    createdAt: now,
+    updatedAt: now,
+    requestId,
+  }, 201);
+});
+
+app.patch('/api/poster-template-categories/:id', async (context) => {
+  const requestId = context.get('requestId');
+  const id = context.req.param('id');
+  const ownerId = context.get('ownerId');
+  const existing = await context.env.DB.prepare(
+    `SELECT id, owner_id, name, inputs_json, created_at, updated_at
+     FROM poster_template_categories
+     WHERE id = ? AND owner_id = ?`,
+  )
+    .bind(id, ownerId)
+    .first<PosterTemplateCategoryRow>();
+  if (!existing) return context.json({ error: 'Category not found.', requestId }, 404);
+
+  const changes = UpdatePosterTemplateCategorySchema.safeParse(
+    JSON.parse(await readBoundedText(context.req.raw, 64_000)),
+  );
+  if (!changes.success || !hasUniqueCategoryInputKeys(changes.data?.inputs ?? [])) {
+    return context.json({ error: 'The category update is invalid.', requestId }, 400);
+  }
+  const previousInputs = parseStoredCategoryInputs(existing.inputs_json);
+  if (!previousInputs) {
+    return context.json({ error: 'The stored category is invalid.', requestId }, 500);
+  }
+  const name = changes.data.name ?? existing.name;
+  const inputs = changes.data.inputs ?? previousInputs;
+  const updatedAt = new Date().toISOString();
+  await context.env.DB.prepare(
+    `UPDATE poster_template_categories
+     SET name = ?, inputs_json = ?, updated_at = ?
+     WHERE id = ? AND owner_id = ?`,
+  )
+    .bind(name, JSON.stringify(inputs), updatedAt, id, ownerId)
+    .run();
+
+  return context.json({
+    id,
+    name,
+    inputs,
+    createdAt: existing.created_at,
+    updatedAt,
+    requestId,
+  });
+});
+
+app.delete('/api/poster-template-categories/:id', async (context) => {
+  const requestId = context.get('requestId');
+  const id = context.req.param('id');
+  const ownerId = context.get('ownerId');
+  const category = await context.env.DB.prepare(
+    'SELECT id FROM poster_template_categories WHERE id = ? AND owner_id = ?',
+  )
+    .bind(id, ownerId)
+    .first<{ id: string }>();
+  if (!category) return context.json({ error: 'Category not found.', requestId }, 404);
+
+  const usage = await context.env.DB.prepare(
+    'SELECT COUNT(*) AS count FROM poster_templates WHERE category = ? AND owner_id = ?',
+  )
+    .bind(id, ownerId)
+    .first<{ count: number }>();
+  if ((usage?.count ?? 0) > 0) {
+    return context.json(
+      { error: 'Move or delete the templates in this category before deleting it.', requestId },
+      409,
+    );
+  }
+
+  await context.env.DB.prepare(
+    'DELETE FROM poster_template_categories WHERE id = ? AND owner_id = ?',
+  )
+    .bind(id, ownerId)
+    .run();
+  return context.body(null, 204);
+});
+
 app.get('/api/poster-templates', async (context) => {
   const result = await context.env.DB.prepare(
     `SELECT id, owner_id, name, category, description, r2_key, thumbnail_r2_key, updated_at
@@ -1976,6 +2121,26 @@ app.onError((error, context) => {
 
 function posterTemplateThumbnailUrl(id: string): string {
   return `/api/poster-templates/${encodeURIComponent(id)}/thumbnail`;
+}
+
+function parseStoredCategoryInputs(value: string): PosterTemplateCategoryInput[] | null {
+  try {
+    const parsed = JSON.parse(value);
+    const result = PosterTemplateCategoryInputSchema.array().max(30).safeParse(parsed);
+    return result.success && hasUniqueCategoryInputKeys(result.data) ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasUniqueCategoryInputKeys(inputs: readonly PosterTemplateCategoryInput[]): boolean {
+  const keys = new Set<string>();
+  for (const input of inputs) {
+    const normalized = input.key.toLowerCase();
+    if (keys.has(normalized)) return false;
+    keys.add(normalized);
+  }
+  return true;
 }
 
 function posterTemplateDocumentKey(ownerId: string, id: string, revision: string): string {

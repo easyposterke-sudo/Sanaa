@@ -56,7 +56,9 @@ export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterA
 
       if (action.chooseAnotherDesign) {
         const templates = getAllPosterTemplates().filter(
-          (template) => (template.fields?.length ?? 0) > 0,
+          (template) =>
+            (template.fields?.length ?? 0) > 0 &&
+            (!session.categoryId || template.category === session.categoryId),
         );
         if (templates.length === 0) throw new Error('No fillable templates are available.');
         const excludedTemplateIds = Array.from(

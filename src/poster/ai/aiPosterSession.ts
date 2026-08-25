@@ -12,5 +12,7 @@ export interface AIPosterSession {
   themeColor: string | null;
   excludedTemplateIds: string[];
   currentTemplateId: string;
+  /** Keeps "another design" inside the poster type the user explicitly chose. */
+  categoryId: string | null;
   typographyMood: import('../../../shared/ai/posterAssistant').PosterTypographyMood | null;
 }

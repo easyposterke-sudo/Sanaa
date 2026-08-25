@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  POSTER_TEMPLATE_CATEGORIES,
   type PosterTemplateCategory,
   type PosterTemplateDefinition,
 } from '../templateTypes';
+import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
 import { usePosterStore } from '../store/posterStore';
 import { useAuthStore } from '../../auth/authStore';
 import { publishPosterTemplateToCloud, updatePosterTemplateFromCloud } from '../services/posterTemplatesApi';
@@ -26,6 +26,7 @@ interface SavePosterTemplateModalProps {
 }
 
 export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCloudEdit = false }: SavePosterTemplateModalProps) {
+  const { categories } = usePosterTemplateCategories();
   const [name, setName] = useState(template.name || 'My template');
   const [category, setCategory] = useState<PosterTemplateCategory>(template.category);
   const [description, setDescription] = useState(template.description ?? '');
@@ -200,9 +201,12 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
                 onChange={(e) => setCategory(e.target.value as PosterTemplateCategory)}
                 className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
               >
-                {POSTER_TEMPLATE_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
+                {!categories.some((item) => item.id === category) && (
+                  <option value={category}>{category}</option>
+                )}
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </select>

@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { PosterTemplateCategoryIdSchema } from '../poster/templateCategory';
 
 export const TEMPLATE_POSTER_SCHEMA_VERSION = 1 as const;
 export const TEMPLATE_POSTER_PROMPT_VERSION = 'template-poster-selector-v3' as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
-const TemplateCategorySchema = z.enum(['church', 'conference', 'business', 'event', 'general']);
+const TemplateCategorySchema = PosterTemplateCategoryIdSchema;
 export const TemplatePosterSemanticRoleSchema = z.enum([
   'title',
   'tagline',
@@ -123,7 +124,6 @@ export const TEMPLATE_POSTER_SELECTION_JSON_SCHEMA = {
 } as const;
 
 export const TEMPLATE_POSTER_MAJOR_FACT_ROLES = [
-  'title',
   'organization',
   'person_name',
   'date',
@@ -151,7 +151,6 @@ export function detectProvidedMajorTemplateFacts(brief: string): TemplatePosterM
     if (matches) facts.add(fact);
   };
 
-  add('title', /\b(?:title|event\s+name)\s*(?::|-|is)\s*\S|\b(?:called|titled|named)\s+["“']?\S/i.test(brief));
   add(
     'organization',
     /\b(?:church|ministry|organization|organisation|company|brand)\s*(?:name)?\s*(?::|-|is)\s*\S|\b(?:hosted|organized|organised|presented)\s+by\s+\S/i.test(brief) ||
@@ -193,7 +192,8 @@ export function detectProvidedMajorTemplateFacts(brief: string): TemplatePosterM
   );
   add(
     'day',
-    /\b(?:every\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i.test(brief),
+    /\bday\s*(?::|-|is)\s*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(brief) ||
+      /\b(?:on|every|this|next)\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i.test(brief),
   );
   add(
     'date',
@@ -505,7 +505,7 @@ function fitFieldValue(
   }
   return {
     value: truncateToFieldLimits(original, field.maxWords, field.maxCharacters, field.maxLines),
-    overflow: isTemplatePosterMajorFactRole(field.semanticRole)
+    overflow: field.semanticRole === 'title' || isTemplatePosterMajorFactRole(field.semanticRole)
       ? ''
       : `${field.label}: ${original}`,
   };

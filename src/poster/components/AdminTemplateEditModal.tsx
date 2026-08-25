@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  POSTER_TEMPLATE_CATEGORIES,
   isValidPosterFieldKey,
   type PosterTemplateCategory,
   type PosterTemplateDefinition,
   type PosterTemplateFieldBinding,
 } from '../templateTypes';
+import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
 import { updatePosterTemplateFromCloud } from '../services/posterTemplatesApi';
 import { usePosterStore } from '../store/posterStore';
 
@@ -58,6 +58,7 @@ export function AdminTemplateEditModal({
   onClose,
   onSaved,
 }: AdminTemplateEditModalProps) {
+  const { categories } = usePosterTemplateCategories();
   const navigate = useNavigate();
   const refreshRemotePosterTemplates = usePosterStore((s) => s.refreshRemotePosterTemplates);
   const loadProject = usePosterStore((s) => s.loadProject);
@@ -164,9 +165,12 @@ export function AdminTemplateEditModal({
                 onChange={(e) => setCategory(e.target.value as PosterTemplateCategory)}
                 className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
               >
-                {POSTER_TEMPLATE_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
+                {!categories.some((item) => item.id === category) && (
+                  <option value={category}>{category}</option>
+                )}
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
                   </option>
                 ))}
               </select>
