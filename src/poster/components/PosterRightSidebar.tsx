@@ -37,8 +37,15 @@ import {
   type FontLibraryEntry,
 } from '../services/fontLibraryApi';
 import { MaskEditorModal } from './MaskEditorModal';
+import { CustomElementsModal } from './CustomElementsModal';
 import { BUILT_IN_TEXTURES } from '../posterTextures';
 import { removeImageBackgroundLocally } from '../services/localBackgroundRemoval';
+import { compressImageToWebp } from '../utils/compressImageToWebp';
+import {
+  buildPosterImageReplacement,
+  readPosterImageDimensions,
+  type PosterImageDimensions,
+} from '../posterImageReplacement';
 import {
   TEXT_CURVE_MAX,
   TEXT_CURVE_MIN,
@@ -1120,6 +1127,10 @@ function PosterImageAppearanceControls({
   const [maskEditorOpen, setMaskEditorOpen] = useState(false);
   const [removingBackground, setRemovingBackground] = useState(false);
   const [backgroundRemovalMessage, setBackgroundRemovalMessage] = useState<string | null>(null);
+  const [customElementsOpen, setCustomElementsOpen] = useState(false);
+  const [replacingImage, setReplacingImage] = useState(false);
+  const [replacementMessage, setReplacementMessage] = useState<string | null>(null);
+  const replacementInputRef = useRef<HTMLInputElement>(null);
   const imageCropTargetId = usePosterStore((s) => s.imageCropTargetId);
   const setImageCropTargetId = usePosterStore((s) => s.setImageCropTargetId);
 
@@ -1143,7 +1154,55 @@ function PosterImageAppearanceControls({
   useEffect(() => {
     setRemovingBackground(false);
     setBackgroundRemovalMessage(null);
+    setCustomElementsOpen(false);
+    setReplacingImage(false);
+    setReplacementMessage(null);
   }, [raster.id]);
+
+  const replaceImageSource = async (
+    nextSrc: string,
+    nextDimensions?: PosterImageDimensions,
+  ) => {
+    if (raster.type !== 'image') return;
+    setReplacingImage(true);
+    setReplacementMessage(null);
+    try {
+      const [currentDimensions, replacementDimensions] = await Promise.all([
+        readPosterImageDimensions(raster.src),
+        nextDimensions ? Promise.resolve(nextDimensions) : readPosterImageDimensions(nextSrc),
+      ]);
+      pushHistory();
+      updateElement(
+        raster.id,
+        buildPosterImageReplacement(raster, nextSrc, currentDimensions, replacementDimensions),
+      );
+      setReplacementMessage('Image replaced. Position, size, crop, and effects were preserved.');
+    } catch (error) {
+      setReplacementMessage(error instanceof Error ? error.message : 'The image could not be replaced.');
+      throw error;
+    } finally {
+      setReplacingImage(false);
+    }
+  };
+
+  const handleReplacementUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || raster.type !== 'image') return;
+    setReplacingImage(true);
+    setReplacementMessage('Preparing replacement…');
+    try {
+      const prepared = await compressImageToWebp(file, { maxLongEdge: 4096, quality: 0.88 });
+      await replaceImageSource(
+        prepared.dataUrl,
+        { width: prepared.width, height: prepared.height },
+      );
+    } catch (error) {
+      setReplacementMessage(error instanceof Error ? error.message : 'The image could not be replaced.');
+    } finally {
+      setReplacingImage(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
@@ -1163,6 +1222,53 @@ function PosterImageAppearanceControls({
                 ? 'Finish other crop first'
                 : 'Crop on canvas'}
           </button>
+        </div>
+      )}
+
+      {raster.type === 'image' && (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+          <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">Replace image</p>
+          <p className="text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400">
+            Swap the photo without losing its position, displayed size, crop, mask, or effects.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => replacementInputRef.current?.click()}
+              disabled={readOnly || !!raster.locked || replacingImage}
+              className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {replacingImage ? 'Replacing…' : 'Upload replacement'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCustomElementsOpen(true)}
+              disabled={readOnly || !!raster.locked || replacingImage}
+              className="rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-900 dark:text-amber-200"
+            >
+              My Custom Elements
+            </button>
+          </div>
+          <input
+            ref={replacementInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(event) => void handleReplacementUpload(event)}
+          />
+          {replacementMessage && (
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-300" role="status">
+              {replacementMessage}
+            </p>
+          )}
+          <CustomElementsModal
+            open={customElementsOpen}
+            mode="replace"
+            onClose={() => setCustomElementsOpen(false)}
+            onPick={async (element) => {
+              await replaceImageSource(element.url);
+            }}
+          />
         </div>
       )}
 

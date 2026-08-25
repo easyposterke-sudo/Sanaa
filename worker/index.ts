@@ -68,6 +68,14 @@ import {
   fontOwnerMatches,
   listFontLibrary,
 } from './fontLibrary';
+import {
+  MAX_CUSTOM_ELEMENT_BYTES,
+  cleanCustomElementLabel,
+  customElementObjectKey,
+  isCustomElementCategory,
+  isCustomElementMediaType,
+  matchesCustomElementSignature,
+} from './customElementLibrary';
 
 type Variables = {
   ownerId: string;
@@ -121,6 +129,17 @@ type OwnedPosterTemplateListRow = PosterTemplateRow & {
 type PosterBackgroundRow = {
   id: string;
   label: string;
+  r2_key: string;
+  file_name: string;
+  media_type: string;
+  byte_size: number;
+  created_at: string;
+};
+
+type CustomElementRow = {
+  id: string;
+  label: string;
+  category: string;
   r2_key: string;
   file_name: string;
   media_type: string;
@@ -281,6 +300,145 @@ app.delete('/api/fonts/:id', async (context) => {
   }
   await context.env.ASSETS.delete(objectKey);
   return context.json({ ok: true, id: context.req.param('id') });
+});
+
+app.get('/api/custom-elements', async (context) => {
+  const result = await context.env.DB.prepare(
+    `SELECT id, label, category, r2_key, file_name, media_type, byte_size, created_at
+     FROM custom_elements
+     WHERE owner_id = ? AND archived_at IS NULL
+     ORDER BY created_at DESC
+     LIMIT 200`,
+  )
+    .bind(context.get('ownerId'))
+    .all<CustomElementRow>();
+
+  context.header('cache-control', 'private, no-store');
+  return context.json(
+    result.results.map((row) => ({
+      id: row.id,
+      label: row.label,
+      category: row.category,
+      url: `/api/custom-elements/${encodeURIComponent(row.id)}/file`,
+      originalName: row.file_name,
+      mediaType: row.media_type,
+      byteSize: row.byte_size,
+      createdAt: row.created_at,
+    })),
+  );
+});
+
+app.post('/api/custom-elements', async (context) => {
+  const requestId = context.get('requestId');
+  const contentLength = parseContentLength(context.req.header('content-length'));
+  if (contentLength !== null && contentLength > MAX_CUSTOM_ELEMENT_BYTES) {
+    return context.json({ error: 'Custom elements must be 20 MB or smaller.', requestId }, 413);
+  }
+
+  const mediaType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase() || '';
+  if (!isCustomElementMediaType(mediaType)) {
+    return context.json(
+      { error: 'Custom elements must be PNG, JPEG, or WebP images.', requestId },
+      415,
+    );
+  }
+  const category = context.req.header('x-element-category')?.trim().toLowerCase() || '';
+  if (!isCustomElementCategory(category)) {
+    return context.json({ error: 'Choose a valid custom element category.', requestId }, 400);
+  }
+
+  const bytes = new Uint8Array(
+    await readBoundedBytes(
+      context.req.raw,
+      MAX_CUSTOM_ELEMENT_BYTES,
+      'Custom elements must be 20 MB or smaller.',
+    ),
+  );
+  if (bytes.byteLength === 0) {
+    return context.json({ error: 'Choose an image to upload.', requestId }, 400);
+  }
+  if (!matchesCustomElementSignature(mediaType, bytes)) {
+    return context.json({ error: 'The uploaded custom element is not a valid image.', requestId }, 400);
+  }
+
+  const ownerId = context.get('ownerId');
+  const id = crypto.randomUUID();
+  const fileName = cleanFileName(context.req.header('x-file-name') || `element.${mediaType.slice(6)}`);
+  const fallbackLabel = fileName.replace(/\.[^.]+$/, '') || 'Custom element';
+  const label = cleanCustomElementLabel(
+    context.req.header('x-element-label') || '',
+    fallbackLabel,
+  );
+  const r2Key = customElementObjectKey(ownerId, id, fileName);
+  await context.env.ASSETS.put(r2Key, bytes, {
+    httpMetadata: {
+      contentType: mediaType,
+      cacheControl: 'private, max-age=31536000, immutable',
+    },
+    customMetadata: { customElementId: id, ownerId, label, category, fileName },
+  });
+
+  const createdAt = new Date().toISOString();
+  try {
+    await context.env.DB.prepare(
+      `INSERT INTO custom_elements (
+         id, owner_id, label, category, r2_key, file_name, media_type, byte_size, created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(id, ownerId, label, category, r2Key, fileName, mediaType, bytes.byteLength, createdAt)
+      .run();
+  } catch (error) {
+    await context.env.ASSETS.delete(r2Key);
+    throw error;
+  }
+
+  return context.json(
+    {
+      id,
+      label,
+      category,
+      url: `/api/custom-elements/${encodeURIComponent(id)}/file`,
+      originalName: fileName,
+      mediaType,
+      byteSize: bytes.byteLength,
+      createdAt,
+      requestId,
+    },
+    201,
+  );
+});
+
+app.get('/api/custom-elements/:id/file', async (context) => {
+  const row = await context.env.DB.prepare(
+    `SELECT id, label, category, r2_key, file_name, media_type, byte_size, created_at
+     FROM custom_elements
+     WHERE id = ? AND owner_id = ? AND archived_at IS NULL`,
+  )
+    .bind(context.req.param('id'), context.get('ownerId'))
+    .first<CustomElementRow>();
+  if (!row) return context.json({ error: 'Custom element not found.' }, 404);
+
+  const object = await context.env.ASSETS.get(row.r2_key);
+  if (!object) return context.json({ error: 'Custom element image is unavailable.' }, 503);
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('cache-control', 'private, max-age=31536000, immutable');
+  headers.set('content-disposition', `inline; filename="${row.file_name.replaceAll('"', '')}"`);
+  headers.set('x-content-type-options', 'nosniff');
+  return new Response(object.body, { headers });
+});
+
+app.delete('/api/custom-elements/:id', async (context) => {
+  const result = await context.env.DB.prepare(
+    `UPDATE custom_elements
+     SET archived_at = ?
+     WHERE id = ? AND owner_id = ? AND archived_at IS NULL`,
+  )
+    .bind(new Date().toISOString(), context.req.param('id'), context.get('ownerId'))
+    .run();
+  if (result.meta.changes === 0) return context.json({ error: 'Custom element not found.' }, 404);
+  return context.body(null, 204);
 });
 
 app.get('/api/poster-backgrounds', async (context) => {

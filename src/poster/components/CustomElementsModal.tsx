@@ -1,39 +1,48 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  CUSTOM_ELEMENT_CATEGORIES,
+  deleteCustomElement,
   listCustomElements,
   uploadCustomElement,
-  deleteCustomElement,
-  CUSTOM_ELEMENT_CATEGORIES,
   type CustomElement,
   type CustomElementCategory,
 } from '../services/customElementsApi';
+import { compressImageToWebp } from '../utils/compressImageToWebp';
 
 interface CustomElementsModalProps {
   open: boolean;
   onClose: () => void;
-  onPick: (url: string) => void;
-  isAdmin?: boolean;
+  onPick: (element: CustomElement) => Promise<void> | void;
+  mode?: 'add' | 'replace';
 }
 
-export function CustomElementsModal({ open, onClose, onPick, isAdmin = false }: CustomElementsModalProps) {
+export function CustomElementsModal({
+  open,
+  onClose,
+  onPick,
+  mode = 'add',
+}: CustomElementsModalProps) {
   const [elements, setElements] = useState<CustomElement[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CustomElementCategory | ''>('');
-  const [adminExpanded, setAdminExpanded] = useState(false);
+  const [uploadExpanded, setUploadExpanded] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadLabel, setUploadLabel] = useState('');
-  const [uploadCategory, setUploadCategory] = useState<CustomElementCategory>('icons');
+  const [uploadCategory, setUploadCategory] = useState<CustomElementCategory>('logos');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
 
   const fetchElements = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const list = await listCustomElements();
-      setElements(list);
-    } catch {
+      setElements(await listCustomElements());
+    } catch (error) {
       setElements([]);
+      setLoadError(error instanceof Error ? error.message : 'Could not load your custom elements.');
     } finally {
       setLoading(false);
     }
@@ -44,54 +53,56 @@ export function CustomElementsModal({ open, onClose, onPick, isAdmin = false }: 
   }, [open, fetchElements]);
 
   const filtered = useMemo(() => {
-    let list = elements;
-    if (categoryFilter) {
-      list = list.filter((e) => e.category === categoryFilter);
-    }
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((e) => e.label.toLowerCase().includes(q));
-    }
-    return list;
-  }, [elements, categoryFilter, search]);
+    const query = search.trim().toLowerCase();
+    return elements.filter((element) => {
+      if (categoryFilter && element.category !== categoryFilter) return false;
+      return !query || element.label.toLowerCase().includes(query);
+    });
+  }, [categoryFilter, elements, search]);
 
-  const handlePick = (url: string) => {
-    onPick(url);
-    onClose();
+  const handlePick = async (element: CustomElement) => {
+    setApplyingId(element.id);
+    setLoadError(null);
+    try {
+      await onPick(element);
+      onClose();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not use this custom element.');
+    } finally {
+      setApplyingId(null);
+    }
   };
 
   const handleUpload = async () => {
     if (!uploadFile) {
-      setUploadError('Select a file first');
-      return;
-    }
-    const label = uploadLabel.trim() || uploadFile.name.replace(/\.[^.]+$/, '');
-    if (!label) {
-      setUploadError('Enter a label');
+      setUploadError('Choose a PNG, JPEG, or WebP image first.');
       return;
     }
     setUploading(true);
     setUploadError(null);
     try {
-      await uploadCustomElement(uploadFile, label, uploadCategory);
+      const prepared = await compressImageToWebp(uploadFile, { maxLongEdge: 4096, quality: 0.88 });
+      const label = uploadLabel.trim() || uploadFile.name.replace(/\.[^.]+$/, '') || 'Custom element';
+      const created = await uploadCustomElement(prepared.file, label, uploadCategory);
+      setElements((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setUploadFile(null);
       setUploadLabel('');
-      await fetchElements();
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+      await handlePick(created);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Upload failed.');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('Delete this element?')) return;
+  const handleDelete = async (id: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!window.confirm('Delete this custom element from your library?')) return;
     try {
       await deleteCustomElement(id);
-      await fetchElements();
-    } catch {
-      // ignore
+      setElements((current) => current.filter((element) => element.id !== id));
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not delete this custom element.');
     }
   };
 
@@ -99,165 +110,147 @@ export function CustomElementsModal({ open, onClose, onPick, isAdmin = false }: 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="custom-elements-title"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
         <div className="shrink-0 border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
-          <h2 id="custom-elements-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Custom Elements
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Icons, logos, decorative elements. Click to add to your poster.
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="custom-elements-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                My Custom Elements
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                Keep logos, portraits, photos, and graphics ready for every poster.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-2 py-1 text-xl leading-none text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800"
+              aria-label="Close custom elements"
+            >
+              ×
+            </button>
+          </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
             <input
-              type="text"
+              type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search elements…"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:border-zinc-700 dark:bg-zinc-800 dark:placeholder-zinc-500 dark:focus:border-zinc-500 dark:focus:ring-zinc-500"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search my elements…"
+              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-amber-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800"
             />
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter((e.target.value || '') as CustomElementCategory | '')}
+              onChange={(event) => setCategoryFilter((event.target.value || '') as CustomElementCategory | '')}
               className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
             >
               <option value="">All categories</option>
-              {CUSTOM_ELEMENT_CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
+              {CUSTOM_ELEMENT_CATEGORIES.map((category) => (
+                <option key={category.value} value={category.value}>{category.label}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setUploadExpanded((current) => !current)}
+              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+            >
+              {uploadExpanded ? 'Cancel upload' : 'Upload new'}
+            </button>
           </div>
 
-          {isAdmin && (
-            <div className="mt-4">
+          {uploadExpanded && (
+            <div className="mt-3 grid gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 sm:grid-cols-[1fr_1fr_auto] dark:border-amber-900 dark:bg-amber-950/20">
+              <div className="sm:col-span-3">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    setUploadFile(file);
+                    if (file && !uploadLabel.trim()) setUploadLabel(file.name.replace(/\.[^.]+$/, ''));
+                    setUploadError(null);
+                  }}
+                  className="block w-full text-xs file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-2 dark:file:bg-zinc-700"
+                />
+              </div>
+              <input
+                type="text"
+                value={uploadLabel}
+                onChange={(event) => setUploadLabel(event.target.value)}
+                placeholder="Name (e.g. Church logo)"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+              <select
+                value={uploadCategory}
+                onChange={(event) => setUploadCategory(event.target.value as CustomElementCategory)}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              >
+                {CUSTOM_ELEMENT_CATEGORIES.map((category) => (
+                  <option key={category.value} value={category.value}>{category.label}</option>
+                ))}
+              </select>
               <button
                 type="button"
-                onClick={() => setAdminExpanded((x) => !x)}
-                className="text-sm font-medium text-amber-700 dark:text-amber-300"
+                disabled={!uploadFile || uploading}
+                onClick={() => void handleUpload()}
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
               >
-                {adminExpanded ? '− Hide upload' : '+ Upload new element'}
+                {uploading ? 'Saving…' : mode === 'replace' ? 'Save & replace' : 'Save & add'}
               </button>
-              {adminExpanded && (
-                <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
-                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    File (PNG, SVG)
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*,.svg"
-                    onChange={(e) => {
-                      setUploadFile(e.target.files?.[0] ?? null);
-                      setUploadError(null);
-                    }}
-                    className="mb-2 block w-full text-xs file:rounded file:border-0 file:bg-zinc-200 file:px-2 file:py-1 dark:file:bg-zinc-700"
-                  />
-                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Label
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadLabel}
-                    onChange={(e) => setUploadLabel(e.target.value)}
-                    placeholder="Element name"
-                    className="mb-2 w-full rounded border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-                  />
-                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                    Category
-                  </label>
-                  <select
-                    value={uploadCategory}
-                    onChange={(e) => setUploadCategory(e.target.value as CustomElementCategory)}
-                    className="mb-2 w-full rounded border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
-                  >
-                    {CUSTOM_ELEMENT_CATEGORIES.map((c) => (
-                      <option key={c.value} value={c.value}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={uploading || !uploadFile}
-                    onClick={handleUpload}
-                    className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
-                  >
-                    {uploading ? 'Saving…' : 'Save to cloud'}
-                  </button>
-                  {uploadError && (
-                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
-                  )}
-                </div>
-              )}
+              {uploadError && <p className="text-xs text-red-600 sm:col-span-3 dark:text-red-400">{uploadError}</p>}
             </div>
           )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {loadError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{loadError}</p>}
           {loading ? (
-            <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">Loading…</p>
+            <p className="py-10 text-center text-sm text-zinc-500">Loading your elements…</p>
           ) : filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              {elements.length === 0
-                ? 'No custom elements yet. Admins can upload icons, logos, and decorative images.'
-                : 'No elements match your search.'}
-            </p>
+            <div className="rounded-xl border border-dashed border-zinc-300 px-5 py-10 text-center dark:border-zinc-700">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {elements.length === 0 ? 'Your custom element library is empty.' : 'No elements match your search.'}
+              </p>
+              {elements.length === 0 && <p className="mt-1 text-xs text-zinc-500">Upload a logo or frequently used photo to get started.</p>}
+            </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
-              {filtered.map((el) => (
-                <div
-                  key={el.id}
-                  className="group relative flex flex-col items-center rounded-lg border border-zinc-200 bg-zinc-50 p-2 transition hover:border-amber-400 hover:bg-amber-50/50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-amber-500 dark:hover:bg-amber-950/20"
-                >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {filtered.map((element) => (
+                <div key={element.id} className="group relative overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition hover:border-amber-400 dark:border-zinc-700 dark:bg-zinc-800">
                   <button
                     type="button"
-                    onClick={() => handlePick(el.url)}
-                    className="flex w-full flex-col items-center"
+                    disabled={applyingId != null}
+                    onClick={() => void handlePick(element)}
+                    className="flex w-full flex-col items-center p-2 disabled:opacity-60"
                   >
-                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-white dark:border-zinc-600 dark:bg-zinc-900">
-                      <img
-                        src={el.url}
-                        alt={el.label}
-                        className="max-h-full max-w-full object-contain"
-                      />
+                    <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-white dark:bg-zinc-950">
+                      <img src={element.url} alt={element.label} className="h-full w-full object-contain" />
                     </div>
-                    <span className="mt-1.5 w-full truncate text-center text-xs font-medium text-zinc-800 dark:text-zinc-200">
-                      {el.label}
+                    <span className="mt-2 w-full truncate text-left text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                      {applyingId === element.id ? (mode === 'replace' ? 'Replacing…' : 'Adding…') : element.label}
                     </span>
+                    <span className="w-full text-left text-[10px] capitalize text-zinc-500">{element.category}</span>
                   </button>
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleDelete(el.id, e)}
-                      className="absolute right-1 top-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 opacity-0 transition group-hover:opacity-100 hover:bg-red-200 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/50"
-                      aria-label={`Delete ${el.label}`}
-                    >
-                      Delete
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={(event) => void handleDelete(element.id, event)}
+                    className="absolute right-1 top-1 rounded bg-white/90 px-1.5 py-1 text-[10px] font-semibold text-red-600 opacity-0 shadow transition group-hover:opacity-100 focus:opacity-100 dark:bg-zinc-900/90"
+                    aria-label={`Delete ${element.label}`}
+                  >
+                    Delete
+                  </button>
                 </div>
               ))}
             </div>
           )}
-        </div>
-
-        <div className="shrink-0 border-t border-zinc-200 px-5 py-3 dark:border-zinc-700">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

@@ -6,8 +6,10 @@ import { getFabricCanvasRef } from '../canvasRef';
 import { posterShapePresetToElement } from '../posterShapePresets';
 import { PosterShapesModal } from './PosterShapesModal';
 import { PosterBackgroundsModal } from './PosterBackgroundsModal';
+import { CustomElementsModal } from './CustomElementsModal';
 import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
 import type { PosterBackgroundLibraryItem } from '../services/posterBackgroundsApi';
+import type { CustomElement } from '../services/customElementsApi';
 import { fetchMyPosterTemplateList } from '../services/posterTemplatesApi';
 import { compressImageToWebp } from '../utils/compressImageToWebp';
 import type {
@@ -110,6 +112,7 @@ export function PosterLeftSidebar({
   const updateElement = usePosterStore((s) => s.updateElement);
   const [shapesModalOpen, setShapesModalOpen] = useState(false);
   const [backgroundsModalOpen, setBackgroundsModalOpen] = useState(false);
+  const [customElementsModalOpen, setCustomElementsModalOpen] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [layerDragFromIndex, setLayerDragFromIndex] = useState<number | null>(null);
   const [layerDragOverIndex, setLayerDragOverIndex] = useState<number | null>(null);
@@ -270,6 +273,18 @@ export function PosterLeftSidebar({
     } as NewPosterImagePayload);
   };
 
+  const handleUseCustomElement = async (element: CustomElement) => {
+    const dimensions = await readImageDimensions(element.url);
+    const fitScale = Math.min(1, 480 / dimensions.width, 480 / dimensions.height);
+    addElement({
+      ...newImageDefaults(),
+      src: element.url,
+      scaleX: fitScale,
+      scaleY: fitScale,
+      layerName: element.label,
+    } as NewPosterImagePayload);
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4">
       {onOpenTemplateCreator && (
@@ -357,6 +372,13 @@ export function PosterLeftSidebar({
           >
             Backgrounds
           </button>
+          <button
+            type="button"
+            onClick={guard(() => setCustomElementsModalOpen(true))}
+            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/60"
+          >
+            My Custom Elements
+          </button>
         </div>
       </div>
 
@@ -370,6 +392,12 @@ export function PosterLeftSidebar({
         open={backgroundsModalOpen}
         onClose={() => setBackgroundsModalOpen(false)}
         onPick={handleUseBackground}
+      />
+
+      <CustomElementsModal
+        open={customElementsModalOpen}
+        onClose={() => setCustomElementsModalOpen(false)}
+        onPick={handleUseCustomElement}
       />
 
       <div>
