@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TemplatePosterRequestSchema } from '../../shared/ai/templatePoster';
-import { selectTemplatePosterWithOpenAI } from './openAiTemplatePoster';
+import {
+  OpenAiTemplatePosterError,
+  selectTemplatePosterWithOpenAI,
+} from './openAiTemplatePoster';
 
 const request = TemplatePosterRequestSchema.parse({
-  brief: 'Create a worship experience on Sunday at Grace Chapel.',
+  brief: 'Create a worship experience poster.',
   themeColor: null,
   images: [],
   excludedTemplateIds: [],
@@ -157,5 +160,24 @@ describe('OpenAI template poster selector', () => {
     };
     expect(payload.text?.format?.schema?.properties?.templateId?.enum).toEqual(['church-two']);
     expect(payloadText).not.toContain('church-one');
+  });
+
+  it('does not call the model when no template can represent supplied major facts', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const incompatibleRequest = TemplatePosterRequestSchema.parse({
+      ...request,
+      brief: 'Create a worship poster. Theme: Arise.',
+    });
+
+    const error = await selectTemplatePosterWithOpenAI({
+      apiKey: 'test-key',
+      model: 'test-model',
+      request: incompatibleRequest,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(OpenAiTemplatePosterError);
+    expect(error).toMatchObject({ code: 'NO_COMPATIBLE_TEMPLATE', status: 422 });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

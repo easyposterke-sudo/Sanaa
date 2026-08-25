@@ -20,6 +20,8 @@ import {
   TEMPLATE_POSTER_PROMPT_VERSION,
   TemplatePosterRequestSchema,
   createFallbackTemplatePosterSelection,
+  detectProvidedMajorTemplateFacts,
+  getSelectableTemplatePosterCatalog,
 } from '../shared/ai/templatePoster';
 import {
   POSTER_ASSISTANT_PROMPT_VERSION,
@@ -603,6 +605,19 @@ app.post('/api/ai/template-poster', async (context) => {
     );
   }
   const request = parsed.data;
+  if (getSelectableTemplatePosterCatalog(request).length === 0) {
+    const requiredFacts = detectProvidedMajorTemplateFacts(request.brief)
+      .map((fact) => fact.replace(/_/g, ' '))
+      .join(', ');
+    return context.json(
+      {
+        error: `No available template has labeled fields for all supplied major details${requiredFacts ? `: ${requiredFacts}` : ''}.`,
+        code: 'NO_COMPATIBLE_TEMPLATE',
+        requestId,
+      },
+      422,
+    );
+  }
   const developmentMode = String(context.env.APP_ENV) === 'development';
   const apiKey = context.env.OPENAI_API_KEY?.trim();
   const model = context.env.OPENAI_MODEL?.trim() || 'gpt-5.6-luna';

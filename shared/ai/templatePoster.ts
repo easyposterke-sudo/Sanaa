@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const TEMPLATE_POSTER_SCHEMA_VERSION = 1 as const;
-export const TEMPLATE_POSTER_PROMPT_VERSION = 'template-poster-selector-v2' as const;
+export const TEMPLATE_POSTER_PROMPT_VERSION = 'template-poster-selector-v3' as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const TemplateCategorySchema = z.enum(['church', 'conference', 'business', 'event', 'general']);
@@ -15,6 +15,10 @@ export const TemplatePosterSemanticRoleSchema = z.enum([
   'time',
   'venue',
   'contact',
+  'phone',
+  'website',
+  'email',
+  'theme',
   'extra_details',
   'other',
 ]);
@@ -27,6 +31,7 @@ export const TemplatePosterFieldSchema = z
     label: z.string().trim().min(1).max(100),
     kind: z.enum(['text', 'image']),
     semanticRole: TemplatePosterSemanticRoleSchema.default('other'),
+    supportedFacts: z.array(TemplatePosterSemanticRoleSchema).max(12).default([]),
     sampleText: z.string().max(500).default(''),
     maxWords: z.number().int().min(1).max(100).nullable().default(null),
     maxCharacters: z.number().int().min(1).max(500).nullable().default(null),
@@ -117,13 +122,129 @@ export const TEMPLATE_POSTER_SELECTION_JSON_SCHEMA = {
   },
 } as const;
 
+export const TEMPLATE_POSTER_MAJOR_FACT_ROLES = [
+  'title',
+  'organization',
+  'person_name',
+  'date',
+  'day',
+  'time',
+  'venue',
+  'contact',
+  'phone',
+  'website',
+  'email',
+  'theme',
+] as const satisfies readonly TemplatePosterSemanticRole[];
+
+export type TemplatePosterMajorFactRole = (typeof TEMPLATE_POSTER_MAJOR_FACT_ROLES)[number];
+
+export function isTemplatePosterMajorFactRole(
+  role: TemplatePosterSemanticRole,
+): role is TemplatePosterMajorFactRole {
+  return (TEMPLATE_POSTER_MAJOR_FACT_ROLES as readonly TemplatePosterSemanticRole[]).includes(role);
+}
+
+export function detectProvidedMajorTemplateFacts(brief: string): TemplatePosterMajorFactRole[] {
+  const facts = new Set<TemplatePosterMajorFactRole>();
+  const add = (fact: TemplatePosterMajorFactRole, matches: boolean) => {
+    if (matches) facts.add(fact);
+  };
+
+  add('title', /\b(?:title|event\s+name)\s*(?::|-|is)\s*\S|\b(?:called|titled|named)\s+["“']?\S/i.test(brief));
+  add(
+    'organization',
+    /\b(?:church|ministry|organization|organisation|company|brand)\s*(?:name)?\s*(?::|-|is)\s*\S|\b(?:hosted|organized|organised|presented)\s+by\s+\S/i.test(brief) ||
+      /\b(?:[A-Z][\p{L}'’.-]*\s+){1,6}(?:Church|Chapel|Ministr(?:y|ies)|Fellowship)\b/u.test(brief),
+  );
+  add(
+    'person_name',
+    /\b(?:pastor|pst\.?|preacher|speaker|guest|minister|presenter|host)\s*(?::|-|is)?\s+[A-Z][\p{L}'’.-]+/u.test(brief),
+  );
+  add(
+    'theme',
+    /\b(?:theme|motto|scripture|verse)\s*(?::|-|is)\s*["“']?\S/i.test(brief),
+  );
+  add(
+    'venue',
+    /\b(?:venue|location|address)\s*(?::|-|is)\s*\S|\b(?:held|happening|located|taking\s+place)\s+at\s+\S/i.test(brief),
+  );
+
+  const hasPhone = /\b(?:phone|telephone|tel\.?|mobile|call|whatsapp)\b\s*(?::|-)?\s*\+?[\d(]/i.test(brief) ||
+    /(?:\+\d[\d\s().-]{7,}\d|\b0\d{8,14}\b)/.test(brief);
+  const hasWebsite = /\b(?:website|web\s*site|url)\s*(?::|-|is)?\s*(?:https?:\/\/|www\.|[\w-]+\.)/i.test(brief) ||
+    /\b(?:https?:\/\/|www\.)\S+/i.test(brief) ||
+    /\b[\w-]+\.(?:com|org|net|co|io|church|africa|ke|uk|us)(?:\/\S*)?\b/i.test(brief);
+  const hasEmail = /\bemail\s*(?::|-|is)?\s*[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(brief) ||
+    /\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(brief);
+  add('phone', hasPhone);
+  add('website', hasWebsite);
+  add('email', hasEmail);
+  add(
+    'contact',
+    !hasPhone && !hasWebsite && !hasEmail && /\bcontact(?:\s+details?|\s+info(?:rmation)?)?\s*(?::|-|is)\s*\S/i.test(brief),
+  );
+
+  add(
+    'time',
+    /\b(?:time|starts?|starting|begins?|ending|finishes?)\s*(?::|-|is|at)\s*\d/i.test(brief) ||
+      /\bat\s+\d{1,2}(?=\s|[.,;]|$)/i.test(brief) ||
+      /\b\d{1,2}(?::\d{2}|\.\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/i.test(brief),
+  );
+  add(
+    'day',
+    /\b(?:every\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?\b/i.test(brief),
+  );
+  add(
+    'date',
+    /\bdate\s*(?::|-|is)\s*\S/i.test(brief) ||
+      /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.test(brief) ||
+      /\b\d{1,2}(?:st|nd|rd|th)?[\s/-]+(?:\d{1,2}|[a-z]{3,9})[\s/-]+\d{2,4}\b/i.test(brief),
+  );
+
+  return TEMPLATE_POSTER_MAJOR_FACT_ROLES.filter((fact) => facts.has(fact));
+}
+
+export function getTemplatePosterFieldSupportedFacts(
+  field: TemplatePosterCatalogItem['fields'][number],
+): TemplatePosterSemanticRole[] {
+  return field.supportedFacts.length > 0 ? field.supportedFacts : [field.semanticRole];
+}
+
+export function templateSupportsMajorTemplateFacts(
+  template: TemplatePosterCatalogItem,
+  requiredFacts: readonly TemplatePosterMajorFactRole[],
+): boolean {
+  const supported = new Set(
+    template.fields
+      .filter((field) => field.kind === 'text')
+      .flatMap((field) => getTemplatePosterFieldSupportedFacts(field)),
+  );
+  return requiredFacts.every((fact) => {
+    if (fact === 'day') return supported.has('day') || supported.has('date');
+    if (fact === 'contact') {
+      return ['contact', 'phone', 'website', 'email'].some((role) =>
+        supported.has(role as TemplatePosterSemanticRole),
+      );
+    }
+    if (fact === 'phone' || fact === 'website' || fact === 'email') {
+      return supported.has(fact) || supported.has('contact');
+    }
+    return supported.has(fact);
+  });
+}
+
 export function getSelectableTemplatePosterCatalog(
   request: TemplatePosterRequest,
 ): TemplatePosterCatalogItem[] {
   const available = request.templates.filter(
     (template) => !request.excludedTemplateIds.includes(template.id),
   );
-  return available.length > 0 ? available : request.templates;
+  const candidates = available.length > 0 ? available : request.templates;
+  const requiredFacts = detectProvidedMajorTemplateFacts(request.brief);
+  return candidates.filter((template) =>
+    templateSupportsMajorTemplateFacts(template, requiredFacts),
+  );
 }
 
 export function validateTemplatePosterSelection(
@@ -132,6 +253,9 @@ export function validateTemplatePosterSelection(
 ): TemplatePosterSelection | null {
   const template = request.templates.find((item) => item.id === selection.templateId);
   if (!template) return null;
+  if (!templateSupportsMajorTemplateFacts(template, detectProvidedMajorTemplateFacts(request.brief))) {
+    return null;
+  }
 
   const alternatives = request.templates.filter(
     (item) => !request.excludedTemplateIds.includes(item.id),
@@ -348,7 +472,16 @@ function fitFieldValue(
   // Proper names are identity data, not expendable copy. Preserve the complete
   // organization/church name and every person's name even when the sample was
   // shorter. They must never be abbreviated or moved into extra details.
-  if (field.semanticRole === 'organization' || field.semanticRole === 'person_name') {
+  if (
+    field.semanticRole === 'organization' ||
+    field.semanticRole === 'person_name' ||
+    field.semanticRole === 'theme' ||
+    field.semanticRole === 'venue' ||
+    field.semanticRole === 'contact' ||
+    field.semanticRole === 'phone' ||
+    field.semanticRole === 'website' ||
+    field.semanticRole === 'email'
+  ) {
     return { value: original, overflow: '' };
   }
 
@@ -372,7 +505,9 @@ function fitFieldValue(
   }
   return {
     value: truncateToFieldLimits(original, field.maxWords, field.maxCharacters, field.maxLines),
-    overflow: `${field.label}: ${original}`,
+    overflow: isTemplatePosterMajorFactRole(field.semanticRole)
+      ? ''
+      : `${field.label}: ${original}`,
   };
 }
 

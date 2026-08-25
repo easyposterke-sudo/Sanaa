@@ -19,6 +19,7 @@ const catalog: TemplatePosterCatalogItem[] = [
         label: 'Time',
         kind: 'text',
         semanticRole: 'time',
+        supportedFacts: ['time'],
         sampleText: '08\nPM',
         maxWords: 2,
         maxCharacters: 8,
@@ -30,6 +31,7 @@ const catalog: TemplatePosterCatalogItem[] = [
         label: 'Other details',
         kind: 'text',
         semanticRole: 'extra_details',
+        supportedFacts: ['extra_details'],
         sampleText: 'Other details',
         maxWords: 80,
         maxCharacters: 500,
@@ -42,7 +44,7 @@ const catalog: TemplatePosterCatalogItem[] = [
 
 const requestFor = (templates: TemplatePosterCatalogItem[]) =>
   TemplatePosterRequestSchema.parse({
-    brief: 'Sunday service with first service at 8am and second service at 9:30am.',
+    brief: 'Create a simple church service poster.',
     themeColor: null,
     images: [],
     templates,
@@ -99,6 +101,7 @@ describe('template poster structural constraints', () => {
             label: 'Event title',
             kind: 'text',
             semanticRole: 'title',
+            supportedFacts: ['title'],
             sampleText: 'Sunday Service',
             maxWords: 4,
             maxCharacters: 30,
@@ -139,6 +142,7 @@ describe('template poster structural constraints', () => {
             label: 'Church name',
             kind: 'text',
             semanticRole: 'organization',
+            supportedFacts: ['organization'],
             sampleText: 'Church Name',
             maxWords: 2,
             maxCharacters: 16,
@@ -150,6 +154,7 @@ describe('template poster structural constraints', () => {
             label: 'Pastor name',
             kind: 'text',
             semanticRole: 'person_name',
+            supportedFacts: ['person_name'],
             sampleText: 'Pastor Name',
             maxWords: 2,
             maxCharacters: 14,
@@ -182,6 +187,46 @@ describe('template poster structural constraints', () => {
 
     expect(fieldValue(selection, 'churchName')).toBe('Christ Ekklesia Fellowship Chapel');
     expect(fieldValue(selection, 'pastorName')).toBe('Pastor David Kiplagat Kituyi');
+    expect(fieldValue(selection, 'otherDetails')).toBeUndefined();
+  });
+
+  it('does not copy structural overflow from a major field into other details', () => {
+    const titleCatalog: TemplatePosterCatalogItem[] = [
+      {
+        ...catalog[0],
+        fields: [
+          {
+            key: 'eventTitle',
+            label: 'Event title',
+            kind: 'text',
+            semanticRole: 'title',
+            supportedFacts: ['title'],
+            sampleText: 'Sunday Service',
+            maxWords: 4,
+            maxCharacters: 30,
+            maxLines: 1,
+            optional: false,
+          },
+          catalog[0].fields[1],
+        ],
+      },
+    ];
+    const selection = validateTemplatePosterSelection(
+      requestFor(titleCatalog),
+      TemplatePosterSelectionSchema.parse({
+        schemaVersion: 1,
+        templateId: 'sunday-service',
+        fields: [
+          {
+            key: 'eventTitle',
+            value: 'Annual International Youth Worship Celebration Experience',
+            imageIndex: null,
+          },
+        ],
+      }),
+    );
+
+    expect(fieldValue(selection, 'eventTitle')).toBe('Annual International Youth');
     expect(fieldValue(selection, 'otherDetails')).toBeUndefined();
   });
 });

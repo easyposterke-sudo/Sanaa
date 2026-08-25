@@ -20,7 +20,12 @@ const request: TemplatePosterRequest = TemplatePosterRequestSchema.parse({
       name: 'Sunday service words only',
       category: 'church',
       description: 'A church service design without portraits.',
-      fields: [{ key: 'event_title', label: 'Event title', kind: 'text' }],
+      fields: [
+        { key: 'event_title', label: 'Event title', kind: 'text', supportedFacts: ['title'] },
+        { key: 'service_when', label: 'Date and time', kind: 'text', supportedFacts: ['date', 'day', 'time'] },
+        { key: 'event_theme', label: 'Theme', kind: 'text', supportedFacts: ['theme'] },
+        { key: 'event_venue', label: 'Venue', kind: 'text', supportedFacts: ['venue'] },
+      ],
     },
     {
       id: 'church-two-photo',
@@ -28,7 +33,10 @@ const request: TemplatePosterRequest = TemplatePosterRequestSchema.parse({
       category: 'church',
       description: 'Two portrait slots for worship services.',
       fields: [
-        { key: 'event_title', label: 'Event title', kind: 'text' },
+        { key: 'event_title', label: 'Event title', kind: 'text', supportedFacts: ['title'] },
+        { key: 'service_when', label: 'Date and time', kind: 'text', supportedFacts: ['date', 'day', 'time'] },
+        { key: 'event_theme', label: 'Theme', kind: 'text', supportedFacts: ['theme'] },
+        { key: 'event_venue', label: 'Venue', kind: 'text', supportedFacts: ['venue'] },
         { key: 'host_photo', label: 'Host image', kind: 'image' },
         { key: 'guest_photo', label: 'Guest image', kind: 'image' },
       ],

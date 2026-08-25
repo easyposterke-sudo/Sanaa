@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildTemplatePosterCatalogField, inferTemplateFieldSemanticRole } from './templateFieldCatalog';
+import {
+  buildTemplatePosterCatalogField,
+  inferTemplateFieldSemanticRole,
+  inferTemplateFieldSupportedFacts,
+} from './templateFieldCatalog';
 import type { PosterTemplateDefinition } from '../templateTypes';
 
 function template(text: string): PosterTemplateDefinition {
@@ -56,6 +60,15 @@ describe('template field catalog constraints', () => {
   it('recognizes common semantic labels', () => {
     expect(inferTemplateFieldSemanticRole('event_time', 'Starts at')).toBe('time');
     expect(inferTemplateFieldSemanticRole('event_title', 'Headline')).toBe('title');
+    expect(inferTemplateFieldSupportedFacts('dateTime', 'Date & Time')).toEqual(['time', 'date']);
+    expect(inferTemplateFieldSupportedFacts('contact_website', 'Website')).toEqual(['website']);
+    expect(inferTemplateFieldSupportedFacts('themeLine', 'Theme line')).toEqual(['theme', 'tagline']);
+    expect(
+      inferTemplateFieldSupportedFacts('contact', 'Contact', '+254 712 345 678'),
+    ).toEqual(['phone']);
+    expect(
+      inferTemplateFieldSupportedFacts('when', 'When', 'Sunday\n20 September\n8 AM'),
+    ).toEqual(['time', 'day', 'date']);
   });
 
   it('does not advertise truncation limits for organization or person names', () => {
