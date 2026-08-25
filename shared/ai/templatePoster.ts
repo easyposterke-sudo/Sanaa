@@ -1,16 +1,37 @@
 import { z } from 'zod';
 
 export const TEMPLATE_POSTER_SCHEMA_VERSION = 1 as const;
-export const TEMPLATE_POSTER_PROMPT_VERSION = 'template-poster-selector-v1' as const;
+export const TEMPLATE_POSTER_PROMPT_VERSION = 'template-poster-selector-v2' as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const TemplateCategorySchema = z.enum(['church', 'conference', 'business', 'event', 'general']);
+export const TemplatePosterSemanticRoleSchema = z.enum([
+  'title',
+  'tagline',
+  'organization',
+  'person_name',
+  'date',
+  'day',
+  'time',
+  'venue',
+  'contact',
+  'extra_details',
+  'other',
+]);
+
+export type TemplatePosterSemanticRole = z.infer<typeof TemplatePosterSemanticRoleSchema>;
 
 export const TemplatePosterFieldSchema = z
   .object({
     key: z.string().trim().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).max(100),
     label: z.string().trim().min(1).max(100),
     kind: z.enum(['text', 'image']),
+    semanticRole: TemplatePosterSemanticRoleSchema.default('other'),
+    sampleText: z.string().max(500).default(''),
+    maxWords: z.number().int().min(1).max(100).nullable().default(null),
+    maxCharacters: z.number().int().min(1).max(500).nullable().default(null),
+    maxLines: z.number().int().min(1).max(20).nullable().default(null),
+    optional: z.boolean().default(false),
   })
   .strict();
 
@@ -43,6 +64,7 @@ export const TemplatePosterRequestSchema = z
   .strict();
 
 export type TemplatePosterRequest = z.infer<typeof TemplatePosterRequestSchema>;
+export type TemplatePosterRequestInput = z.input<typeof TemplatePosterRequestSchema>;
 export type TemplatePosterCatalogItem = z.infer<typeof TemplatePosterCatalogItemSchema>;
 
 export const TemplatePosterFieldValueSchema = z
@@ -130,7 +152,7 @@ export function validateTemplatePosterSelection(
     return true;
   });
 
-  return { ...selection, fields };
+  return constrainTemplatePosterSelection(request, { ...selection, fields });
 }
 
 export function createFallbackTemplatePosterSelection(
@@ -146,7 +168,7 @@ export function createFallbackTemplatePosterSelection(
   if (!template) throw new Error('At least one poster template is required.');
   let imageSlotIndex = 0;
 
-  return {
+  return constrainTemplatePosterSelection(request, {
     schemaVersion: TEMPLATE_POSTER_SCHEMA_VERSION,
     templateId: template.id,
     fields: template.fields.map((field) => {
@@ -161,7 +183,7 @@ export function createFallbackTemplatePosterSelection(
         imageIndex: null,
       };
     }),
-  };
+  });
 }
 
 function scoreTemplate(request: TemplatePosterRequest, template: TemplatePosterCatalogItem): number {
@@ -259,4 +281,216 @@ function tokenize(value: string): Set<string> {
       .split(/[^a-z0-9]+/)
       .filter((word) => word.length > 2),
   );
+}
+
+/**
+ * Final guardrail for AI and fallback output. It keeps compact visual slots compact,
+ * extracts one primary time from a service schedule, and moves overflow into the
+ * template's designated extra-details field when one exists.
+ */
+export function constrainTemplatePosterSelection(
+  request: TemplatePosterRequest,
+  selection: TemplatePosterSelection,
+): TemplatePosterSelection {
+  const template = request.templates.find((item) => item.id === selection.templateId);
+  if (!template) return selection;
+  const fieldsByKey = new Map(template.fields.map((field) => [field.key, field]));
+  const detailsField = template.fields.find(
+    (field) => field.kind === 'text' && field.semanticRole === 'extra_details',
+  );
+  const overflow: string[] = [];
+  const nextFields = selection.fields.map((fieldValue) => {
+    const field = fieldsByKey.get(fieldValue.key);
+    if (!field || field.kind !== 'text' || fieldValue.value === null) return fieldValue;
+    const original = cleanFieldValue(fieldValue.value);
+    if (!original || field.semanticRole === 'extra_details') {
+      return { ...fieldValue, value: original };
+    }
+
+    if (!isSemanticallySuitable(field.semanticRole, original)) {
+      overflow.push(`${field.label}: ${original}`);
+      return { ...fieldValue, value: '' };
+    }
+
+    const fitted = fitFieldValue(field, original);
+    if (fitted.overflow) overflow.push(fitted.overflow);
+    return { ...fieldValue, value: fitted.value };
+  });
+
+  if (!detailsField || overflow.length === 0) return { ...selection, fields: nextFields };
+  const detailsIndex = nextFields.findIndex((field) => field.key === detailsField.key);
+  const existing = detailsIndex >= 0 ? cleanFieldValue(nextFields[detailsIndex]?.value ?? '') : '';
+  const combined = uniqueDetailLines([existing, ...overflow]).join('\n');
+  const fittedDetails = fitFieldValue(detailsField, combined).value;
+  if (detailsIndex >= 0) {
+    const currentDetails = nextFields[detailsIndex]!;
+    nextFields[detailsIndex] = {
+      ...currentDetails,
+      value: fittedDetails,
+      imageIndex: null,
+    };
+  } else if (nextFields.length < 80) {
+    nextFields.push({ key: detailsField.key, value: fittedDetails, imageIndex: null });
+  }
+  return { ...selection, fields: nextFields };
+}
+
+function fitFieldValue(
+  field: TemplatePosterCatalogItem['fields'][number],
+  original: string,
+): { value: string; overflow: string } {
+  if (field.semanticRole === 'time') {
+    const schedule = extractServiceSchedule(original);
+    if (schedule.primary) {
+      return {
+        value: formatTimeLikeSample(schedule.primary, field.sampleText),
+        overflow: schedule.additional.join('\n'),
+      };
+    }
+  }
+
+  if (field.semanticRole === 'day') {
+    const day = original.match(/\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)?.[0];
+    if (day) return { value: preserveSampleLineShape(day, field.sampleText), overflow: '' };
+  }
+
+  if (!exceedsFieldLimits(field, original)) {
+    return { value: preserveSampleLineShape(original, field.sampleText), overflow: '' };
+  }
+  return {
+    value: truncateToFieldLimits(original, field.maxWords, field.maxCharacters, field.maxLines),
+    overflow: `${field.label}: ${original}`,
+  };
+}
+
+function isSemanticallySuitable(role: TemplatePosterSemanticRole, value: string): boolean {
+  const looksLikeSchedule = /\b(?:first|second|third|fourth)\s+service\b|\bstarts?\s+at\b|\b\d{1,2}(?::\d{2}|\.\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/i.test(value);
+  if (
+    looksLikeSchedule &&
+    (role === 'title' || role === 'tagline' || role === 'organization' || role === 'person_name')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function extractServiceSchedule(value: string): { primary: string; additional: string[] } {
+  const labeled = [...value.matchAll(
+    /\b(first|second|third|fourth)\s+service\s*:?[\s-]*(?:starts?\s+(?:at\s+)?)?(\d{1,2}(?:(?::|\.)\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?)/gi,
+  )];
+  if (labeled.length > 0) {
+    return {
+      primary: normalizeTime(labeled[0]?.[2] ?? ''),
+      additional: labeled.slice(1).map((match) =>
+        `${capitalize(match[1] ?? 'Additional')} service: ${normalizeTime(match[2] ?? '')}`,
+      ),
+    };
+  }
+
+  const times = [...value.matchAll(
+    /\b(\d{1,2}(?:(?::|\.)\d{2})?\s*(?:a\.?m\.?|p\.?m\.?))\b/gi,
+  )].map((match) => normalizeTime(match[1] ?? ''));
+  return {
+    primary: times[0] ?? '',
+    additional: times.slice(1).map((time) => `Additional service: ${time}`),
+  };
+}
+
+function normalizeTime(value: string): string {
+  const match = value.trim().match(/^(\d{1,2})(?:(?::|\.)(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?$/i);
+  if (!match) return cleanFieldValue(value);
+  const hour = String(Number(match[1] ?? 0));
+  const minute = match[2] ? `:${match[2]}` : '';
+  const period = match[3]?.replace(/\./g, '').toUpperCase() ?? '';
+  return `${hour}${minute}${period ? ` ${period}` : ''}`;
+}
+
+function formatTimeLikeSample(value: string, sample: string): string {
+  const normalized = normalizeTime(value);
+  const match = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return normalized;
+  const separator = sample.includes('.') && !sample.includes(':') ? '.' : ':';
+  const paddedHour = /(?:^|\n)0\d/.test(sample) ? (match[1] ?? '').padStart(2, '0') : match[1];
+  const number = `${paddedHour}${match[2] ? `${separator}${match[2]}` : ''}`;
+  const period = match[3]?.toUpperCase() ?? '';
+  const sampleLines = sample.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const prefix = sampleLines.filter((line) => !/\d/.test(line) && /\b(?:time|start)\b/i.test(line));
+  const splitNumberAndPeriod = sampleLines.length - prefix.length >= 2 && period !== '';
+  const timeLines = splitNumberAndPeriod
+    ? [number, period]
+    : [`${number}${period ? ` ${period}` : ''}`];
+  return [...prefix, ...timeLines].join(splitNumberAndPeriod || prefix.length > 0 ? '\n' : ' ');
+}
+
+function preserveSampleLineShape(value: string, sample: string): string {
+  const sampleLines = sample.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (sampleLines.length <= 1 || value.includes('\n')) return value;
+  const words = value.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return value;
+  const result: string[] = [];
+  let offset = 0;
+  for (let index = 0; index < sampleLines.length && offset < words.length; index += 1) {
+    const remainingLines = sampleLines.length - index;
+    const take = Math.max(1, Math.ceil((words.length - offset) / remainingLines));
+    result.push(words.slice(offset, offset + take).join(' '));
+    offset += take;
+  }
+  return result.join('\n');
+}
+
+function exceedsFieldLimits(
+  field: TemplatePosterCatalogItem['fields'][number],
+  value: string,
+): boolean {
+  const words = value.split(/\s+/).filter(Boolean).length;
+  const lines = value.split(/\r?\n/).length;
+  return (
+    (field.maxWords !== null && words > field.maxWords) ||
+    (field.maxCharacters !== null && value.length > field.maxCharacters) ||
+    (field.maxLines !== null && lines > field.maxLines)
+  );
+}
+
+function truncateToFieldLimits(
+  value: string,
+  maxWords: number | null,
+  maxCharacters: number | null,
+  maxLines: number | null,
+): string {
+  let next = value
+    .split(/\r?\n/)
+    .slice(0, maxLines ?? Number.POSITIVE_INFINITY)
+    .join('\n');
+  if (maxWords !== null) next = next.split(/\s+/).filter(Boolean).slice(0, maxWords).join(' ');
+  if (maxCharacters !== null && next.length > maxCharacters) {
+    next = next.slice(0, maxCharacters).replace(/\s+\S*$/, '').trim();
+  }
+  return next.trim();
+}
+
+function cleanFieldValue(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 500);
+}
+
+function uniqueDetailLines(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    for (const line of cleanFieldValue(value).split('\n').filter(Boolean)) {
+      const key = line.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      result.push(line);
+    }
+  }
+  return result;
+}
+
+function capitalize(value: string): string {
+  return value ? `${value[0]?.toUpperCase() ?? ''}${value.slice(1).toLowerCase()}` : value;
 }

@@ -10,6 +10,7 @@ import type { PosterTemplateDefinition, PosterTemplateFieldBinding } from '../te
 import type { PosterProject } from '../types';
 import type { AIPosterSession } from '../ai/aiPosterSession';
 import { findMissingTemplateTextFields } from '../ai/missingTemplateDetails';
+import { buildTemplatePosterCatalogFields } from '../ai/templateFieldCatalog';
 
 interface GeneratedTemplatePoster {
   project: PosterProject;
@@ -204,11 +205,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
           name: template.name,
           category: template.category,
           description: template.description ?? '',
-          fields: (template.fields ?? []).slice(0, 80).map((field) => ({
-            key: field.key,
-            label: field.label,
-            kind: field.kind ?? 'text',
-          })),
+          fields: buildTemplatePosterCatalogFields(template),
         })),
         excludedTemplateIds,
       });

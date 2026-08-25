@@ -48,7 +48,7 @@ describe('applyFieldBindings', () => {
     expect(updated?.type).toBe('3d-text');
     if (updated?.type !== '3d-text') throw new Error('Expected 3D text.');
     expect(updated.config.text?.content).toBe('CONFERENCE');
-    expect(updated.config.textLayers?.every((layer) => layer.text?.content === 'CONFERENCE')).toBe(true);
+    expect(updated.config.textLayers?.every((layer) => 'text' in layer && layer.text?.content === 'CONFERENCE')).toBe(true);
     expect(updated.image).toContain('CONFERENCE');
     expect((updated.previewWidth ?? 0) * updated.scaleX).toBeCloseTo(originalSize.width * 0.8);
     expect((updated.previewHeight ?? 0) * updated.scaleY).toBeCloseTo(originalSize.height * 0.8);
@@ -91,6 +91,42 @@ describe('instantiateTemplate AI clearing', () => {
       { clearMissingTextFields: true },
     );
 
-    expect(result.project.elements[0]).toMatchObject({ type: 'text', text: '', width: 742 });
+    expect(result.project.elements[0]).toMatchObject({ type: 'text', text: '', opacity: 0, width: 742 });
+  });
+
+  it('hides a missing optional 3D text field instead of leaving template wording visible', async () => {
+    const config = compileTwoLayer3DTextState({
+      text: 'OTHER DETAILS',
+      faceColor: '#ffffff',
+      extrusionColor: '#111111',
+    });
+    const result = await instantiateTemplate(
+      {
+        id: 'template-3d',
+        name: 'Event',
+        category: 'event',
+        fields: [{ key: 'other_details', label: 'Other details', sourceElementId: 'details' }],
+        project: {
+          canvasWidth: 800,
+          canvasHeight: 600,
+          elements: [{
+            id: 'details',
+            type: '3d-text',
+            image: 'data:image/png;base64,placeholder',
+            config,
+            left: 10,
+            top: 10,
+            scaleX: 1,
+            scaleY: 1,
+            angle: 0,
+            opacity: 1,
+            zIndex: 1,
+          }],
+        },
+      },
+      { other_details: '' },
+      { clearMissingTextFields: true },
+    );
+    expect(result.project.elements[0]).toMatchObject({ type: '3d-text', opacity: 0 });
   });
 });

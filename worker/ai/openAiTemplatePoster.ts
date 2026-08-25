@@ -188,7 +188,14 @@ Field rules:
 - Text fields: set value from the brief, set imageIndex to null, and use an empty string when the brief does not supply that fact.
 - Image fields: set value to null and imageIndex to the best matching uploaded image index, or null when no suitable upload exists.
 - Preserve the user's spelling for names, titles, venues, dates, scripture, and themes.
-- Keep copy concise enough for its labeled slot: titles should usually be 2-8 words, subtitles 12 words or fewer, and names/dates/venues should contain only the relevant fact.
+- Treat every text field as a fixed visual slot, not a generic destination. Read semanticRole, sampleText, maxWords, maxCharacters, and maxLines before assigning it.
+- Never exceed a field's maxWords, maxCharacters, or maxLines. Do not shrink, cram, or place a sentence in a slot whose sample contains only a few words or stacked numerals.
+- Match the structure demonstrated by sampleText. A stacked time such as "08\nPM" must stay a compact stacked time, not become a sentence. A circle or badge slot must remain similarly concise.
+- Put only the matching fact in semantic fields: time receives one primary time, date receives only a date, day receives only a weekday/frequency, person_name receives only the person's name/title, and venue receives only the location.
+- When the brief contains multiple services or excess facts, keep the first/primary value in its compact slot and place the remaining schedule and unmatched facts in the field whose semanticRole is extra_details.
+- Never copy the same schedule or fact into several fields. Do not put service times into title, tagline, organization, person-name, date, or venue fields.
+- If an optional extra_details field has no genuine remaining information, return an empty string so it disappears from the poster.
+- Titles should usually be 2-8 words, subtitles 12 words or fewer, and names/dates/venues should contain only the relevant fact even when a larger limit is available.
 - Do not add claims, dates, venues, people, scripture, contact details, or event facts that the user did not provide.
 - Return only the required JSON object.`;
 

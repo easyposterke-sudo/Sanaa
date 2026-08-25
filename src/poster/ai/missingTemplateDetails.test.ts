@@ -12,4 +12,11 @@ describe('missing template details', () => {
       findMissingTemplateTextFields({ fields }, { church_name: '', time: '10:00 AM' }),
     ).toEqual([fields[0]]);
   });
+
+  it('does not ask for optional other-details overflow fields', () => {
+    const fields = [
+      { key: 'other_details', label: 'Other details', sourceElementId: 'details', kind: 'text' as const },
+    ];
+    expect(findMissingTemplateTextFields({ fields }, {})).toEqual([]);
+  });
 });

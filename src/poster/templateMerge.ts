@@ -94,13 +94,20 @@ export function applyFieldBindings(
     if (!bs?.length) return el;
     if (el.type === 'text') {
       const t = el as PosterTextElement;
+      const text = applyBoundText(t.text, bs, data, options.clearMissingTextFields ?? false);
       return {
         ...t,
-        text: applyBoundText(t.text, bs, data, options.clearMissingTextFields ?? false),
+        text,
+        ...(options.clearMissingTextFields && !text.trim() ? { opacity: 0 } : {}),
       };
     }
     if (el.type === '3d-text') {
-      return applyTwoLayer3DTextBinding(el as Poster3DTextElement, bs, data);
+      return applyTwoLayer3DTextBinding(
+        el as Poster3DTextElement,
+        bs,
+        data,
+        options.clearMissingTextFields ?? false,
+      );
     }
     return el;
   });
@@ -137,10 +144,17 @@ function applyTwoLayer3DTextBinding(
   element: Poster3DTextElement,
   bindings: PosterTemplateFieldBinding[],
   data: Record<string, string>,
+  clearMissingTextFields = false,
 ): Poster3DTextElement {
   const original = element.config.text?.content ?? '';
-  const content = applyBoundText(original, bindings, data).trim();
-  if (!content || content === original) return element;
+  const content = applyBoundText(
+    original,
+    bindings,
+    data,
+    clearMissingTextFields,
+  ).trim();
+  if (!content) return clearMissingTextFields ? { ...element, opacity: 0 } : element;
+  if (content === original) return element;
 
   const config = replaceTwoLayer3DTextContent(element.config, content);
   if (!config) return element;

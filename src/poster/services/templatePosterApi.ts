@@ -1,7 +1,7 @@
 import {
   TemplatePosterRequestSchema,
   TemplatePosterSelectionSchema,
-  type TemplatePosterRequest,
+  type TemplatePosterRequestInput,
   type TemplatePosterResponse,
 } from '../../../shared/ai/templatePoster';
 import { apiFetch } from '../../lib/api';
@@ -17,7 +17,7 @@ export class TemplatePosterError extends Error {
 }
 
 export async function requestTemplatePoster(
-  request: TemplatePosterRequest,
+  request: TemplatePosterRequestInput,
 ): Promise<TemplatePosterResponse> {
   const payload = TemplatePosterRequestSchema.parse(request);
   const response = await apiFetch('/api/ai/template-poster', {

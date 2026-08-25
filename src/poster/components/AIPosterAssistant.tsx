@@ -10,6 +10,7 @@ import { usePosterStore } from '../store/posterStore';
 import { instantiateTemplate } from '../templateMerge';
 import type { PosterTemplateFieldBinding } from '../templateTypes';
 import type { PosterProject } from '../types';
+import { buildTemplatePosterCatalogFields } from '../ai/templateFieldCatalog';
 
 interface AIPosterAssistantProps {
   open: boolean;
@@ -75,11 +76,7 @@ export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterA
             name: template.name,
             category: template.category,
             description: template.description ?? '',
-            fields: (template.fields ?? []).slice(0, 80).map((field) => ({
-              key: field.key,
-              label: field.label,
-              kind: field.kind ?? 'text',
-            })),
+            fields: buildTemplatePosterCatalogFields(template),
           })),
           excludedTemplateIds,
         });
