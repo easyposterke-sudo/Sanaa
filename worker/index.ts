@@ -658,7 +658,7 @@ app.post('/api/ai/template-poster', async (context) => {
     );
     return context.json({
       selection: result.selection,
-      source: 'openai',
+      source: result.usedFallback ? 'fallback' : 'openai',
       model,
       requestId,
     });

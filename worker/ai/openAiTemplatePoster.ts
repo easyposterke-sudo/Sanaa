@@ -1,6 +1,8 @@
 import {
   TEMPLATE_POSTER_SELECTION_JSON_SCHEMA,
   TemplatePosterSelectionSchema,
+  createFallbackTemplatePosterSelection,
+  getSelectableTemplatePosterCatalog,
   validateTemplatePosterSelection,
   type TemplatePosterRequest,
   type TemplatePosterSelection,
@@ -10,6 +12,7 @@ const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 export interface OpenAiTemplatePosterResult {
   selection: TemplatePosterSelection;
+  usedFallback: boolean;
   openAiRequestId: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
@@ -32,6 +35,7 @@ export async function selectTemplatePosterWithOpenAI(input: {
   request: TemplatePosterRequest;
   timeoutMs?: number;
 }): Promise<OpenAiTemplatePosterResult> {
+  const selectableRequest = createSelectableRequest(input.request);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs ?? 60_000);
   let response: Response;
@@ -54,7 +58,7 @@ export async function selectTemplatePosterWithOpenAI(input: {
           },
           {
             role: 'user',
-            content: [{ type: 'input_text', text: buildUserPrompt(input.request) }],
+            content: [{ type: 'input_text', text: buildUserPrompt(selectableRequest) }],
           },
         ],
         text: {
@@ -62,7 +66,7 @@ export async function selectTemplatePosterWithOpenAI(input: {
             type: 'json_schema',
             name: 'easyposter_template_selection',
             strict: true,
-            schema: TEMPLATE_POSTER_SELECTION_JSON_SCHEMA,
+            schema: createSelectionJsonSchema(selectableRequest),
           },
         },
       }),
@@ -152,17 +156,20 @@ export async function selectTemplatePosterWithOpenAI(input: {
       'AI_INVALID_SELECTION',
     );
   }
-  const validated = validateTemplatePosterSelection(input.request, selection.data);
+  const validated = validateTemplatePosterSelection(selectableRequest, selection.data);
   if (!validated) {
-    throw new OpenAiTemplatePosterError(
-      'The AI selected a template that is not available.',
-      502,
-      'AI_INVALID_SELECTION',
-    );
+    return {
+      selection: createFallbackTemplatePosterSelection(selectableRequest),
+      usedFallback: true,
+      openAiRequestId: openAiRequestId ?? data.id ?? null,
+      inputTokens: finiteInteger(data.usage?.input_tokens),
+      outputTokens: finiteInteger(data.usage?.output_tokens),
+    };
   }
 
   return {
     selection: validated,
+    usedFallback: false,
     openAiRequestId: openAiRequestId ?? data.id ?? null,
     inputTokens: finiteInteger(data.usage?.input_tokens),
     outputTokens: finiteInteger(data.usage?.output_tokens),
@@ -189,7 +196,8 @@ Field rules:
 - Image fields: set value to null and imageIndex to the best matching uploaded image index, or null when no suitable upload exists.
 - Preserve the user's spelling for names, titles, venues, dates, scripture, and themes.
 - Treat every text field as a fixed visual slot, not a generic destination. Read semanticRole, sampleText, maxWords, maxCharacters, and maxLines before assigning it.
-- Never exceed a field's maxWords, maxCharacters, or maxLines. Do not shrink, cram, or place a sentence in a slot whose sample contains only a few words or stacked numerals.
+- Never exceed a field's maxWords, maxCharacters, or maxLines, except for semanticRole organization and person_name. Do not shrink, cram, or place a sentence in a slot whose sample contains only a few words or stacked numerals.
+- Organization and person_name are protected identity fields. Preserve the complete organization, church, ministry, company, pastor, preacher, speaker, or other person's name exactly as supplied. Never abbreviate, truncate, split, or move any part of those names into extra_details, even when the sample name is shorter.
 - Match the structure demonstrated by sampleText. A stacked time such as "08\nPM" must stay a compact stacked time, not become a sentence. A circle or badge slot must remain similarly concise.
 - Put only the matching fact in semantic fields: time receives one primary time, date receives only a date, day receives only a weekday/frequency, person_name receives only the person's name/title, and venue receives only the location.
 - When the brief contains multiple services or excess facts, keep the first/primary value in its compact slot and place the remaining schedule and unmatched facts in the field whose semanticRole is extra_details.
@@ -209,6 +217,28 @@ ${JSON.stringify({
   excludedTemplateIds: request.excludedTemplateIds,
   templateCatalog: request.templates,
 })}`;
+}
+
+function createSelectableRequest(request: TemplatePosterRequest): TemplatePosterRequest {
+  return {
+    ...request,
+    templates: getSelectableTemplatePosterCatalog(request),
+    excludedTemplateIds: [],
+  };
+}
+
+function createSelectionJsonSchema(request: TemplatePosterRequest) {
+  const allowedTemplateIds = [...new Set(request.templates.map((template) => template.id))];
+  return {
+    ...TEMPLATE_POSTER_SELECTION_JSON_SCHEMA,
+    properties: {
+      ...TEMPLATE_POSTER_SELECTION_JSON_SCHEMA.properties,
+      templateId: {
+        type: 'string',
+        enum: allowedTemplateIds,
+      },
+    },
+  };
 }
 
 type OpenAiResponsesPayload = {

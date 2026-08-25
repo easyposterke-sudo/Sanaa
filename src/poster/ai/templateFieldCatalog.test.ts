@@ -57,4 +57,33 @@ describe('template field catalog constraints', () => {
     expect(inferTemplateFieldSemanticRole('event_time', 'Starts at')).toBe('time');
     expect(inferTemplateFieldSemanticRole('event_title', 'Headline')).toBe('title');
   });
+
+  it('does not advertise truncation limits for organization or person names', () => {
+    const input = template('Church Name');
+    const organization = buildTemplatePosterCatalogField(input, {
+      key: 'churchName',
+      label: 'Church name',
+      sourceElementId: 'time',
+      kind: 'text',
+    });
+    const person = buildTemplatePosterCatalogField(input, {
+      key: 'pastorName',
+      label: 'Pastor name',
+      sourceElementId: 'time',
+      kind: 'text',
+    });
+
+    expect(organization).toMatchObject({
+      semanticRole: 'organization',
+      maxWords: null,
+      maxCharacters: null,
+      maxLines: null,
+    });
+    expect(person).toMatchObject({
+      semanticRole: 'person_name',
+      maxWords: null,
+      maxCharacters: null,
+      maxLines: null,
+    });
+  });
 });

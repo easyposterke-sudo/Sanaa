@@ -128,4 +128,60 @@ describe('template poster structural constraints', () => {
     expect(fieldValue(selection, 'eventTitle')).toBe('');
     expect(fieldValue(selection, 'otherDetails')).toContain('First service at 8am');
   });
+
+  it('preserves complete organization and person names without overflow', () => {
+    const identityCatalog: TemplatePosterCatalogItem[] = [
+      {
+        ...catalog[0],
+        fields: [
+          {
+            key: 'churchName',
+            label: 'Church name',
+            kind: 'text',
+            semanticRole: 'organization',
+            sampleText: 'Church Name',
+            maxWords: 2,
+            maxCharacters: 16,
+            maxLines: 1,
+            optional: false,
+          },
+          {
+            key: 'pastorName',
+            label: 'Pastor name',
+            kind: 'text',
+            semanticRole: 'person_name',
+            sampleText: 'Pastor Name',
+            maxWords: 2,
+            maxCharacters: 14,
+            maxLines: 1,
+            optional: false,
+          },
+          catalog[0].fields[1],
+        ],
+      },
+    ];
+    const selection = validateTemplatePosterSelection(
+      requestFor(identityCatalog),
+      TemplatePosterSelectionSchema.parse({
+        schemaVersion: 1,
+        templateId: 'sunday-service',
+        fields: [
+          {
+            key: 'churchName',
+            value: 'Christ Ekklesia Fellowship Chapel',
+            imageIndex: null,
+          },
+          {
+            key: 'pastorName',
+            value: 'Pastor David Kiplagat Kituyi',
+            imageIndex: null,
+          },
+        ],
+      }),
+    );
+
+    expect(fieldValue(selection, 'churchName')).toBe('Christ Ekklesia Fellowship Chapel');
+    expect(fieldValue(selection, 'pastorName')).toBe('Pastor David Kiplagat Kituyi');
+    expect(fieldValue(selection, 'otherDetails')).toBeUndefined();
+  });
 });

@@ -26,15 +26,17 @@ export function buildTemplatePosterCatalogField(
   const sampleText = kind === 'text' ? readTextContent(element) : '';
   const semanticRole = inferTemplateFieldSemanticRole(field.key, field.label, sampleText);
   const limits = textFieldLimits(semanticRole, sampleText);
+  const protectsCompleteName =
+    semanticRole === 'organization' || semanticRole === 'person_name';
   return {
     key: field.key,
     label: field.label,
     kind,
     semanticRole,
     sampleText: sampleText.slice(0, 500),
-    maxWords: kind === 'text' ? limits.maxWords : null,
-    maxCharacters: kind === 'text' ? limits.maxCharacters : null,
-    maxLines: kind === 'text' ? limits.maxLines : null,
+    maxWords: kind === 'text' && !protectsCompleteName ? limits.maxWords : null,
+    maxCharacters: kind === 'text' && !protectsCompleteName ? limits.maxCharacters : null,
+    maxLines: kind === 'text' && !protectsCompleteName ? limits.maxLines : null,
     optional: semanticRole === 'extra_details',
   };
 }

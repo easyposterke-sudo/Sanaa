@@ -117,6 +117,15 @@ export const TEMPLATE_POSTER_SELECTION_JSON_SCHEMA = {
   },
 } as const;
 
+export function getSelectableTemplatePosterCatalog(
+  request: TemplatePosterRequest,
+): TemplatePosterCatalogItem[] {
+  const available = request.templates.filter(
+    (template) => !request.excludedTemplateIds.includes(template.id),
+  );
+  return available.length > 0 ? available : request.templates;
+}
+
 export function validateTemplatePosterSelection(
   request: TemplatePosterRequest,
   selection: TemplatePosterSelection,
@@ -158,10 +167,7 @@ export function validateTemplatePosterSelection(
 export function createFallbackTemplatePosterSelection(
   request: TemplatePosterRequest,
 ): TemplatePosterSelection {
-  const available = request.templates.filter(
-    (template) => !request.excludedTemplateIds.includes(template.id),
-  );
-  const candidates = available.length > 0 ? available : request.templates;
+  const candidates = getSelectableTemplatePosterCatalog(request);
   const template = [...candidates].sort(
     (left, right) => scoreTemplate(request, right) - scoreTemplate(request, left),
   )[0];
@@ -339,6 +345,13 @@ function fitFieldValue(
   field: TemplatePosterCatalogItem['fields'][number],
   original: string,
 ): { value: string; overflow: string } {
+  // Proper names are identity data, not expendable copy. Preserve the complete
+  // organization/church name and every person's name even when the sample was
+  // shorter. They must never be abbreviated or moved into extra details.
+  if (field.semanticRole === 'organization' || field.semanticRole === 'person_name') {
+    return { value: original, overflow: '' };
+  }
+
   if (field.semanticRole === 'time') {
     const schedule = extractServiceSchedule(original);
     if (schedule.primary) {
