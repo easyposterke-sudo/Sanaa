@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type {
   PosterReconstructionPlan,
   PosterReconstructionSource,
@@ -42,6 +43,7 @@ interface TemplateCreatorWizardProps {
 }
 
 export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreatorWizardProps) {
+  useModalScrollLock(open);
   const [reference, setReference] = useState<PreparedPosterImage | null>(null);
   const [canvasSize, setCanvasSize] = useState<CanvasSizeSelection | null>(null);
   const [customWidth, setCustomWidth] = useState('1080');
@@ -225,12 +227,12 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-black/65 p-3 sm:p-6"
+      className="fixed inset-0 z-[90] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-creator-title"
     >
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
           <div>
             <h2 id="template-creator-title" className="text-xl font-semibold text-zinc-900 dark:text-white">
@@ -251,6 +253,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
           </button>
         </div>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
         <div className="grid gap-6 p-5 md:grid-cols-[1.1fr_0.9fr]">
           <section>
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">1. Upload the reference</h3>
@@ -470,7 +473,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
         </div>
 
         {analysis && (
-          <section className="max-h-[48vh] overflow-y-auto border-t border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
+          <section className="border-t border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Review unsafe image crops</h3>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -571,6 +574,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
             </div>
           </section>
         )}
+        </div>
 
         <div className="border-t border-zinc-200 px-5 py-4 dark:border-zinc-700">
           {error && (

@@ -4,6 +4,7 @@ import {
   type PosterTemplateDefinition,
 } from '../templateTypes';
 import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { usePosterStore } from '../store/posterStore';
 import { useAuthStore } from '../../auth/authStore';
 import { publishPosterTemplateToCloud, updatePosterTemplateFromCloud } from '../services/posterTemplatesApi';
@@ -26,6 +27,7 @@ interface SavePosterTemplateModalProps {
 }
 
 export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCloudEdit = false }: SavePosterTemplateModalProps) {
+  useModalScrollLock(open);
   const { categories } = usePosterTemplateCategories();
   const [name, setName] = useState(template.name || 'My template');
   const [category, setCategory] = useState<PosterTemplateCategory>(template.category);
@@ -148,8 +150,8 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4">
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
         <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {publishAction === 'update'
@@ -169,12 +171,12 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
           <div className="flex flex-col gap-3">
             {fieldList.length > 0 && (
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-600 dark:bg-zinc-800/50">
                 <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Fields ({fieldList.length})</p>
-                <ul className="mt-1 max-h-28 list-inside list-disc overflow-y-auto text-xs text-zinc-700 dark:text-zinc-300">
+                <ul className="mt-1 max-h-28 list-inside list-disc overflow-y-auto overscroll-y-contain text-xs text-zinc-700 dark:text-zinc-300">
                   {fieldList.map((f) => (
                     <li key={`${f.sourceElementId}-${f.key}`}>
                       {(f.kind ?? 'text') === 'image' ? (

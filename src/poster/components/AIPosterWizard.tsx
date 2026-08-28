@@ -12,6 +12,7 @@ import type { AIPosterSession } from '../ai/aiPosterSession';
 import { findMissingTemplateTextFields } from '../ai/missingTemplateDetails';
 import { buildTemplatePosterCatalogFields } from '../ai/templateFieldCatalog';
 import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type {
   PosterTemplateCategoryDefinition,
   PosterTemplateCategoryInput,
@@ -51,6 +52,7 @@ interface PendingPoster {
 }
 
 export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) {
+  useModalScrollLock(open);
   const { categories, loading: categoriesLoading } = usePosterTemplateCategories();
   const [brief, setBrief] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
@@ -301,12 +303,12 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
   if (pendingPoster) {
     return (
       <div
-        className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-black/65 p-3 sm:p-6"
+        className="fixed inset-0 z-[85] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-3 sm:p-6"
         role="dialog"
         aria-modal="true"
         aria-labelledby="missing-poster-details-title"
       >
-        <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-zinc-700 dark:bg-zinc-900">
           <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
             <h2 id="missing-poster-details-title" className="text-lg font-semibold text-zinc-900 dark:text-white">
               A few details may be missing
@@ -315,7 +317,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
               Add any details you want shown. Every field is optional, and the selected design stays hidden.
             </p>
           </div>
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto p-5">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain p-5">
             {pendingPoster.missingFields.map((field) => (
               <label key={field.key} className="block">
                 <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{field.label}</span>
@@ -401,12 +403,12 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/65 p-3 sm:p-6"
+      className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-3 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ai-poster-title"
     >
-      <div className="my-auto w-full max-w-4xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
           <div>
             <h2 id="ai-poster-title" className="text-xl font-semibold text-zinc-900 dark:text-white">
@@ -427,7 +429,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
           </button>
         </div>
 
-        <div className="grid gap-6 p-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto overscroll-y-contain p-5 lg:grid-cols-[1.2fr_0.8fr]">
           <section>
             <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
               <label className="block text-sm font-semibold text-zinc-900 dark:text-white" htmlFor="ai-poster-category">

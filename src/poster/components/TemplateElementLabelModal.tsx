@@ -5,6 +5,7 @@ import {
   type PosterTemplateFieldBinding,
   type PosterTemplateFieldKind,
 } from '../templateTypes';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 function snippet(text: string, max = 48): string {
   const t = text.replace(/\s+/g, ' ').trim();
@@ -39,6 +40,7 @@ export function TemplateElementLabelModal({
   onSave,
   onRemove,
 }: TemplateElementLabelModalProps) {
+  useModalScrollLock(open);
   const [label, setLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -99,12 +101,12 @@ export function TemplateElementLabelModal({
 
   return (
     <div
-      className="fixed inset-0 z-[210] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[210] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-y-contain rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
         role="dialog"
         aria-labelledby="tpl-label-title"
         onClick={(e) => e.stopPropagation()}

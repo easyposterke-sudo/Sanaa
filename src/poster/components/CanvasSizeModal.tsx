@@ -5,6 +5,7 @@ import {
   ASPECT_PRESETS,
   type CanvasPreset,
 } from '../data/canvasPresets';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface CanvasSizeModalProps {
   onSelect: (width: number, height: number) => void;
@@ -21,6 +22,7 @@ export function CanvasSizeModal({
   currentHeight = 600,
   isNewProject = true,
 }: CanvasSizeModalProps) {
+  useModalScrollLock(true);
   const [customWidth, setCustomWidth] = useState(currentWidth);
   const [customHeight, setCustomHeight] = useState(currentHeight);
 
@@ -37,8 +39,8 @@ export function CanvasSizeModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-2xl rounded-xl bg-white shadow-xl dark:bg-zinc-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4">
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
         <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold">
             {isNewProject ? 'Choose your canvas size' : 'Change canvas size'}
@@ -48,7 +50,7 @@ export function CanvasSizeModal({
           </p>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6">
           <section className="mb-6">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Paper sizes

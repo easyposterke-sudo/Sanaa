@@ -3,6 +3,7 @@ import type { PosterElement, PosterImageElement, Poster3DTextElement, PosterImag
 import { posterRasterSrc } from '../posterRaster';
 import { bakeMaskedImage, computeMaskPreviewSize } from '../utils/bakeMaskedImage';
 import { useIntentionalSliderDrag } from '../../hooks/useIntentionalSliderDrag';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface MaskEditorModalProps {
   open: boolean;
@@ -30,6 +31,7 @@ const MASK_GRID_PAD_X = 48;
 const MASK_MD_MIN_W = 768;
 
 export function MaskEditorModal({ open, target, onClose, onApply }: MaskEditorModalProps) {
+  useModalScrollLock(open);
   const [mask, setMask] = useState<PosterImageMask>(target.mask ?? 'circle');
   const [cornerRadius, setCornerRadius] = useState(target.maskCornerRadius ?? 0.18);
   const [offsetX, setOffsetX] = useState(target.maskImageOffsetX ?? 0.5);
@@ -143,8 +145,8 @@ export function MaskEditorModal({ open, target, onClose, onApply }: MaskEditorMo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900 sm:max-h-[calc(100dvh-2rem)]">
         <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold">Mask editor</h2>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -152,7 +154,7 @@ export function MaskEditorModal({ open, target, onClose, onApply }: MaskEditorMo
           </p>
         </div>
 
-        <div className="grid min-h-0 min-w-0 flex-1 gap-2 overflow-y-auto overflow-x-hidden p-3 sm:p-6 md:grid-cols-[auto,220px] md:justify-items-start md:justify-center">
+        <div className="grid min-h-0 min-w-0 flex-1 gap-2 overflow-y-auto overflow-x-hidden overscroll-y-contain p-3 sm:p-6 md:grid-cols-[auto,220px] md:justify-items-start md:justify-center">
           <div
             className="relative shrink-0 justify-self-start overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800"
             style={{ width: stageW, height: stageH, maxWidth: '100%' }}

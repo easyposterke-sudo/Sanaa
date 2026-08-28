@@ -1,4 +1,5 @@
 import type { PosterShapePresetId } from '../posterShapePresets';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface PosterShapesModalProps {
   open: boolean;
@@ -26,11 +27,12 @@ const SHAPES: { id: PosterShapePresetId; label: string; description: string }[] 
 ];
 
 export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalProps) {
+  useModalScrollLock(open);
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="poster-shapes-title"
@@ -38,7 +40,7 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-zinc-900">
+      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
         <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
           <h2 id="poster-shapes-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Shapes
@@ -48,7 +50,7 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
           </p>
         </div>
 
-        <div className="max-h-[min(70vh,420px)] overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {SHAPES.map((s) => (
               <button

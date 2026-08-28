@@ -11,6 +11,7 @@ import { instantiateTemplate } from '../templateMerge';
 import type { PosterTemplateFieldBinding } from '../templateTypes';
 import type { PosterProject } from '../types';
 import { buildTemplatePosterCatalogFields } from '../ai/templateFieldCatalog';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface AIPosterAssistantProps {
   open: boolean;
@@ -23,6 +24,7 @@ interface AIPosterAssistantProps {
 }
 
 export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterAssistantProps) {
+  useModalScrollLock(open);
   const [instruction, setInstruction] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,12 +135,12 @@ export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterA
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center bg-black/45 p-3 sm:items-center sm:p-6"
+      className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none bg-black/45 p-3 sm:items-center sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="poster-assistant-title"
     >
-      <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl dark:border-emerald-900 dark:bg-zinc-900">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-emerald-900 dark:bg-zinc-900">
         <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
           <div>
             <h2 id="poster-assistant-title" className="text-lg font-semibold text-zinc-900 dark:text-white">
@@ -157,7 +159,7 @@ export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterA
             Close
           </button>
         </div>
-        <div className="p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-5">
           <div className="mb-3 flex flex-wrap gap-2 text-xs">
             {['Make the theme blue', 'Use playful fonts', 'Make it official and crisp', 'Find another design'].map((example) => (
               <button

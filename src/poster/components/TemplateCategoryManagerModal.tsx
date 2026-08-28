@@ -9,6 +9,7 @@ import {
   updatePosterTemplateCategory,
 } from '../services/posterTemplateCategoriesApi';
 import { labelToSnakeCaseKey } from '../templateTypes';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface TemplateCategoryManagerModalProps {
   open: boolean;
@@ -33,6 +34,7 @@ export function TemplateCategoryManagerModal({
   onClose,
   onChanged,
 }: TemplateCategoryManagerModalProps) {
+  useModalScrollLock(open);
   const editableCategories = useMemo(
     () => categories.filter((category) => category.canEdit),
     [categories],
@@ -132,9 +134,9 @@ export function TemplateCategoryManagerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
-      <div className="grid max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl md:grid-cols-[15rem_1fr] dark:border-zinc-700 dark:bg-zinc-900">
-        <aside className="max-h-56 overflow-y-auto border-b border-zinc-200 bg-zinc-50 p-3 md:max-h-none md:border-b-0 md:border-r dark:border-zinc-700 dark:bg-zinc-950">
+    <div className="fixed inset-0 z-[220] flex items-center justify-center overflow-hidden overscroll-none bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
+      <div className="grid max-h-[calc(100dvh-2rem)] min-h-0 w-full max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl md:grid-cols-[15rem_1fr] md:grid-rows-1 dark:border-zinc-700 dark:bg-zinc-900">
+        <aside className="max-h-56 overflow-y-auto overscroll-y-contain border-b border-zinc-200 bg-zinc-50 p-3 md:max-h-none md:border-b-0 md:border-r dark:border-zinc-700 dark:bg-zinc-950">
           <button type="button" onClick={beginNew} className="w-full rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700">
             + Add category
           </button>
@@ -155,7 +157,7 @@ export function TemplateCategoryManagerModal({
           </div>
         </aside>
 
-        <section className="min-h-0 overflow-y-auto p-5">
+        <section className="min-h-0 overflow-y-auto overscroll-y-contain p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 id="category-manager-title" className="text-lg font-semibold">{editingId ? 'Edit category' : 'Add a category'}</h2>

@@ -7,6 +7,7 @@ import {
   type PosterTemplateFieldBinding,
 } from '../templateTypes';
 import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { updatePosterTemplateFromCloud } from '../services/posterTemplatesApi';
 import { usePosterStore } from '../store/posterStore';
 
@@ -58,6 +59,7 @@ export function AdminTemplateEditModal({
   onClose,
   onSaved,
 }: AdminTemplateEditModalProps) {
+  useModalScrollLock(open);
   const { categories } = usePosterTemplateCategories();
   const navigate = useNavigate();
   const refreshRemotePosterTemplates = usePosterStore((s) => s.refreshRemotePosterTemplates);
@@ -131,9 +133,9 @@ export function AdminTemplateEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4">
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
         role="dialog"
         aria-labelledby="admin-edit-title"
       >
@@ -148,7 +150,7 @@ export function AdminTemplateEditModal({
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Name</label>
