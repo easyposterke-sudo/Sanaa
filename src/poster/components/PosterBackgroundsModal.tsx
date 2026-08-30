@@ -110,7 +110,7 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="poster-backgrounds-title"
@@ -118,8 +118,8 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
         if (event.target === event.currentTarget && !uploading && !applyingId) onClose();
       }}
     >
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
-        <div className="shrink-0 border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)] dark:bg-zinc-900">
+        <div className="max-h-[55dvh] shrink-0 overflow-y-auto overscroll-y-contain border-b border-zinc-200 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700">
           <h2 id="poster-backgrounds-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Backgrounds
           </h2>
@@ -173,7 +173,7 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
           />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
           {loadError && (
             <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
               {loadError}
@@ -231,7 +231,7 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
           )}
         </div>
 
-        <div className="shrink-0 border-t border-zinc-200 px-5 py-3 dark:border-zinc-700">
+        <div className="shrink-0 border-t border-zinc-200 p-3 sm:px-5 dark:border-zinc-700">
           <button
             type="button"
             onClick={onClose}

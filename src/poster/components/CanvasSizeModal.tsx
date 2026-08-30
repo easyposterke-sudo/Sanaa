@@ -39,9 +39,9 @@ export function CanvasSizeModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4">
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)] dark:bg-zinc-900">
+        <div className="shrink-0 border-b border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold">
             {isNewProject ? 'Choose your canvas size' : 'Change canvas size'}
           </h2>
@@ -50,7 +50,7 @@ export function CanvasSizeModal({
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-6">
           <section className="mb-6">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Paper sizes
@@ -116,14 +116,14 @@ export function CanvasSizeModal({
               Custom size
             </h3>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
+              <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-2 sm:w-auto">
                 <input
                   type="number"
                   min={100}
                   max={4000}
                   value={customWidth}
                   onChange={(e) => setCustomWidth(parseInt(e.target.value, 10) || 100)}
-                  className="w-24 rounded border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  className="min-w-0 rounded border border-zinc-200 px-2 py-2 text-sm sm:w-24 sm:px-3 dark:border-zinc-700 dark:bg-zinc-800"
                 />
                 <span className="text-zinc-500">×</span>
                 <input
@@ -132,13 +132,13 @@ export function CanvasSizeModal({
                   max={4000}
                   value={customHeight}
                   onChange={(e) => setCustomHeight(parseInt(e.target.value, 10) || 100)}
-                  className="w-24 rounded border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+                  className="min-w-0 rounded border border-zinc-200 px-2 py-2 text-sm sm:w-24 sm:px-3 dark:border-zinc-700 dark:bg-zinc-800"
                 />
                 <span className="text-sm text-zinc-500">px</span>
               </div>
               <button
                 onClick={handleCustomApply}
-                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600"
+                className="w-full rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 sm:w-auto"
               >
                 Apply
               </button>
@@ -147,10 +147,10 @@ export function CanvasSizeModal({
         </div>
 
         {onClose && (
-          <div className="flex justify-end gap-2 border-t border-zinc-200 px-6 py-4 dark:border-zinc-700">
+          <div className="grid shrink-0 gap-2 border-t border-zinc-200 p-3 sm:flex sm:justify-end sm:px-6 sm:py-4 dark:border-zinc-700">
             <button
               onClick={onClose}
-              className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="w-full rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-100 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               Cancel
             </button>

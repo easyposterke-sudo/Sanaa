@@ -135,14 +135,14 @@ export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterA
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none bg-black/45 p-3 sm:items-center sm:p-6"
+      className="fixed inset-0 z-[90] flex items-end justify-center overflow-hidden overscroll-none bg-black/45 p-2 sm:items-center sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="poster-assistant-title"
     >
-      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-emerald-900 dark:bg-zinc-900">
-        <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
-          <div>
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-emerald-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl dark:border-emerald-900 dark:bg-zinc-900">
+        <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-3 py-3 sm:gap-4 sm:px-5 sm:py-4 dark:border-zinc-700">
+          <div className="min-w-0">
             <h2 id="poster-assistant-title" className="text-lg font-semibold text-zinc-900 dark:text-white">
               AI design assistant
             </h2>
@@ -154,12 +154,12 @@ export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterA
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 sm:px-3 sm:py-2 dark:hover:bg-zinc-800"
           >
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-5">
           <div className="mb-3 flex flex-wrap gap-2 text-xs">
             {['Make the theme blue', 'Use playful fonts', 'Make it official and crisp', 'Find another design'].map((example) => (
               <button
@@ -192,12 +192,12 @@ export function AIPosterAssistant({ open, session, onClose, onApply }: AIPosterA
             </p>
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-700">
+        <div className="grid shrink-0 gap-2 border-t border-zinc-200 p-3 sm:flex sm:justify-end sm:px-5 sm:py-4 dark:border-zinc-700">
           <button
             type="button"
             onClick={() => void handleSubmit()}
             disabled={busy || instruction.trim().length < 3}
-            className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-5"
           >
             {busy ? 'Working on your poster…' : 'Make this change'}
           </button>

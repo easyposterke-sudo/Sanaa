@@ -147,7 +147,7 @@ export function MaskEditorModal({ open, target, onClose, onApply }: MaskEditorMo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4">
       <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900 sm:max-h-[calc(100dvh-2rem)]">
-        <div className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-700">
+        <div className="shrink-0 border-b border-zinc-200 px-3 py-3 sm:px-6 sm:py-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold">Mask editor</h2>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Resize the picture, then drag the mask to pick the visible area.
@@ -324,7 +324,7 @@ export function MaskEditorModal({ open, target, onClose, onApply }: MaskEditorMo
           </div>
         </div>
 
-        <div className="flex shrink-0 justify-end gap-2 border-t border-zinc-200 px-4 py-3 sm:px-6 sm:py-4 dark:border-zinc-700">
+        <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-zinc-200 px-3 py-3 sm:flex sm:justify-end sm:px-6 sm:py-4 dark:border-zinc-700">
           <button
             onClick={onClose}
             className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"

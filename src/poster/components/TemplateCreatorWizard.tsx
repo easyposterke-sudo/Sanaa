@@ -227,15 +227,15 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
 
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-3 sm:p-6"
+      className="fixed inset-0 z-[90] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-2 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="template-creator-title"
     >
-      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-zinc-700 dark:bg-zinc-900">
-        <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
-          <div>
-            <h2 id="template-creator-title" className="text-xl font-semibold text-zinc-900 dark:text-white">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-3 py-3 sm:gap-4 sm:px-5 sm:py-4 dark:border-zinc-700">
+          <div className="min-w-0">
+            <h2 id="template-creator-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
               Create a template from a flat poster
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
@@ -247,14 +247,14 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="ml-4 rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 sm:px-3 sm:py-2 dark:hover:bg-zinc-800"
           >
             Close
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
-        <div className="grid gap-6 p-5 md:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid gap-4 p-3 sm:p-5 md:grid-cols-[1.1fr_0.9fr] md:gap-6">
           <section>
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">1. Upload the reference</h3>
             <label className="mt-2 block cursor-pointer rounded-xl border border-dashed border-violet-400 bg-violet-50/60 p-3 text-sm text-violet-900 hover:bg-violet-50 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-200">
@@ -281,7 +281,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
               <img
                 src={reference.dataUrl}
                 alt="Template reconstruction reference"
-                className="mt-3 max-h-[55vh] w-full rounded-xl bg-zinc-100 object-contain dark:bg-zinc-950"
+                className="mt-3 max-h-[42dvh] w-full rounded-xl bg-zinc-100 object-contain sm:max-h-[55vh] dark:bg-zinc-950"
               />
             )}
           </section>
@@ -473,7 +473,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
         </div>
 
         {analysis && (
-          <section className="border-t border-zinc-200 bg-zinc-50 px-5 py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
+          <section className="border-t border-zinc-200 bg-zinc-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Review unsafe image crops</h3>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
@@ -514,7 +514,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
                     </div>
 
                     {selected && (
-                      <div className="mt-3 flex items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-2 dark:border-emerald-800 dark:bg-emerald-950/20">
+                      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-2 dark:border-emerald-800 dark:bg-emerald-950/20">
                         <img
                           src={selected.src}
                           alt="Selected clean replacement"
@@ -535,7 +535,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
                             delete next[item.key];
                             return next;
                           })}
-                          className="rounded px-2 py-1 text-xs text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/30"
+                          className="ml-auto rounded px-2 py-1 text-xs text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/30"
                         >
                           Use placeholder
                         </button>
@@ -576,18 +576,18 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
         )}
         </div>
 
-        <div className="border-t border-zinc-200 px-5 py-4 dark:border-zinc-700">
+        <div className="shrink-0 border-t border-zinc-200 p-3 sm:px-5 sm:py-4 dark:border-zinc-700">
           {error && (
             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
               {error}
             </div>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="grid gap-2 sm:flex sm:justify-end">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               Cancel
             </button>
@@ -595,7 +595,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
               type="button"
               onClick={() => void handleCreate()}
               disabled={!reference || !canvasSize || preparing || submitting || Boolean(preparingReplacement)}
-              className="rounded-lg bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-5"
             >
               {submitting
                 ? analysis ? 'Creating editable draft…' : 'Analyzing poster…'

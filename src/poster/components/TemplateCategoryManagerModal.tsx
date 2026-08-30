@@ -134,9 +134,9 @@ export function TemplateCategoryManagerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[220] flex items-center justify-center overflow-hidden overscroll-none bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
-      <div className="grid max-h-[calc(100dvh-2rem)] min-h-0 w-full max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl md:grid-cols-[15rem_1fr] md:grid-rows-1 dark:border-zinc-700 dark:bg-zinc-900">
-        <aside className="max-h-56 overflow-y-auto overscroll-y-contain border-b border-zinc-200 bg-zinc-50 p-3 md:max-h-none md:border-b-0 md:border-r dark:border-zinc-700 dark:bg-zinc-950">
+    <div className="fixed inset-0 z-[220] flex items-center justify-center overflow-hidden overscroll-none bg-black/60 p-2 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
+      <div className="grid max-h-[calc(100dvh-1rem)] min-h-0 w-full max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl md:grid-cols-[15rem_1fr] md:grid-rows-1 dark:border-zinc-700 dark:bg-zinc-900">
+        <aside className="max-h-40 overflow-y-auto overscroll-y-contain border-b border-zinc-200 bg-zinc-50 p-2 sm:max-h-56 sm:p-3 md:max-h-none md:border-b-0 md:border-r dark:border-zinc-700 dark:bg-zinc-950">
           <button type="button" onClick={beginNew} className="w-full rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-700">
             + Add category
           </button>
@@ -157,15 +157,15 @@ export function TemplateCategoryManagerModal({
           </div>
         </aside>
 
-        <section className="min-h-0 overflow-y-auto overscroll-y-contain p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
+        <section className="min-h-0 overflow-y-auto overscroll-y-contain p-3 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="min-w-0">
               <h2 id="category-manager-title" className="text-lg font-semibold">{editingId ? 'Edit category' : 'Add a category'}</h2>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                 Define optional reminders shown in Create with AI. None of these inputs will block generation.
               </p>
             </div>
-            <button type="button" onClick={onClose} disabled={busy} className="rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">Close</button>
+            <button type="button" onClick={onClose} disabled={busy} className="self-end rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 sm:self-auto dark:hover:bg-zinc-800">Close</button>
           </div>
 
           <label className="mt-5 block text-sm font-medium">
@@ -173,7 +173,7 @@ export function TemplateCategoryManagerModal({
             <input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="Example: Sunday service" className={inputClass} />
           </label>
 
-          <div className="mt-6 flex items-center justify-between gap-3">
+          <div className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-semibold">Common optional inputs</h3>
               <p className="mt-1 text-xs text-zinc-500">Examples: venue, time, speaker, theme, Bible verse, logo.</p>
@@ -202,9 +202,9 @@ export function TemplateCategoryManagerModal({
           </div>
 
           {error && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</p>}
-          <div className="mt-6 flex flex-wrap justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <div className="mt-6 grid gap-3 border-t border-zinc-200 pt-4 sm:flex sm:flex-wrap sm:justify-between dark:border-zinc-700">
             <div>{editingId && <button type="button" onClick={() => void handleDelete()} disabled={busy} className="rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-900 dark:text-red-400">Delete category</button>}</div>
-            <button type="button" onClick={() => void handleSave()} disabled={busy} className="rounded-lg bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
+            <button type="button" onClick={() => void handleSave()} disabled={busy} className="w-full rounded-lg bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 sm:w-auto">
               {busy ? 'Saving…' : editingId ? 'Save changes' : 'Create category'}
             </button>
           </div>

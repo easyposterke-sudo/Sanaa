@@ -32,7 +32,7 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="poster-shapes-title"
@@ -40,8 +40,8 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900">
-        <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)] dark:bg-zinc-900">
+        <div className="shrink-0 border-b border-zinc-200 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700">
           <h2 id="poster-shapes-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Shapes
           </h2>
@@ -50,7 +50,7 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {SHAPES.map((s) => (
               <button
@@ -69,7 +69,7 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
           </div>
         </div>
 
-        <div className="border-t border-zinc-200 px-5 py-3 dark:border-zinc-700">
+        <div className="shrink-0 border-t border-zinc-200 p-3 sm:px-5 dark:border-zinc-700">
           <button
             type="button"
             onClick={onClose}

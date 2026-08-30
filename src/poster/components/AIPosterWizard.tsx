@@ -303,13 +303,13 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
   if (pendingPoster) {
     return (
       <div
-        className="fixed inset-0 z-[85] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-3 sm:p-6"
+        className="fixed inset-0 z-[85] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-2 sm:p-6"
         role="dialog"
         aria-modal="true"
         aria-labelledby="missing-poster-details-title"
       >
-        <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
+        <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="border-b border-zinc-200 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700">
             <h2 id="missing-poster-details-title" className="text-lg font-semibold text-zinc-900 dark:text-white">
               A few details may be missing
             </h2>
@@ -317,7 +317,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
               Add any details you want shown. Every field is optional, and the selected design stays hidden.
             </p>
           </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain p-5">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-y-contain p-3 sm:p-5">
             {pendingPoster.missingFields.map((field) => (
               <label key={field.key} className="block">
                 <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{field.label}</span>
@@ -338,12 +338,12 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
               </p>
             )}
           </div>
-          <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 px-5 py-4 dark:border-zinc-700">
+          <div className="grid shrink-0 gap-2 border-t border-zinc-200 p-3 sm:flex sm:flex-wrap sm:justify-end sm:px-5 sm:py-4 dark:border-zinc-700">
             <button
               type="button"
               disabled={submitting}
               onClick={() => void applyPendingPoster(pendingPoster, {})}
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               Leave blank and create
             </button>
@@ -351,7 +351,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
               type="button"
               disabled={submitting}
               onClick={() => void applyPendingPoster(pendingPoster, missingValues)}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
             >
               {submitting ? 'Creating…' : 'Add details and create'}
             </button>
@@ -363,8 +363,8 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
 
   if (result) {
     return (
-      <div className="fixed inset-x-3 bottom-3 z-[80] flex justify-center sm:bottom-6" role="status">
-        <div className="w-full max-w-xl rounded-2xl border border-emerald-300 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-emerald-800 dark:bg-zinc-900/95">
+      <div className="fixed inset-x-2 bottom-2 z-[80] flex justify-center sm:inset-x-3 sm:bottom-6" role="status">
+        <div className="max-h-[calc(100dvh-1rem)] w-full max-w-xl overflow-y-auto overscroll-y-contain rounded-xl border border-emerald-300 bg-white/95 p-3 shadow-2xl backdrop-blur sm:rounded-2xl sm:p-4 dark:border-emerald-800 dark:bg-zinc-900/95">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-semibold text-zinc-900 dark:text-white">Your poster is ready</p>
@@ -372,12 +372,12 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
                 Review it on the canvas. The template choice stays in the background.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => void handleGenerate()}
                 disabled={submitting}
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
               >
                 {submitting ? 'Finding another…' : 'Try another design'}
               </button>
@@ -385,7 +385,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
                 type="button"
                 onClick={onClose}
                 disabled={submitting}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 sm:w-auto"
               >
                 Use this poster
               </button>
@@ -403,15 +403,15 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-3 sm:p-6"
+      className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-2 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ai-poster-title"
     >
-      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] dark:border-zinc-700 dark:bg-zinc-900">
-        <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-700">
-          <div>
-            <h2 id="ai-poster-title" className="text-xl font-semibold text-zinc-900 dark:text-white">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-3 py-3 sm:gap-4 sm:px-5 sm:py-4 dark:border-zinc-700">
+          <div className="min-w-0">
+            <h2 id="ai-poster-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
               What do you want to create today?
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
@@ -423,13 +423,13 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
             type="button"
             onClick={onClose}
             disabled={submitting || preparingImages}
-            className="ml-4 rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
+            className="shrink-0 rounded-lg px-2 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 sm:px-3 sm:py-2 dark:hover:bg-zinc-800"
           >
             Close
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto overscroll-y-contain p-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-y-contain p-3 sm:p-5 lg:grid-cols-[1.2fr_0.8fr] lg:gap-6">
           <section>
             <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
               <label className="block text-sm font-semibold text-zinc-900 dark:text-white" htmlFor="ai-poster-category">
@@ -642,18 +642,18 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
           </section>
         </div>
 
-        <div className="border-t border-zinc-200 px-5 py-4 dark:border-zinc-700">
+        <div className="shrink-0 border-t border-zinc-200 p-3 sm:px-5 sm:py-4 dark:border-zinc-700">
           {error && (
             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
               {error}
             </div>
           )}
-          <div className="flex flex-wrap justify-end gap-2">
+          <div className="grid gap-2 sm:flex sm:flex-wrap sm:justify-end">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting || preparingImages}
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
               Cancel
             </button>
@@ -661,7 +661,7 @@ export function AIPosterWizard({ open, onClose, onApply }: AIPosterWizardProps) 
               type="button"
               onClick={() => void handleGenerate()}
               disabled={submitting || preparingImages || guidedBrief.length < 10}
-              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-5"
             >
               {submitting ? 'Finding and creating your poster…' : 'Create my poster'}
             </button>

@@ -150,8 +150,8 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4">
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)] dark:border-zinc-700 dark:bg-zinc-900">
         <div className="shrink-0 border-b border-zinc-200 p-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {publishAction === 'update'
@@ -171,7 +171,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
           <div className="flex flex-col gap-3">
             {fieldList.length > 0 && (
               <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-600 dark:bg-zinc-800/50">
@@ -238,12 +238,12 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 p-4 dark:border-zinc-700">
+        <div className="grid shrink-0 gap-2 border-t border-zinc-200 p-3 sm:flex sm:flex-wrap sm:justify-end sm:p-4 dark:border-zinc-700">
           <button
             type="button"
             onClick={onClose}
             disabled={publishBusy}
-            className="rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed dark:hover:bg-zinc-800"
+            className="w-full rounded px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5 dark:hover:bg-zinc-800"
           >
             Cancel
           </button>
@@ -253,7 +253,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
                 type="button"
                 disabled={publishBusy}
                 onClick={handlePublishCloud}
-                className="rounded border border-accent-600 px-4 py-1.5 text-sm font-medium text-accent-700 hover:bg-accent-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-accent-300 dark:hover:bg-accent-950/40"
+                className="w-full rounded border border-accent-600 px-4 py-2 text-sm font-medium text-accent-700 hover:bg-accent-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5 dark:text-accent-300 dark:hover:bg-accent-950/40"
               >
                 {publishAction === 'create' ? 'Saving new…' : 'Save as new template'}
               </button>
@@ -261,7 +261,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
                 type="button"
                 disabled={publishBusy}
                 onClick={handleUpdateCloud}
-                className="rounded bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full rounded bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
               >
                 {publishAction === 'update' ? 'Updating…' : 'Update template'}
               </button>
@@ -271,7 +271,7 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
               type="button"
               disabled={publishBusy}
               onClick={handlePublishCloud}
-              className="rounded bg-accent-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-accent-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full rounded bg-accent-600 px-4 py-2 text-sm font-medium text-white hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-1.5"
             >
               {publishAction === 'create' ? 'Saving…' : 'Save to cloud'}
             </button>

@@ -101,12 +101,12 @@ export function TemplateElementLabelModal({
 
   return (
     <div
-      className="fixed inset-0 z-[210] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4"
+      className="fixed inset-0 z-[210] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-y-contain rounded-xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto overscroll-y-contain rounded-xl border border-zinc-200 bg-white p-3 shadow-xl sm:max-h-[calc(100dvh-2rem)] sm:p-4 dark:border-zinc-700 dark:bg-zinc-900"
         role="dialog"
         aria-labelledby="tpl-label-title"
         onClick={(e) => e.stopPropagation()}
@@ -165,8 +165,8 @@ export function TemplateElementLabelModal({
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex gap-2">
+        <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             {existing && (
               <button
                 type="button"
@@ -181,14 +181,14 @@ export function TemplateElementLabelModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="w-full rounded px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-100 sm:w-auto sm:py-1.5 dark:hover:bg-zinc-800"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="rounded bg-accent-600 px-3 py-1.5 text-sm text-white hover:bg-accent-500"
+              className="w-full rounded bg-accent-600 px-3 py-2 text-sm text-white hover:bg-accent-500 sm:w-auto sm:py-1.5"
             >
               Save field
             </button>

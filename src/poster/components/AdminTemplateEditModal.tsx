@@ -133,9 +133,9 @@ export function AdminTemplateEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-4">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center overflow-hidden overscroll-none bg-black/50 p-2 sm:p-4">
       <div
-        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
+        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl sm:max-h-[calc(100dvh-2rem)] dark:border-zinc-700 dark:bg-zinc-900"
         role="dialog"
         aria-labelledby="admin-edit-title"
       >
@@ -150,7 +150,7 @@ export function AdminTemplateEditModal({
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Name</label>
@@ -210,8 +210,8 @@ export function AdminTemplateEditModal({
                   No fields defined. Open in editor to add labels to text/image layers.
                 </p>
               ) : (
-                <div className="max-h-48 overflow-y-auto">
-                  <table className="w-full text-left text-sm">
+                <div className="max-h-48 overflow-auto overscroll-contain">
+                  <table className="w-full min-w-[640px] text-left text-sm">
                     <thead>
                       <tr className="border-b border-zinc-200 bg-zinc-50/50 dark:border-zinc-700 dark:bg-zinc-800/30">
                         <th className="px-3 py-2 font-medium text-zinc-600 dark:text-zinc-400">Status</th>
@@ -258,15 +258,15 @@ export function AdminTemplateEditModal({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-200 px-4 py-3 dark:border-zinc-700">
+        <div className="grid shrink-0 gap-2 border-t border-zinc-200 p-3 sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:gap-3 sm:px-4 dark:border-zinc-700">
           <button
             type="button"
             onClick={handleOpenInEditor}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 sm:w-auto sm:py-1.5 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Open in editor to fix labels
           </button>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             <button
               type="button"
               onClick={onClose}
