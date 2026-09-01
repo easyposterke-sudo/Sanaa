@@ -48,6 +48,16 @@ export const TemplatePosterCatalogItemSchema = z
     category: TemplateCategorySchema,
     description: z.string().trim().max(500),
     fields: z.array(TemplatePosterFieldSchema).max(80),
+    /** Optional small trusted gallery rendering so the designer can judge the layout, not only field names. */
+    preview: z
+      .object({
+        dataUrl: z.string().startsWith('data:image/').max(300_000),
+        width: z.number().int().min(64).max(800),
+        height: z.number().int().min(64).max(1_600),
+      })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 

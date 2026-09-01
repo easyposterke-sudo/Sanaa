@@ -96,6 +96,33 @@ describe('poster designer agent contracts', () => {
     expect(validated?.expectedFacts).toEqual(expect.arrayContaining(['theme', 'venue', 'time']));
   });
 
+  it('removes an added text block when the same semantic fact already fills a template field', () => {
+    const plan = PosterDesignerPlanSchema.parse({
+      schemaVersion: 1,
+      templateId: 'church-1',
+      mode: 'adaptive',
+      concept: 'Use the existing venue treatment once.',
+      fields: [{ key: 'venue', value: 'Main Sanctuary', imageIndex: null }],
+      operations: [{
+        id: 'repeat_venue',
+        kind: 'add_text',
+        elementId: null,
+        semanticRole: 'venue',
+        text: 'Main Sanctuary',
+        box: { x: 0.1, y: 0.7, width: 0.8, height: 0.05 },
+        fontFamily: 'Inter',
+        fontSizeRatio: 0.025,
+        fontWeight: '600',
+        textAlign: 'center',
+        fill: '#ffffff',
+        reason: 'Duplicate venue that should be filtered.',
+      }],
+      expectedFacts: ['venue'],
+    });
+    const validated = validatePosterDesignerPlan(request(), plan);
+    expect(validated?.operations).toEqual([]);
+  });
+
   it('rejects an add_text operation without text or a box', () => {
     const parsed = PosterDesignerPlanSchema.safeParse({
       schemaVersion: 1,

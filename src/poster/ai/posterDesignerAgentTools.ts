@@ -78,6 +78,41 @@ export function applyPosterDesignerOperations(
       continue;
     }
 
+    if (operation.kind === 'add_panel') {
+      const box = operation.box;
+      if (!box || !operation.fill) {
+        skipped.push({ operationId: operation.id, reason: 'Missing panel box or fill.' });
+        continue;
+      }
+      const anchor = operation.elementId
+        ? elements.find((element) => element.id === operation.elementId)
+        : undefined;
+      const width = box.width * project.canvasWidth;
+      const height = box.height * project.canvasHeight;
+      const panel: PosterShapeElement = {
+        id: generateElementId(),
+        type: 'rect',
+        layerName: 'Agent: information panel',
+        left: box.x * project.canvasWidth,
+        top: box.y * project.canvasHeight,
+        scaleX: 1,
+        scaleY: 1,
+        angle: 0,
+        opacity: 1,
+        zIndex: anchor
+          ? anchor.zIndex - 0.25
+          : Math.max(0, ...elements.map((element) => element.zIndex)) + 1,
+        fill: operation.fill,
+        fillOpacity: operation.fillOpacity ?? 0.82,
+        width,
+        height,
+        rx: Math.min(width, height) * (operation.cornerRadiusRatio ?? 0.12),
+      };
+      elements.push(panel);
+      appliedOperationIds.push(operation.id);
+      continue;
+    }
+
     const index = elements.findIndex((element) => element.id === operation.elementId);
     if (index < 0) {
       skipped.push({ operationId: operation.id, reason: 'Target element is unavailable.' });
@@ -94,6 +129,36 @@ export function applyPosterDesignerOperations(
         ...element,
         zIndex: Math.max(0, ...elements.map((candidate) => candidate.zIndex)) + 1,
       };
+      appliedOperationIds.push(operation.id);
+      continue;
+    }
+
+    if (operation.kind === 'hide_duplicate_text') {
+      if (!isTextBearingElement(element)) {
+        skipped.push({ operationId: operation.id, reason: 'Only duplicate text layers can be hidden.' });
+        continue;
+      }
+      const targetCopy = canonicalTextKey(elementText(element));
+      const targetRole = semanticRoleForElement(bindings, element.id);
+      const survivor = elements.find((candidate) =>
+        candidate.id !== element.id &&
+        candidate.opacity > 0 &&
+        isTextBearingElement(candidate) &&
+        (
+          (targetCopy.length >= 5 && canonicalTextKey(elementText(candidate)) === canonicalTextKey(elementText(element))) ||
+          (targetRole !== null && targetRole !== 'other' && semanticRoleForElement(bindings, candidate.id) === targetRole)
+        ),
+      );
+      if (!survivor) {
+        skipped.push({ operationId: operation.id, reason: 'No matching visible semantic duplicate was found.' });
+        continue;
+      }
+      elements[index] = { ...element, opacity: 0 };
+      for (let bindingIndex = 0; bindingIndex < bindings.length; bindingIndex += 1) {
+        if (bindings[bindingIndex]!.sourceElementId === element.id) {
+          bindings[bindingIndex] = { ...bindings[bindingIndex]!, sourceElementId: survivor.id };
+        }
+      }
       appliedOperationIds.push(operation.id);
       continue;
     }
@@ -121,6 +186,12 @@ export function applyPosterDesignerOperations(
         if (baseWidth && baseHeight) {
           updates.scaleX = (box.width * project.canvasWidth) / baseWidth;
           updates.scaleY = (box.height * project.canvasHeight) / baseHeight;
+        }
+      } else {
+        const currentBounds = readFabricBounds(project.canvasWidth, project.canvasHeight).get(element.id);
+        if (currentBounds) {
+          updates.scaleX = element.scaleX * ((box.width * project.canvasWidth) / currentBounds.width);
+          updates.scaleY = element.scaleY * ((box.height * project.canvasHeight) / currentBounds.height);
         }
       }
       elements[index] = { ...element, ...updates } as PosterElement;
@@ -157,7 +228,7 @@ export function applyPosterDesignerOperations(
   }
 
   return {
-    project: { ...project, elements },
+    project: { ...project, elements: normalizeZIndexes(elements) },
     fieldBindings: bindings,
     appliedOperationIds,
     skipped,
@@ -195,6 +266,8 @@ export function collectPosterDesignerElementSummaries(
         fontSizeRatio: element.type === 'text' ? element.fontSize / project.canvasHeight : null,
         fill: element.type === 'text' && typeof element.fill === 'string' ? element.fill : null,
         zIndex: element.zIndex,
+        agentCreated: element.layerName?.startsWith('Agent:') ?? false,
+        locked: element.locked ?? false,
       };
     });
 }
@@ -225,13 +298,13 @@ export function validatePosterDesignerLayout(
     }
   }
 
-  const textElements = summaries.filter((element) => element.type === 'text' && element.text);
+  const textElements = summaries.filter((element) => Boolean(element.text));
   for (let leftIndex = 0; leftIndex < textElements.length; leftIndex += 1) {
     const left = textElements[leftIndex]!;
     for (let rightIndex = leftIndex + 1; rightIndex < textElements.length; rightIndex += 1) {
       const right = textElements[rightIndex]!;
       const overlap = overlapRatio(left.box, right.box);
-      if (overlap > 0.22) {
+      if (overlap > 0.08) {
         issues.push({
           code: 'text_overlap',
           severity: 'error',
@@ -239,12 +312,20 @@ export function validatePosterDesignerLayout(
           message: 'Two text layers substantially overlap.',
         });
       }
+      if (overlap === 0 && crowdedEdgeGap(left.box, right.box)) {
+        issues.push({
+          code: 'crowded_spacing',
+          severity: 'warning',
+          elementIds: [left.id, right.id],
+          message: 'Two text blocks have too little breathing room and should be regrouped or moved.',
+        });
+      }
     }
   }
 
   const firstByText = new Map<string, string>();
   for (const element of textElements) {
-    const normalized = element.text!.toLowerCase().replace(/\s+/g, ' ').trim();
+    const normalized = canonicalTextKey(element.text!);
     if (normalized.length < 5) continue;
     const first = firstByText.get(normalized);
     if (first) {
@@ -256,6 +337,45 @@ export function validatePosterDesignerLayout(
       });
     } else {
       firstByText.set(normalized, element.id);
+    }
+  }
+
+  const firstByRole = new Map<TemplatePosterSemanticRole, PosterDesignerElementSummary>();
+  for (const element of textElements) {
+    const role = element.semanticRole;
+    if (role !== 'title' && role !== 'theme') continue;
+    const first = firstByRole.get(role);
+    if (first) {
+      issues.push({
+        code: 'duplicate_semantic_role',
+        severity: role === 'title' || role === 'theme' ? 'error' : 'warning',
+        elementIds: [first.id, element.id],
+        message: `More than one visible text layer represents the poster ${humanizeRole(role).toLowerCase()}. Keep one intentional treatment.`,
+      });
+    } else {
+      firstByRole.set(role, element);
+    }
+  }
+
+  const titleSize = Math.max(
+    0,
+    ...textElements
+      .filter((element) => element.semanticRole === 'title')
+      .map((element) => element.fontSizeRatio ?? 0),
+  );
+  for (const element of textElements) {
+    const size = element.fontSizeRatio ?? 0;
+    const role = element.semanticRole;
+    const isMetadata = role && ['date', 'day', 'time', 'venue', 'contact', 'phone', 'website', 'email'].includes(role);
+    const overAbsoluteLimit = role !== 'title' && size > (role === 'theme' ? 0.065 : 0.05);
+    const overTitle = titleSize > 0 && role !== 'title' && size > titleSize * (role === 'theme' ? 0.9 : 0.68);
+    if (overAbsoluteLimit || (isMetadata && overTitle)) {
+      issues.push({
+        code: 'weak_hierarchy',
+        severity: 'warning',
+        elementIds: [element.id],
+        message: 'Supporting copy is competing with the main title and should be reduced or regrouped.',
+      });
     }
   }
 
@@ -357,6 +477,30 @@ function isShapeWithDimensions(element: PosterElement): element is PosterShapeEl
   return ['rect', 'circle', 'triangle', 'ellipse', 'line', 'polygon'].includes(element.type);
 }
 
+function isTextBearingElement(element: PosterElement): boolean {
+  return element.type === 'text' || element.type === '3d-text';
+}
+
+function elementText(element: PosterElement): string {
+  if (element.type === 'text') return element.text;
+  if (element.type === '3d-text') return element.config.text?.content ?? '';
+  return '';
+}
+
+function semanticRoleForElement(
+  bindings: readonly PosterTemplateFieldBinding[],
+  elementId: string,
+): TemplatePosterSemanticRole | null {
+  const binding = bindings.find((candidate) => candidate.sourceElementId === elementId);
+  return binding ? inferTemplateFieldSemanticRole(binding.key, binding.label) : null;
+}
+
+function normalizeZIndexes(elements: PosterElement[]): PosterElement[] {
+  const ordered = [...elements].sort((left, right) => left.zIndex - right.zIndex);
+  const zIndexById = new Map(ordered.map((element, index) => [element.id, index + 1]));
+  return elements.map((element) => ({ ...element, zIndex: zIndexById.get(element.id) ?? element.zIndex })) as PosterElement[];
+}
+
 function uniqueAgentFieldKey(
   bindings: readonly PosterTemplateFieldBinding[],
   role: TemplatePosterSemanticRole,
@@ -396,6 +540,30 @@ function overlapRatio(left: PosterDesignerElementSummary['box'], right: PosterDe
   const intersection = width * height;
   if (intersection === 0) return 0;
   return intersection / Math.max(0.0001, Math.min(left.width * left.height, right.width * right.height));
+}
+
+function crowdedEdgeGap(
+  left: PosterDesignerElementSummary['box'],
+  right: PosterDesignerElementSummary['box'],
+): boolean {
+  const horizontalOverlap = Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x));
+  const verticalOverlap = Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y));
+  const horizontalGap = Math.max(0, Math.max(left.x, right.x) - Math.min(left.x + left.width, right.x + right.width));
+  const verticalGap = Math.max(0, Math.max(left.y, right.y) - Math.min(left.y + left.height, right.y + right.height));
+  const alignedVertically = horizontalOverlap > Math.min(left.width, right.width) * 0.35;
+  const alignedHorizontally = verticalOverlap > Math.min(left.height, right.height) * 0.35;
+  return (alignedVertically && verticalGap > 0 && verticalGap < 0.012) ||
+    (alignedHorizontally && horizontalGap > 0 && horizontalGap < 0.012);
+}
+
+function canonicalTextKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(/\s+/)
+    .sort()
+    .join(' ');
 }
 
 function contrastRatio(foreground: string, background: string): number | null {

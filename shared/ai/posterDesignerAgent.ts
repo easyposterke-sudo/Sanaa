@@ -5,10 +5,11 @@ import {
   TemplatePosterImageSchema,
   TemplatePosterSemanticRoleSchema,
   detectProvidedMajorTemplateFacts,
+  type TemplatePosterSemanticRole,
 } from './templatePoster';
 
 export const POSTER_DESIGNER_AGENT_SCHEMA_VERSION = 1 as const;
-export const POSTER_DESIGNER_AGENT_PROMPT_VERSION = 'poster-designer-agent-v1' as const;
+export const POSTER_DESIGNER_AGENT_PROMPT_VERSION = 'poster-designer-agent-v2' as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -25,8 +26,10 @@ export type NormalizedAgentBox = z.infer<typeof NormalizedAgentBoxSchema>;
 
 export const PosterDesignerOperationKindSchema = z.enum([
   'add_text',
+  'add_panel',
   'move_resize',
   'update_text_style',
+  'hide_duplicate_text',
   'bring_to_front',
 ]);
 
@@ -48,6 +51,8 @@ export const PosterDesignerOperationSchema = z
     fontWeight: z.enum(['400', '500', '600', '700', '800', '900']).nullable(),
     textAlign: z.enum(['left', 'center', 'right']).nullable(),
     fill: HexColorSchema.nullable(),
+    fillOpacity: z.number().min(0.08).max(1).nullable().default(null),
+    cornerRadiusRatio: z.number().min(0).max(0.5).nullable().default(null),
     reason: z.string().trim().min(1).max(180),
   })
   .strict()
@@ -58,6 +63,10 @@ export const PosterDesignerOperationSchema = z
       }
       if (!operation.box) {
         context.addIssue({ code: 'custom', message: 'add_text requires a box.', path: ['box'] });
+      }
+    } else if (operation.kind === 'add_panel') {
+      if (!operation.box || !operation.fill) {
+        context.addIssue({ code: 'custom', message: 'add_panel requires a box and fill.', path: ['box'] });
       }
     } else if (!operation.elementId) {
       context.addIssue({ code: 'custom', message: `${operation.kind} requires elementId.`, path: ['elementId'] });
@@ -106,6 +115,8 @@ export const PosterDesignerElementSummarySchema = z
     fontSizeRatio: z.number().min(0).max(1).nullable(),
     fill: z.string().max(80).nullable(),
     zIndex: z.number().int(),
+    agentCreated: z.boolean(),
+    locked: z.boolean(),
   })
   .strict();
 
@@ -118,8 +129,11 @@ export const PosterDesignerValidationIssueSchema = z
       'text_too_small',
       'text_overlap',
       'duplicate_text',
+      'duplicate_semantic_role',
       'missing_fact',
       'low_contrast',
+      'weak_hierarchy',
+      'crowded_spacing',
     ]),
     severity: z.enum(['warning', 'error']),
     elementIds: z.array(z.string().trim().min(1).max(120)).max(8),
@@ -203,7 +217,14 @@ const operationJsonSchema = strictObject({
   id: { type: 'string', pattern: '^[a-z][a-z0-9_]{0,47}$' },
   kind: {
     type: 'string',
-    enum: ['add_text', 'move_resize', 'update_text_style', 'bring_to_front'],
+    enum: [
+      'add_text',
+      'add_panel',
+      'move_resize',
+      'update_text_style',
+      'hide_duplicate_text',
+      'bring_to_front',
+    ],
   },
   elementId: nullableString(120),
   semanticRole: {
@@ -220,6 +241,8 @@ const operationJsonSchema = strictObject({
   fontWeight: { type: ['string', 'null'], enum: ['400', '500', '600', '700', '800', '900', null] },
   textAlign: { type: ['string', 'null'], enum: ['left', 'center', 'right', null] },
   fill: { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$' },
+  fillOpacity: { type: ['number', 'null'], minimum: 0.08, maximum: 1 },
+  cornerRadiusRatio: { type: ['number', 'null'], minimum: 0, maximum: 0.5 },
   reason: { type: 'string', minLength: 1, maxLength: 180 },
 });
 
@@ -278,7 +301,23 @@ export function validatePosterDesignerPlan(
     ...detectProvidedMajorTemplateFacts(request.brief),
     ...plan.expectedFacts,
   ])).slice(0, 16);
-  return { ...plan, fields: safeFields, expectedFacts };
+  const filledRoles = new Set<TemplatePosterSemanticRole>();
+  const filledCopy = new Set<string>();
+  for (const value of safeFields) {
+    if (!value.value?.trim()) continue;
+    const field = fields.get(value.key);
+    if (!field) continue;
+    filledRoles.add(field.semanticRole);
+    for (const role of field.supportedFacts) filledRoles.add(role);
+    filledCopy.add(normalizePosterCopy(value.value));
+  }
+  const operations = plan.operations.filter((operation) => {
+    if (operation.kind !== 'add_text') return true;
+    const copy = normalizePosterCopy(operation.text ?? '');
+    if (copy && filledCopy.has(copy)) return false;
+    return !operation.semanticRole || !filledRoles.has(operation.semanticRole);
+  });
+  return { ...plan, fields: safeFields, operations, expectedFacts };
 }
 
 export function validatePosterDesignerReview(
@@ -289,7 +328,17 @@ export function validatePosterDesignerReview(
   return {
     ...review,
     operations: review.operations.filter(
-      (operation) => operation.kind === 'add_text' || Boolean(operation.elementId && elementIds.has(operation.elementId)),
+      (operation) =>
+        operation.kind === 'add_text' ||
+        (operation.kind === 'add_panel' && (!operation.elementId || elementIds.has(operation.elementId))) ||
+        Boolean(operation.elementId && elementIds.has(operation.elementId)),
     ),
   };
+}
+
+function normalizePosterCopy(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
 }

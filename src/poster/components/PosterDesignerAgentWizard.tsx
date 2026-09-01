@@ -20,7 +20,7 @@ import {
 import { fetchPosterTemplateById } from '../services/posterTemplatesApi';
 import { usePosterStore } from '../store/posterStore';
 import { instantiateTemplate } from '../templateMerge';
-import type { PosterTemplateFieldBinding } from '../templateTypes';
+import type { PosterTemplateDefinition, PosterTemplateFieldBinding } from '../templateTypes';
 import type { PosterProject } from '../types';
 
 type GeneratedAgentPoster = {
@@ -47,8 +47,12 @@ interface AgentResult {
   templateName: string;
   concept: string;
   source: 'openai' | 'fallback';
+  reviewSource: 'openai' | 'fallback' | null;
   review: PosterDesignerReview | null;
+  visualReviewRequested: boolean;
+  visualInspectionUsed: boolean;
   deterministicIssueCount: number;
+  revisionPasses: number;
   appliedOperations: number;
   skippedOperations: number;
 }
@@ -61,7 +65,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
   const [images, setImages] = useState<BriefImage[]>([]);
   const [themeEnabled, setThemeEnabled] = useState(false);
   const [themeColor, setThemeColor] = useState('#6d28d9');
-  const [visualReview, setVisualReview] = useState(false);
+  const [visualReview, setVisualReview] = useState(true);
   const [preparingImages, setPreparingImages] = useState(false);
   const [stage, setStage] = useState<AgentStage>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -138,15 +142,16 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           name: image.name.trim(),
           role: image.role.trim(),
         })),
-        templates: templates.slice(0, 100).map((template) => ({
+        templates: templates.slice(0, 100).map((template, index) => ({
           id: template.id,
           name: template.name,
           category: template.category,
           description: template.description ?? '',
           fields: buildTemplatePosterCatalogFields(template),
+          preview: visualReview && index < 8 ? templatePreview(template) : null,
         })),
         excludedTemplateIds: [],
-        maxRevisions: 1,
+        maxRevisions: 3,
       });
 
       setStage('building');
@@ -178,53 +183,70 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         response.plan.operations,
       );
       onApply({ project: initialTools.project, fieldBindings: initialTools.fieldBindings });
-
-      setStage('inspecting');
-      await waitForCanvasRender();
-      const renderedProject = usePosterStore.getState().getProject();
-      const summaries = collectPosterDesignerElementSummaries(
-        renderedProject,
-        initialTools.fieldBindings,
-      );
-      const issues = validatePosterDesignerLayout(
-        renderedProject,
-        summaries,
-        response.plan.expectedFacts,
-      );
-      const previewDataUrl = visualReview
-        ? await capturePosterThumbnail(
-            renderedProject.canvasWidth,
-            renderedProject.canvasHeight,
-            renderedProject.canvasBackground ?? {
-              type: 'solid',
-              color: renderedProject.canvasBackgroundColor ?? '#ffffff',
-            },
-          )
-        : null;
-      const preview = previewDataUrl
-        ? previewMetadata(previewDataUrl, renderedProject.canvasWidth, renderedProject.canvasHeight)
-        : null;
-
-      const reviewResponse = await reviewPosterDesignerDraft({
-        sessionId,
-        iteration: 1,
-        elements: summaries,
-        issues,
-        preview,
-      });
-
       let appliedOperations = initialTools.appliedOperationIds.length;
       let skippedOperations = initialTools.skipped.length;
-      if (reviewResponse.review.operations.length > 0) {
+      let revisionPasses = 0;
+      let deterministicIssueCount = 0;
+      let latestReview: PosterDesignerReview | null = null;
+      let latestReviewSource: 'openai' | 'fallback' | null = null;
+      let visualInspectionUsed = false;
+      let workingBindings = initialTools.fieldBindings;
+
+      // Two genuine correction passes followed by a third inspection-only pass.
+      for (let iteration = 1; iteration <= 3; iteration += 1) {
+        setStage('inspecting');
+        await waitForCanvasRender();
+        const renderedProject = usePosterStore.getState().getProject();
+        const summaries = collectPosterDesignerElementSummaries(renderedProject, workingBindings);
+        const issues = validatePosterDesignerLayout(
+          renderedProject,
+          summaries,
+          response.plan.expectedFacts,
+        );
+        deterministicIssueCount = issues.length;
+        const previewDataUrl = visualReview
+          ? await capturePosterThumbnail(
+              renderedProject.canvasWidth,
+              renderedProject.canvasHeight,
+              renderedProject.canvasBackground ?? {
+                type: 'solid',
+                color: renderedProject.canvasBackgroundColor ?? '#ffffff',
+              },
+            )
+          : null;
+        const reviewResponse = await reviewPosterDesignerDraft({
+          sessionId,
+          iteration,
+          elements: summaries,
+          issues,
+          preview: previewDataUrl
+            ? previewMetadata(previewDataUrl, renderedProject.canvasWidth, renderedProject.canvasHeight)
+            : null,
+        });
+        latestReview = reviewResponse.review;
+        latestReviewSource = reviewResponse.source;
+        visualInspectionUsed ||= Boolean(previewDataUrl);
+        const isFinalInspection = iteration === 3;
+        if (
+          isFinalInspection ||
+          reviewResponse.review.operations.length === 0 ||
+          reviewResponse.review.stopReason === 'quality_passed'
+        ) {
+          break;
+        }
+
         setStage('revising');
         const latestProject = usePosterStore.getState().getProject();
         const revised = applyPosterDesignerOperations(
           latestProject,
-          initialTools.fieldBindings,
+          workingBindings,
           reviewResponse.review.operations,
         );
         appliedOperations += revised.appliedOperationIds.length;
         skippedOperations += revised.skipped.length;
+        if (revised.appliedOperationIds.length === 0) break;
+        revisionPasses += 1;
+        workingBindings = revised.fieldBindings;
         onApply({ project: revised.project, fieldBindings: revised.fieldBindings });
         await waitForCanvasRender();
       }
@@ -233,8 +255,12 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         templateName: selectedTemplate.name,
         concept: response.plan.concept,
         source: response.source,
-        review: reviewResponse.review,
-        deterministicIssueCount: issues.length,
+        reviewSource: latestReviewSource,
+        review: latestReview,
+        visualReviewRequested: visualReview,
+        visualInspectionUsed,
+        deterministicIssueCount,
+        revisionPasses,
         appliedOperations,
         skippedOperations,
       });
@@ -264,7 +290,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
               </span>
             </div>
             <p className="mt-1 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">
-              The agent may adapt a template, create missing information blocks, inspect the rendered draft, and make one bounded revision.
+              The agent may adapt a template, create missing information blocks, inspect the rendered draft, and make up to two bounded visual corrections.
             </p>
           </div>
           <button
@@ -394,7 +420,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
                 <span className="flex-1">
                   <span className="text-sm font-semibold text-cyan-950 dark:text-cyan-100">Let the agent inspect a preview</span>
                   <span className="mt-1 block text-xs leading-5 text-cyan-800 dark:text-cyan-300">
-                    A reduced WebP preview, which may include supplied portraits and poster text, is sent privately to the configured AI service for one visual critique. Turn this off for geometry-only review.
+                    Small template previews and reduced WebP drafts, which may include supplied portraits and poster text, are sent privately to the configured AI service for visual planning and critique. Turn this off for metadata-and-geometry-only review.
                   </span>
                 </span>
               </label>
@@ -416,10 +442,17 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-emerald-900 dark:text-emerald-200">
                   <div><dt className="font-semibold">Base design</dt><dd>{result.templateName}</dd></div>
                   <div><dt className="font-semibold">Agent tools</dt><dd>{result.appliedOperations} applied</dd></div>
-                  <div><dt className="font-semibold">Initial checks</dt><dd>{result.deterministicIssueCount} issue{result.deterministicIssueCount === 1 ? '' : 's'}</dd></div>
+                  <div><dt className="font-semibold">Final checks</dt><dd>{result.deterministicIssueCount} issue{result.deterministicIssueCount === 1 ? '' : 's'}</dd></div>
+                  <div><dt className="font-semibold">Corrections</dt><dd>{result.revisionPasses} pass{result.revisionPasses === 1 ? '' : 'es'}</dd></div>
                   <div><dt className="font-semibold">Planner</dt><dd>{result.source === 'openai' ? 'AI' : 'safe fallback'}</dd></div>
+                  <div><dt className="font-semibold">Critic</dt><dd>{result.reviewSource === 'openai' ? 'AI visual critic' : 'safe fallback'}</dd></div>
                 </dl>
                 {result.review && <p className="mt-3 text-xs leading-5">{result.review.summary}</p>}
+                {result.visualReviewRequested && !result.visualInspectionUsed && (
+                  <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    The canvas could not be captured, so this run used geometry-only inspection.
+                  </p>
+                )}
                 {result.skippedOperations > 0 && <p className="mt-2 text-xs">{result.skippedOperations} unsafe or invalid operation{result.skippedOperations === 1 ? ' was' : 's were'} skipped.</p>}
               </div>
             )}
@@ -486,6 +519,17 @@ async function waitForCanvasRender(): Promise<void> {
 function previewMetadata(dataUrl: string, canvasWidth: number, canvasHeight: number) {
   const width = Math.max(64, Math.min(400, Math.round(canvasWidth)));
   const height = Math.max(64, Math.min(1_600, Math.round((canvasHeight / canvasWidth) * width)));
+  return { dataUrl, width, height };
+}
+
+function templatePreview(template: PosterTemplateDefinition) {
+  const dataUrl = template.thumbnail;
+  if (!dataUrl?.startsWith('data:image/') || dataUrl.length > 300_000) return null;
+  const width = Math.max(64, Math.min(400, Math.round(template.project.canvasWidth)));
+  const height = Math.max(
+    64,
+    Math.min(1_600, Math.round((template.project.canvasHeight / template.project.canvasWidth) * width)),
+  );
   return { dataUrl, width, height };
 }
 
