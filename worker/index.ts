@@ -1,5 +1,9 @@
 import { Hono } from 'hono';
 import {
+  PosterDesignerReviewRequestSchema,
+  PosterDesignerStartRequestSchema,
+} from '../shared/ai/posterDesignerAgent';
+import {
   POSTER_PLAN_PROMPT_VERSION,
   POSTER_PLAN_SCHEMA_VERSION,
   POSTER_RECIPE_CATALOG_VERSION,
@@ -84,6 +88,7 @@ import {
   UpdatePosterTemplateCategorySchema,
   type PosterTemplateCategoryInput,
 } from '../shared/poster/templateCategory';
+export { PosterDesignerAgent } from './agents/PosterDesignerAgent';
 
 type Variables = {
   ownerId: string;
@@ -589,6 +594,90 @@ app.delete('/api/poster-backgrounds/:id', async (context) => {
     .run();
   if (result.meta.changes === 0) return context.json({ error: 'Background not found.' }, 404);
   return context.body(null, 204);
+});
+
+app.post('/api/ai/poster-designer-agent/start', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const contentType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return context.json(
+      { error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(await readBoundedText(context.req.raw, maxAiRequestBytes(context.env)));
+  } catch (error) {
+    if (error instanceof RangeError) throw error;
+    return context.json(
+      { error: 'The agent design request is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const parsed = PosterDesignerStartRequestSchema.safeParse(json);
+  if (!parsed.success) {
+    return context.json(
+      { error: 'The poster brief or template catalog is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+
+  const instanceName = await posterDesignerInstanceName(context.get('ownerId'), parsed.data.sessionId);
+  const agent = context.env.POSTER_DESIGNER_AGENT.getByName(instanceName);
+  const response = await agent.fetch(new Request('https://poster-designer-agent.internal/start', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(parsed.data),
+  }));
+  const headers = new Headers(response.headers);
+  headers.set('cache-control', 'private, no-store');
+  headers.set('x-easyposter-request-id', requestId);
+  return new Response(response.body, { status: response.status, headers });
+});
+
+app.post('/api/ai/poster-designer-agent/review', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const contentType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return context.json(
+      { error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+
+  let json: unknown;
+  try {
+    json = JSON.parse(await readBoundedText(context.req.raw, maxAiRequestBytes(context.env)));
+  } catch (error) {
+    if (error instanceof RangeError) throw error;
+    return context.json(
+      { error: 'The agent review request is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const parsed = PosterDesignerReviewRequestSchema.safeParse(json);
+  if (!parsed.success) {
+    return context.json(
+      { error: 'The poster preview report is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+
+  const instanceName = await posterDesignerInstanceName(context.get('ownerId'), parsed.data.sessionId);
+  const agent = context.env.POSTER_DESIGNER_AGENT.getByName(instanceName);
+  const response = await agent.fetch(new Request('https://poster-designer-agent.internal/review', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(parsed.data),
+  }));
+  const headers = new Headers(response.headers);
+  headers.set('cache-control', 'private, no-store');
+  headers.set('x-easyposter-request-id', requestId);
+  return new Response(response.body, { status: response.status, headers });
 });
 
 app.post('/api/ai/template-poster', async (context) => {
@@ -2550,6 +2639,11 @@ function readCookie(
     }
   }
   return undefined;
+}
+
+async function posterDesignerInstanceName(ownerId: string, sessionId: string): Promise<string> {
+  const digest = await sha256Hex(new TextEncoder().encode(`${ownerId}\n${sessionId}`));
+  return `poster-${digest.slice(0, 48)}`;
 }
 
 export default app;

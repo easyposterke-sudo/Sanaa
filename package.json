@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.2",
+    "agents": "^0.22.0",
     "fabric": "^7.2.0",
     "hono": "^4.13.1",
     "html-to-image": "^1.11.13",

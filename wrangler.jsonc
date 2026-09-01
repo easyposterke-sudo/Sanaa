@@ -26,6 +26,20 @@
       "bucket_name": "easyposter-studio-assets"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "POSTER_DESIGNER_AGENT",
+        "class_name": "PosterDesignerAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PosterDesignerAgent"]
+    }
+  ],
   "observability": {
     "enabled": true,
     "logs": {

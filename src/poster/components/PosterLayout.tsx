@@ -15,6 +15,7 @@ import { TemplateElementLabelModal } from './TemplateElementLabelModal';
 import { SavePosterTemplateModal } from './SavePosterTemplateModal';
 import { AIPosterWizard } from './AIPosterWizard';
 import { AIPosterAssistant } from './AIPosterAssistant';
+import { PosterDesignerAgentWizard } from './PosterDesignerAgentWizard';
 import { TemplateCreatorWizard } from './TemplateCreatorWizard';
 import type { AIPosterSession } from '../ai/aiPosterSession';
 import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
@@ -89,6 +90,7 @@ export function PosterLayout() {
     setAutomatic3DRenderIds((ids) => ids.filter((id) => id !== elementId));
   }, []);
   const [aiWizardOpen, setAiWizardOpen] = useState(false);
+  const [posterDesignerAgentOpen, setPosterDesignerAgentOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [aiPosterSession, setAiPosterSession] = useState<AIPosterSession | null>(null);
   const [templateCreatorOpen, setTemplateCreatorOpen] = useState(false);
@@ -897,6 +899,7 @@ export function PosterLayout() {
           <PosterLeftSidebar
             readOnly={readOnly}
             onOpen3DModal={(m) => setThreeTextModal(m)}
+            onOpenPosterDesignerAgent={() => setPosterDesignerAgentOpen(true)}
             onOpenAIWizard={() => setAiWizardOpen(true)}
             onOpenAIAssistant={aiPosterSession ? () => setAiAssistantOpen(true) : undefined}
             onOpenTemplateCreator={() => setTemplateCreatorOpen(true)}
@@ -960,6 +963,14 @@ export function PosterLayout() {
         onApply={(compiled, meta) => {
           applyAIPoster(compiled);
           setAiPosterSession(meta.session);
+        }}
+      />
+      <PosterDesignerAgentWizard
+        open={posterDesignerAgentOpen}
+        onClose={() => setPosterDesignerAgentOpen(false)}
+        onApply={(compiled) => {
+          applyAIPoster(compiled);
+          setAiPosterSession(null);
         }}
       />
       {aiPosterSession && (
