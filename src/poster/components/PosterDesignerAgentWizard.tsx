@@ -4,9 +4,13 @@ import { applyTemplateTheme } from '../ai/applyTemplateTheme';
 import {
   applyPosterDesignerOperations,
   collectPosterDesignerElementSummaries,
+  stabilizePosterDesignerLayout,
   validatePosterDesignerLayout,
 } from '../ai/posterDesignerAgentTools';
-import { buildTemplatePosterCatalogFields } from '../ai/templateFieldCatalog';
+import {
+  buildTemplatePosterCatalogFields,
+  buildTemplatePosterExistingText,
+} from '../ai/templateFieldCatalog';
 import { capturePosterThumbnail } from '../canvasRef';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
@@ -53,6 +57,7 @@ interface AgentResult {
   visualInspectionUsed: boolean;
   deterministicIssueCount: number;
   revisionPasses: number;
+  safetyAdjustments: number;
   appliedOperations: number;
   skippedOperations: number;
 }
@@ -148,10 +153,11 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           category: template.category,
           description: template.description ?? '',
           fields: buildTemplatePosterCatalogFields(template),
+          existingText: buildTemplatePosterExistingText(template),
           preview: visualReview && index < 8 ? templatePreview(template) : null,
         })),
         excludedTemplateIds: [],
-        maxRevisions: 3,
+        maxRevisions: 4,
       });
 
       setStage('building');
@@ -191,13 +197,15 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
       let latestReviewSource: 'openai' | 'fallback' | null = null;
       let visualInspectionUsed = false;
       let workingBindings = initialTools.fieldBindings;
+      let latestSummaries: ReturnType<typeof collectPosterDesignerElementSummaries> = [];
 
-      // Two genuine correction passes followed by a third inspection-only pass.
-      for (let iteration = 1; iteration <= 3; iteration += 1) {
+      // Three genuine correction passes followed by a fourth inspection-only pass.
+      for (let iteration = 1; iteration <= 4; iteration += 1) {
         setStage('inspecting');
         await waitForCanvasRender();
         const renderedProject = usePosterStore.getState().getProject();
         const summaries = collectPosterDesignerElementSummaries(renderedProject, workingBindings);
+        latestSummaries = summaries;
         const issues = validatePosterDesignerLayout(
           renderedProject,
           summaries,
@@ -226,7 +234,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         latestReview = reviewResponse.review;
         latestReviewSource = reviewResponse.source;
         visualInspectionUsed ||= Boolean(previewDataUrl);
-        const isFinalInspection = iteration === 3;
+        const isFinalInspection = iteration === 4;
         if (
           isFinalInspection ||
           reviewResponse.review.operations.length === 0 ||
@@ -251,6 +259,22 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         await waitForCanvasRender();
       }
 
+      const stabilization = stabilizePosterDesignerLayout(
+        usePosterStore.getState().getProject(),
+        latestSummaries,
+      );
+      if (stabilization.adjustedElementIds.length > 0) {
+        onApply({ project: stabilization.project, fieldBindings: workingBindings });
+        await waitForCanvasRender();
+        const finalProject = usePosterStore.getState().getProject();
+        const finalSummaries = collectPosterDesignerElementSummaries(finalProject, workingBindings);
+        deterministicIssueCount = validatePosterDesignerLayout(
+          finalProject,
+          finalSummaries,
+          response.plan.expectedFacts,
+        ).length;
+      }
+
       setResult({
         templateName: selectedTemplate.name,
         concept: response.plan.concept,
@@ -261,6 +285,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         visualInspectionUsed,
         deterministicIssueCount,
         revisionPasses,
+        safetyAdjustments: stabilization.adjustedElementIds.length,
         appliedOperations,
         skippedOperations,
       });
@@ -290,7 +315,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
               </span>
             </div>
             <p className="mt-1 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">
-              The agent may adapt a template, create missing information blocks, inspect the rendered draft, and make up to two bounded visual corrections.
+              The agent may adapt a template, understand unlabeled visible copy, inspect the rendered draft, and make up to three bounded visual corrections.
             </p>
           </div>
           <button
@@ -444,6 +469,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
                   <div><dt className="font-semibold">Agent tools</dt><dd>{result.appliedOperations} applied</dd></div>
                   <div><dt className="font-semibold">Final checks</dt><dd>{result.deterministicIssueCount} issue{result.deterministicIssueCount === 1 ? '' : 's'}</dd></div>
                   <div><dt className="font-semibold">Corrections</dt><dd>{result.revisionPasses} pass{result.revisionPasses === 1 ? '' : 'es'}</dd></div>
+                  <div><dt className="font-semibold">Layout guard</dt><dd>{result.safetyAdjustments} adjustment{result.safetyAdjustments === 1 ? '' : 's'}</dd></div>
                   <div><dt className="font-semibold">Planner</dt><dd>{result.source === 'openai' ? 'AI' : 'safe fallback'}</dd></div>
                   <div><dt className="font-semibold">Critic</dt><dd>{result.reviewSource === 'openai' ? 'AI visual critic' : 'safe fallback'}</dd></div>
                 </dl>

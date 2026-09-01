@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTemplatePosterCatalogField,
+  buildTemplatePosterExistingText,
   inferTemplateFieldSemanticRole,
   inferTemplateFieldSupportedFacts,
 } from './templateFieldCatalog';
@@ -98,5 +99,26 @@ describe('template field catalog constraints', () => {
       maxCharacters: null,
       maxLines: null,
     });
+  });
+
+  it('recognizes a split unlabeled Sunday Service headline from prominent template text', () => {
+    const input = template('Unused');
+    input.fields = [];
+    input.project.elements = [
+      {
+        id: 'sunday', type: 'text', text: 'SUNDAY', left: 100, top: 80, width: 600,
+        fontSize: 120, fontFamily: 'Impact', fill: '#ffffff', scaleX: 1, scaleY: 1,
+        angle: 0, opacity: 1, zIndex: 1,
+      },
+      {
+        id: 'service', type: 'text', text: 'SERVICE', left: 180, top: 220, width: 520,
+        fontSize: 100, fontFamily: 'Impact', fill: '#ffffff', scaleX: 1, scaleY: 1,
+        angle: 0, opacity: 1, zIndex: 2,
+      },
+    ];
+    expect(buildTemplatePosterExistingText(input)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ text: 'SUNDAY', semanticRole: 'title', labeled: false }),
+      expect.objectContaining({ text: 'SERVICE', semanticRole: 'title', labeled: false }),
+    ]));
   });
 });

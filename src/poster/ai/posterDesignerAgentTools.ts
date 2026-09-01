@@ -1,5 +1,6 @@
 import type {
   PosterDesignerElementSummary,
+  NormalizedAgentBox,
   PosterDesignerOperation,
   PosterDesignerValidationIssue,
 } from '../../../shared/ai/posterDesignerAgent';
@@ -8,7 +9,10 @@ import { getFabricCanvasRef } from '../canvasRef';
 import type { PosterTemplateFieldBinding } from '../templateTypes';
 import type { PosterElement, PosterProject, PosterShapeElement, PosterTextElement } from '../types';
 import { generateElementId } from '../utils/generateElementId';
-import { inferTemplateFieldSemanticRole } from './templateFieldCatalog';
+import {
+  inferTemplateFieldSemanticRole,
+  inferVisibleTextSemanticRole,
+} from './templateFieldCatalog';
 
 export type PosterDesignerToolResult = {
   project: PosterProject;
@@ -37,7 +41,7 @@ export function applyPosterDesignerOperations(
 
     if (operation.kind === 'add_text') {
       const text = operation.text?.trim();
-      const box = operation.box;
+      const box = operation.box ? safeAgentBox(operation.box) : null;
       if (!text || !box) {
         skipped.push({ operationId: operation.id, reason: 'Missing text or layout box.' });
         continue;
@@ -58,7 +62,12 @@ export function applyPosterDesignerOperations(
         zIndex,
         text,
         width: Math.max(80, box.width * project.canvasWidth),
-        fontSize: Math.max(12, (operation.fontSizeRatio ?? defaultFontSizeRatio(role)) * project.canvasHeight),
+        fontSize: fitTextFontSize(
+          text,
+          box.width * project.canvasWidth,
+          box.height * project.canvasHeight,
+          (operation.fontSizeRatio ?? defaultFontSizeRatio(role)) * project.canvasHeight,
+        ),
         fontFamily: operation.fontFamily ?? defaultFontFamily(role),
         fontWeight: operation.fontWeight ?? defaultFontWeight(role),
         fontStyle: 'normal',
@@ -79,7 +88,7 @@ export function applyPosterDesignerOperations(
     }
 
     if (operation.kind === 'add_panel') {
-      const box = operation.box;
+      const box = operation.box ? safeAgentBox(operation.box) : null;
       if (!box || !operation.fill) {
         skipped.push({ operationId: operation.id, reason: 'Missing panel box or fill.' });
         continue;
@@ -139,14 +148,14 @@ export function applyPosterDesignerOperations(
         continue;
       }
       const targetCopy = canonicalTextKey(elementText(element));
-      const targetRole = semanticRoleForElement(bindings, element.id);
+      const targetRole = semanticRoleForElement(bindings, element, project);
       const survivor = elements.find((candidate) =>
         candidate.id !== element.id &&
         candidate.opacity > 0 &&
         isTextBearingElement(candidate) &&
         (
           (targetCopy.length >= 5 && canonicalTextKey(elementText(candidate)) === canonicalTextKey(elementText(element))) ||
-          (targetRole !== null && targetRole !== 'other' && semanticRoleForElement(bindings, candidate.id) === targetRole)
+          (targetRole !== null && targetRole !== 'other' && semanticRoleForElement(bindings, candidate, project) === targetRole)
         ),
       );
       if (!survivor) {
@@ -168,17 +177,24 @@ export function applyPosterDesignerOperations(
         skipped.push({ operationId: operation.id, reason: 'Missing target layout box.' });
         continue;
       }
-      const box = operation.box;
+      const box = safeAgentBox(operation.box);
       const updates: Partial<PosterElement> = {
         left: box.x * project.canvasWidth,
         top: box.y * project.canvasHeight,
       };
       if (element.type === 'text') {
+        const width = Math.max(80, box.width * project.canvasWidth);
+        const requestedFontSize = operation.fontSizeRatio !== null
+          ? operation.fontSizeRatio * project.canvasHeight
+          : element.fontSize;
         Object.assign(updates, {
-          width: Math.max(80, box.width * project.canvasWidth),
-          ...(operation.fontSizeRatio !== null
-            ? { fontSize: Math.max(12, operation.fontSizeRatio * project.canvasHeight) }
-            : {}),
+          width,
+          fontSize: fitTextFontSize(
+            element.text,
+            width,
+            box.height * project.canvasHeight,
+            requestedFontSize,
+          ),
         });
       } else if (isShapeWithDimensions(element)) {
         const baseWidth = element.width ?? (element.radius ? element.radius * 2 : undefined);
@@ -205,20 +221,34 @@ export function applyPosterDesignerOperations(
         continue;
       }
       const textElement = element as PosterTextElement;
+      const safeBox = operation.box ? safeAgentBox(operation.box) : null;
+      const targetWidth = safeBox
+        ? Math.max(80, safeBox.width * project.canvasWidth)
+        : Math.max(80, (textElement.width ?? 200) * Math.abs(textElement.scaleX));
+      const requestedFontSize = operation.fontSizeRatio !== null
+        ? operation.fontSizeRatio * project.canvasHeight
+        : textElement.fontSize;
       elements[index] = {
         ...textElement,
         ...(operation.fontFamily ? { fontFamily: operation.fontFamily } : {}),
-        ...(operation.fontSizeRatio !== null
-          ? { fontSize: Math.max(12, operation.fontSizeRatio * project.canvasHeight) }
+        ...((safeBox || operation.fontSizeRatio !== null)
+          ? {
+              fontSize: fitTextFontSize(
+                textElement.text,
+                targetWidth,
+                safeBox ? safeBox.height * project.canvasHeight : project.canvasHeight * 0.3,
+                requestedFontSize,
+              ),
+            }
           : {}),
         ...(operation.fontWeight ? { fontWeight: operation.fontWeight } : {}),
         ...(operation.textAlign ? { textAlign: operation.textAlign } : {}),
         ...(operation.fill ? { fill: operation.fill } : {}),
-        ...(operation.box
+        ...(safeBox
           ? {
-              left: operation.box.x * project.canvasWidth,
-              top: operation.box.y * project.canvasHeight,
-              width: Math.max(80, operation.box.width * project.canvasWidth),
+              left: safeBox.x * project.canvasWidth,
+              top: safeBox.y * project.canvasHeight,
+              width: targetWidth,
             }
           : {}),
       };
@@ -257,10 +287,18 @@ export function collectPosterDesignerElementSummaries(
         : element.type === '3d-text'
           ? element.config.text?.content ?? null
           : null;
+      const boundRole = roleByElementId.get(element.id) ?? null;
+      const inferredRole = text
+        ? inferVisibleTextSemanticRole(
+            text,
+            element.type === 'text' ? element.fontSize / project.canvasHeight : null,
+            bounds.height / project.canvasHeight,
+          )
+        : null;
       return {
         id: element.id,
         type: element.type,
-        semanticRole: roleByElementId.get(element.id) ?? null,
+        semanticRole: boundRole && boundRole !== 'other' ? boundRole : inferredRole ?? boundRole,
         text: text?.trim().slice(0, 500) || null,
         box: normalizeBounds(bounds, project.canvasWidth, project.canvasHeight),
         fontSizeRatio: element.type === 'text' ? element.fontSize / project.canvasHeight : null,
@@ -340,20 +378,20 @@ export function validatePosterDesignerLayout(
     }
   }
 
-  const firstByRole = new Map<TemplatePosterSemanticRole, PosterDesignerElementSummary>();
-  for (const element of textElements) {
-    const role = element.semanticRole;
-    if (role !== 'title' && role !== 'theme') continue;
-    const first = firstByRole.get(role);
-    if (first) {
+  for (const role of ['title', 'theme'] as const) {
+    const roleElements = textElements.filter((element) => element.semanticRole === role);
+    const agentElements = roleElements.filter((element) => element.agentCreated);
+    if (roleElements.length > 1 && agentElements.length > 0) {
+      const templateElement = roleElements.find((element) => !element.agentCreated);
       issues.push({
         code: 'duplicate_semantic_role',
-        severity: role === 'title' || role === 'theme' ? 'error' : 'warning',
-        elementIds: [first.id, element.id],
-        message: `More than one visible text layer represents the poster ${humanizeRole(role).toLowerCase()}. Keep one intentional treatment.`,
+        severity: 'error',
+        elementIds: [
+          ...(templateElement ? [templateElement.id] : []),
+          ...agentElements.map((element) => element.id),
+        ].slice(0, 8),
+        message: `Agent-added copy repeats the template's visible ${humanizeRole(role).toLowerCase()}. Keep the integrated template treatment.`,
       });
-    } else {
-      firstByRole.set(role, element);
     }
   }
 
@@ -414,6 +452,92 @@ export function validatePosterDesignerLayout(
   }
 
   return dedupeIssues(issues).slice(0, 80);
+}
+
+/**
+ * Last-resort geometry guard after the visual critic finishes. It only keeps
+ * visible editable layers inside safe bounds and separates colliding support
+ * copy; it deliberately leaves intentional template title art alone.
+ */
+export function stabilizePosterDesignerLayout(
+  project: PosterProject,
+  summaries: readonly PosterDesignerElementSummary[],
+): { project: PosterProject; adjustedElementIds: string[] } {
+  const elements = project.elements.map((element) => ({ ...element })) as PosterElement[];
+  const elementById = new Map(elements.map((element) => [element.id, element]));
+  const boxes = new Map(summaries.map((summary) => [summary.id, { ...summary.box }]));
+  const adjusted = new Set<string>();
+  const margin = 0.025;
+
+  for (const summary of summaries) {
+    if (summary.locked) continue;
+    const element = elementById.get(summary.id);
+    const box = boxes.get(summary.id);
+    if (!element || !box) continue;
+    const scale = Math.min(1, (1 - margin * 2) / box.width, (1 - margin * 2) / box.height);
+    if (scale < 0.999) {
+      element.scaleX *= scale;
+      element.scaleY *= scale;
+      box.width *= scale;
+      box.height *= scale;
+      adjusted.add(element.id);
+    }
+    const targetX = clamp(box.x, margin, 1 - margin - box.width);
+    const targetY = clamp(box.y, margin, 1 - margin - box.height);
+    if (Math.abs(targetX - box.x) > 0.001 || Math.abs(targetY - box.y) > 0.001) {
+      element.left += (targetX - box.x) * project.canvasWidth;
+      element.top += (targetY - box.y) * project.canvasHeight;
+      box.x = targetX;
+      box.y = targetY;
+      adjusted.add(element.id);
+    }
+  }
+
+  const textSummaries = summaries.filter((summary) => Boolean(summary.text));
+  for (let pass = 0; pass < 4; pass += 1) {
+    let moved = false;
+    for (let leftIndex = 0; leftIndex < textSummaries.length; leftIndex += 1) {
+      const left = textSummaries[leftIndex]!;
+      for (let rightIndex = leftIndex + 1; rightIndex < textSummaries.length; rightIndex += 1) {
+        const right = textSummaries[rightIndex]!;
+        const leftBox = boxes.get(left.id);
+        const rightBox = boxes.get(right.id);
+        if (!leftBox || !rightBox || overlapRatio(leftBox, rightBox) <= 0.04) continue;
+        if (
+          !left.agentCreated &&
+          !right.agentCreated &&
+          isHeroRole(left.semanticRole) &&
+          isHeroRole(right.semanticRole)
+        ) continue;
+        const moving = chooseMovableSupportText(left, right);
+        const stationary = moving.id === left.id ? right : left;
+        if (moving.locked || !isSupportRole(moving.semanticRole, moving.agentCreated)) continue;
+        const movingElement = elementById.get(moving.id);
+        const movingBox = boxes.get(moving.id);
+        const stationaryBox = boxes.get(stationary.id);
+        if (!movingElement || !movingBox || !stationaryBox) continue;
+        const gap = 0.015;
+        const below = stationaryBox.y + stationaryBox.height + gap;
+        const above = stationaryBox.y - gap - movingBox.height;
+        const targetY = below + movingBox.height <= 1 - margin
+          ? below
+          : above >= margin
+            ? above
+            : null;
+        if (targetY === null || Math.abs(targetY - movingBox.y) < 0.001) continue;
+        movingElement.top += (targetY - movingBox.y) * project.canvasHeight;
+        movingBox.y = targetY;
+        adjusted.add(moving.id);
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+
+  return {
+    project: { ...project, elements: normalizeZIndexes(elements) },
+    adjustedElementIds: [...adjusted],
+  };
 }
 
 function readFabricBounds(canvasWidth: number, canvasHeight: number): Map<string, Bounds> {
@@ -489,10 +613,20 @@ function elementText(element: PosterElement): string {
 
 function semanticRoleForElement(
   bindings: readonly PosterTemplateFieldBinding[],
-  elementId: string,
+  element: PosterElement,
+  project: PosterProject,
 ): TemplatePosterSemanticRole | null {
-  const binding = bindings.find((candidate) => candidate.sourceElementId === elementId);
-  return binding ? inferTemplateFieldSemanticRole(binding.key, binding.label) : null;
+  const binding = bindings.find((candidate) => candidate.sourceElementId === element.id);
+  if (binding) {
+    const role = inferTemplateFieldSemanticRole(binding.key, binding.label, elementText(element));
+    if (role !== 'other') return role;
+  }
+  const bounds = fallbackBounds(element, project);
+  return inferVisibleTextSemanticRole(
+    elementText(element),
+    element.type === 'text' ? element.fontSize / project.canvasHeight : null,
+    bounds.height / project.canvasHeight,
+  );
 }
 
 function normalizeZIndexes(elements: PosterElement[]): PosterElement[] {
@@ -534,6 +668,53 @@ function defaultFontWeight(role: TemplatePosterSemanticRole): PosterTextElement[
   return role === 'title' || role === 'theme' ? '800' : '600';
 }
 
+function safeAgentBox(box: NormalizedAgentBox): NormalizedAgentBox {
+  const margin = 0.025;
+  const width = clamp(box.width, 0.03, 1 - margin * 2);
+  const height = clamp(box.height, 0.02, 1 - margin * 2);
+  return {
+    x: clamp(box.x, margin, 1 - margin - width),
+    y: clamp(box.y, margin, 1 - margin - height),
+    width,
+    height,
+  };
+}
+
+function fitTextFontSize(
+  text: string,
+  width: number,
+  height: number,
+  requestedFontSize: number,
+): number {
+  let fontSize = clamp(requestedFontSize, 12, Math.max(12, height * 0.92));
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const lineCount = estimatedWrappedLineCount(text, width, fontSize);
+    if (lineCount * fontSize * 1.12 <= height) break;
+    fontSize *= 0.9;
+  }
+  return Math.max(12, fontSize);
+}
+
+function estimatedWrappedLineCount(text: string, width: number, fontSize: number): number {
+  const capacity = Math.max(1, Math.floor(width / Math.max(1, fontSize * 0.56)));
+  return text.split(/\r?\n/).reduce((total, paragraph) => {
+    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return total + 1;
+    let lines = 1;
+    let used = 0;
+    for (const word of words) {
+      const length = Math.max(1, word.length);
+      if (used > 0 && used + 1 + length > capacity) {
+        lines += 1;
+        used = length;
+      } else {
+        used += (used > 0 ? 1 : 0) + length;
+      }
+    }
+    return total + lines;
+  }, 0);
+}
+
 function overlapRatio(left: PosterDesignerElementSummary['box'], right: PosterDesignerElementSummary['box']): number {
   const width = Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x));
   const height = Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y));
@@ -554,6 +735,38 @@ function crowdedEdgeGap(
   const alignedHorizontally = verticalOverlap > Math.min(left.height, right.height) * 0.35;
   return (alignedVertically && verticalGap > 0 && verticalGap < 0.012) ||
     (alignedHorizontally && horizontalGap > 0 && horizontalGap < 0.012);
+}
+
+function isHeroRole(role: TemplatePosterSemanticRole | null): boolean {
+  return role === 'title' || role === 'theme';
+}
+
+function isSupportRole(role: TemplatePosterSemanticRole | null, agentCreated: boolean): boolean {
+  if (agentCreated) return true;
+  return role !== null && [
+    'tagline',
+    'person_name',
+    'date',
+    'day',
+    'time',
+    'venue',
+    'contact',
+    'phone',
+    'website',
+    'email',
+    'extra_details',
+  ].includes(role);
+}
+
+function chooseMovableSupportText(
+  left: PosterDesignerElementSummary,
+  right: PosterDesignerElementSummary,
+): PosterDesignerElementSummary {
+  const score = (element: PosterDesignerElementSummary) =>
+    (element.agentCreated ? 100 : 0) +
+    (isSupportRole(element.semanticRole, element.agentCreated) ? 20 : 0) +
+    element.zIndex / 10_000;
+  return score(right) >= score(left) ? right : left;
 }
 
 function canonicalTextKey(value: string): string {

@@ -4,6 +4,7 @@ import type { PosterProject } from '../types';
 import {
   applyPosterDesignerOperations,
   collectPosterDesignerElementSummaries,
+  stabilizePosterDesignerLayout,
   validatePosterDesignerLayout,
 } from './posterDesignerAgentTools';
 
@@ -199,5 +200,80 @@ describe('poster designer browser tools', () => {
     ], [operation]);
     expect(result.project.elements.find((element) => element.id === 'agent-title')?.opacity).toBe(0);
     expect(result.fieldBindings.every((binding) => binding.sourceElementId === 'title-1')).toBe(true);
+  });
+
+  it('recognizes an agent title as duplicating a split unlabeled template headline', () => {
+    const source = project();
+    source.elements = [
+      {
+        id: 'fixed-sunday', type: 'text', text: 'SUNDAY', left: 80, top: 60, width: 760,
+        fontSize: 120, fontFamily: 'Impact', fill: '#ffffff', scaleX: 1, scaleY: 1,
+        angle: 0, opacity: 1, zIndex: 1,
+      },
+      {
+        id: 'fixed-service', type: 'text', text: 'SERVICE', left: 140, top: 190, width: 700,
+        fontSize: 100, fontFamily: 'Impact', fill: '#ffffff', scaleX: 1, scaleY: 1,
+        angle: 0, opacity: 1, zIndex: 2,
+      },
+      {
+        id: 'agent-title', type: 'text', layerName: 'Agent: Title', text: 'Sunday Service',
+        left: 100, top: 330, width: 800, fontSize: 80, fontFamily: 'Inter', fill: '#ffffff',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 3,
+      },
+    ];
+    const summaries = collectPosterDesignerElementSummaries(source, [
+      { key: 'agent_title', label: 'Title', sourceElementId: 'agent-title', kind: 'text' },
+    ]);
+    expect(summaries.filter((summary) => summary.semanticRole === 'title')).toHaveLength(3);
+    expect(validatePosterDesignerLayout(source, summaries, ['title'])).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'duplicate_semantic_role',
+        elementIds: expect.arrayContaining(['agent-title']),
+      }),
+    ]));
+  });
+
+  it('clamps unsafe requested boxes and fits long text inside its requested height', () => {
+    const operation: PosterDesignerOperation = {
+      ...addThemeOperation(),
+      id: 'safe_long_detail',
+      semanticRole: 'extra_details',
+      text: 'Second service starts at 9:30am',
+      box: { x: 0.9, y: 0.94, width: 0.5, height: 0.05 },
+      fontSizeRatio: 0.08,
+    };
+    const result = applyPosterDesignerOperations(project(), [], [operation]);
+    const added = result.project.elements.at(-1);
+    expect(added?.type).toBe('text');
+    if (added?.type !== 'text') throw new Error('Expected fitted text.');
+    expect(added.left + (added.width ?? 0)).toBeLessThanOrEqual(975);
+    expect(added.top).toBeLessThanOrEqual(925);
+    expect(added.fontSize).toBeLessThan(50);
+  });
+
+  it('separates overlapping service times in the deterministic final layout guard', () => {
+    const source = project();
+    source.elements = [
+      {
+        id: 'time-one', type: 'text', text: '8am', left: 300, top: 720, width: 300,
+        fontSize: 55, fontFamily: 'Inter', fill: '#ffffff', scaleX: 1, scaleY: 1,
+        angle: 0, opacity: 1, zIndex: 1,
+      },
+      {
+        id: 'time-two', type: 'text', text: '9:30am', left: 300, top: 730, width: 300,
+        fontSize: 55, fontFamily: 'Inter', fill: '#ffffff', scaleX: 1, scaleY: 1,
+        angle: 0, opacity: 1, zIndex: 2,
+      },
+    ];
+    const bindings = [
+      { key: 'first_time', label: 'First service time', sourceElementId: 'time-one', kind: 'text' as const },
+      { key: 'second_time', label: 'Second service time', sourceElementId: 'time-two', kind: 'text' as const },
+    ];
+    const summaries = collectPosterDesignerElementSummaries(source, bindings);
+    const stabilized = stabilizePosterDesignerLayout(source, summaries);
+    const first = stabilized.project.elements.find((element) => element.id === 'time-one');
+    const second = stabilized.project.elements.find((element) => element.id === 'time-two');
+    expect(stabilized.adjustedElementIds).toContain('time-two');
+    expect(Math.abs((first?.top ?? 0) - (second?.top ?? 0))).toBeGreaterThan(50);
   });
 });

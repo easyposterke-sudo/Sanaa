@@ -1,5 +1,6 @@
 import type {
   TemplatePosterCatalogItem,
+  TemplatePosterExistingText,
   TemplatePosterSemanticRole,
 } from '../../../shared/ai/templatePoster';
 import type {
@@ -15,6 +16,69 @@ export function buildTemplatePosterCatalogFields(
   return (template.fields ?? []).slice(0, 80).map((field) =>
     buildTemplatePosterCatalogField(template, field),
   );
+}
+
+export function buildTemplatePosterExistingText(
+  template: PosterTemplateDefinition,
+): TemplatePosterExistingText[] {
+  const bindingByElementId = new Map(
+    (template.fields ?? []).map((field) => [field.sourceElementId, field]),
+  );
+  const canvasWidth = Math.max(1, template.project.canvasWidth);
+  const canvasHeight = Math.max(1, template.project.canvasHeight);
+  return template.project.elements
+    .filter((element) => element.opacity > 0 && (element.type === 'text' || element.type === '3d-text'))
+    .slice(0, 120)
+    .flatMap((element) => {
+      const text = readTextContent(element).trim();
+      if (!text) return [];
+      const binding = bindingByElementId.get(element.id);
+      const bounds = approximateTextBounds(element, canvasWidth, canvasHeight);
+      const fontSizeRatio = element.type === 'text' ? element.fontSize / canvasHeight : null;
+      const semanticRole = binding
+        ? inferTemplateFieldSemanticRole(binding.key, binding.label, text)
+        : inferVisibleTextSemanticRole(text, fontSizeRatio, bounds.height / canvasHeight);
+      return [{
+        elementId: element.id,
+        text: text.slice(0, 500),
+        semanticRole,
+        labeled: Boolean(binding),
+        fontSizeRatio,
+        box: {
+          x: clamp(element.left / canvasWidth, 0, 1),
+          y: clamp(element.top / canvasHeight, 0, 1),
+          width: clamp(bounds.width / canvasWidth, 0.01, 1),
+          height: clamp(bounds.height / canvasHeight, 0.01, 1),
+        },
+      }];
+    });
+}
+
+/** Infer useful meaning from visible copy even when a template creator did not label the layer. */
+export function inferVisibleTextSemanticRole(
+  text: string,
+  fontSizeRatio: number | null = null,
+  heightRatio: number | null = null,
+): TemplatePosterSemanticRole | null {
+  const copy = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (!copy) return null;
+  const prominent = Math.max(fontSizeRatio ?? 0, heightRatio ?? 0) >= 0.05;
+  if (
+    /\b(?:sunday|worship|church|morning|evening)\s+(?:service|worship)\b/.test(copy) ||
+    (prominent && /^(?:sunday|service|worship)$/.test(copy)) ||
+    (prominent && /\b(?:conference|summit|crusade|concert|festival|seminar)\b/.test(copy))
+  ) return 'title';
+  if (/\b(?:church|chapel|fellowship|ministry|ministries)\b/.test(copy)) return 'organization';
+  if (/^(?:every\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?$/.test(copy)) return 'day';
+  if (/\b\d{1,2}(?::\d{2}|\.\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/.test(copy)) return 'time';
+  if (/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/.test(copy)) return 'date';
+  if (/\b(?:pastor|pst|speaker|guest|minister|host)\b/.test(copy)) return 'person_name';
+  if (/^(?:theme|motto|scripture|verse)\b/.test(copy)) return 'theme';
+  if (/\b(?:venue|location|address|university|hall|auditorium|road|street|gate)\b/.test(copy)) return 'venue';
+  if (/\b(?:www\.|https?:\/\/|\.com|\.org|\.church|\.co\.ke)\b/.test(copy)) return 'website';
+  if (/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(text)) return 'email';
+  if (/(?:\+\d[\d\s().-]{7,}\d|\b0\d{8,14}\b)/.test(text)) return 'phone';
+  return null;
 }
 
 export function buildTemplatePosterCatalogField(
@@ -120,6 +184,28 @@ function readTextContent(element: PosterTemplateDefinition['project']['elements'
   if (element?.type === 'text') return element.text;
   if (element?.type === '3d-text') return element.config.text?.content ?? '';
   return '';
+}
+
+function approximateTextBounds(
+  element: PosterTemplateDefinition['project']['elements'][number],
+  canvasWidth: number,
+  canvasHeight: number,
+): { width: number; height: number } {
+  if (element.type === 'text') {
+    const lines = Math.max(1, element.text.split(/\r?\n/).length);
+    return {
+      width: Math.max(1, (element.width ?? element.fontSize * Math.max(2, element.text.length * 0.55)) * Math.abs(element.scaleX)),
+      height: Math.max(1, element.fontSize * (element.lineHeight ?? 1.16) * lines * Math.abs(element.scaleY)),
+    };
+  }
+  return {
+    width: canvasWidth * 0.25 * Math.abs(element.scaleX),
+    height: canvasHeight * 0.08 * Math.abs(element.scaleY),
+  };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
 }
 
 function textFieldLimits(

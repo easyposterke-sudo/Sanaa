@@ -26,6 +26,26 @@ export const TemplatePosterSemanticRoleSchema = z.enum([
 
 export type TemplatePosterSemanticRole = z.infer<typeof TemplatePosterSemanticRoleSchema>;
 
+export const TemplatePosterExistingTextSchema = z
+  .object({
+    elementId: z.string().trim().min(1).max(120),
+    text: z.string().trim().min(1).max(500),
+    semanticRole: TemplatePosterSemanticRoleSchema.nullable(),
+    labeled: z.boolean(),
+    fontSizeRatio: z.number().min(0).max(1).nullable(),
+    box: z
+      .object({
+        x: z.number().min(0).max(1),
+        y: z.number().min(0).max(1),
+        width: z.number().min(0.01).max(1),
+        height: z.number().min(0.01).max(1),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type TemplatePosterExistingText = z.infer<typeof TemplatePosterExistingTextSchema>;
+
 export const TemplatePosterFieldSchema = z
   .object({
     key: z.string().trim().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/).max(100),
@@ -48,6 +68,8 @@ export const TemplatePosterCatalogItemSchema = z
     category: TemplateCategorySchema,
     description: z.string().trim().max(500),
     fields: z.array(TemplatePosterFieldSchema).max(80),
+    /** Visible copy is inventoried even when the template creator did not label it as a fillable field. */
+    existingText: z.array(TemplatePosterExistingTextSchema).max(120).optional(),
     /** Optional small trusted gallery rendering so the designer can judge the layout, not only field names. */
     preview: z
       .object({

@@ -208,7 +208,8 @@ Design policy:
 - Choose only a template id from the supplied catalog, but DO NOT reject a useful template merely because it lacks a field. Use adaptive mode and add_text for supplied facts that have no compatible slot.
 - Preserve every explicitly supplied organization, person, theme, date, day, time, venue, phone, website, and email exactly. Never invent event facts.
 - Map text only to semantically compatible fields. Map image indexes only to image fields.
-- Never add_text for a semantic role already filled through a template field. Never repeat a title, day, date, service name, organization, or person name.
+- Treat existingText as authoritative visible template copy, including layers that were never labeled as fields. Several nearby large layers may compose one phrase; for example “SUNDAY” plus “SERVICE” is already the title “Sunday Service.”
+- Never add_text for a semantic role already filled through a template field or already visibly expressed by existingText. Never repeat a title, day, date, service name, organization, or person name.
 - Compose in intentional zones: identity, hero/title, theme, event logistics, people, and footer. Added facts must form one aligned group, not isolated labels scattered across the canvas.
 - Keep the template's visual grammar. Prefer adding no more than five missing text blocks. If several missing facts belong together, add one restrained rounded add_panel before the related add_text operations. A panel must support hierarchy and contrast, not decorate randomly.
 - Use normalized boxes. Keep added blocks inside x=0.05..0.95 and y=0.05..0.95. Reserve breathing room around the hero title and portrait. Do not place text over faces, existing headlines, dates, or footer copy.
@@ -250,6 +251,7 @@ ${JSON.stringify({
       category: template.category,
       description: template.description,
       fields: template.fields,
+      existingText: template.existingText,
     })),
   })}`;
 }

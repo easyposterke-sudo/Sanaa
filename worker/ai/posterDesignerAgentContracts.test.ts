@@ -123,6 +123,64 @@ describe('poster designer agent contracts', () => {
     expect(validated?.operations).toEqual([]);
   });
 
+  it('does not add a Sunday Service title when split unlabeled template copy already expresses it', () => {
+    const input = request();
+    input.templates[0]!.existingText = [
+      {
+        elementId: 'fixed-sunday', text: 'SUNDAY', semanticRole: 'title', labeled: false,
+        fontSizeRatio: 0.12, box: { x: 0.1, y: 0.08, width: 0.8, height: 0.14 },
+      },
+      {
+        elementId: 'fixed-service', text: 'SERVICE', semanticRole: 'title', labeled: false,
+        fontSizeRatio: 0.1, box: { x: 0.2, y: 0.22, width: 0.7, height: 0.12 },
+      },
+    ];
+    const plan = PosterDesignerPlanSchema.parse({
+      schemaVersion: 1,
+      templateId: 'church-1',
+      mode: 'adaptive',
+      concept: 'Preserve the existing split headline.',
+      fields: [],
+      operations: [{
+        id: 'repeat_service_title', kind: 'add_text', elementId: null, semanticRole: 'title',
+        text: 'Sunday Service', box: { x: 0.1, y: 0.2, width: 0.8, height: 0.15 },
+        fontFamily: 'Impact', fontSizeRatio: 0.1, fontWeight: '900', textAlign: 'center',
+        fill: '#ffffff', reason: 'Duplicate title that must be filtered.',
+      }],
+      expectedFacts: ['title'],
+    });
+    expect(validatePosterDesignerPlan(input, plan)?.operations).toEqual([]);
+  });
+
+  it('does not fill a labeled title slot with copy already expressed by unlabeled template art', () => {
+    const input = request();
+    input.templates[0]!.fields.push({
+      key: 'event_title', label: 'Event title', kind: 'text', semanticRole: 'title',
+      supportedFacts: ['title'], sampleText: 'EVENT TITLE', maxWords: 8,
+      maxCharacters: 72, maxLines: 2, optional: false,
+    });
+    input.templates[0]!.existingText = [
+      {
+        elementId: 'fixed-sunday', text: 'SUNDAY', semanticRole: 'title', labeled: false,
+        fontSizeRatio: 0.12, box: { x: 0.1, y: 0.08, width: 0.8, height: 0.14 },
+      },
+      {
+        elementId: 'fixed-service', text: 'SERVICE', semanticRole: 'title', labeled: false,
+        fontSizeRatio: 0.1, box: { x: 0.2, y: 0.22, width: 0.7, height: 0.12 },
+      },
+    ];
+    const plan = PosterDesignerPlanSchema.parse({
+      schemaVersion: 1,
+      templateId: 'church-1',
+      mode: 'adaptive',
+      concept: 'Keep the fixed visual headline.',
+      fields: [{ key: 'event_title', value: 'Sunday Service', imageIndex: null }],
+      operations: [],
+      expectedFacts: ['title'],
+    });
+    expect(validatePosterDesignerPlan(input, plan)?.fields).toEqual([]);
+  });
+
   it('rejects an add_text operation without text or a box', () => {
     const parsed = PosterDesignerPlanSchema.safeParse({
       schemaVersion: 1,

@@ -9,7 +9,7 @@ import {
 } from './templatePoster';
 
 export const POSTER_DESIGNER_AGENT_SCHEMA_VERSION = 1 as const;
-export const POSTER_DESIGNER_AGENT_PROMPT_VERSION = 'poster-designer-agent-v2' as const;
+export const POSTER_DESIGNER_AGENT_PROMPT_VERSION = 'poster-designer-agent-v3' as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -84,7 +84,7 @@ export const PosterDesignerStartRequestSchema = z
     images: z.array(TemplatePosterImageSchema).max(8),
     templates: z.array(TemplatePosterCatalogItemSchema).min(1).max(100),
     excludedTemplateIds: z.array(z.string().trim().min(1).max(200)).max(100).default([]),
-    maxRevisions: z.number().int().min(0).max(3).default(1),
+    maxRevisions: z.number().int().min(0).max(4).default(1),
   })
   .strict();
 
@@ -146,7 +146,7 @@ export type PosterDesignerValidationIssue = z.infer<typeof PosterDesignerValidat
 export const PosterDesignerReviewRequestSchema = z
   .object({
     sessionId: z.string().uuid(),
-    iteration: z.number().int().min(1).max(3),
+    iteration: z.number().int().min(1).max(4),
     elements: z.array(PosterDesignerElementSummarySchema).max(120),
     issues: z.array(PosterDesignerValidationIssueSchema).max(80),
     preview: z
@@ -297,13 +297,24 @@ export function validatePosterDesignerPlan(
     seen.add(field.key);
     return true;
   });
+  const existingUnlabeledText = (template.existingText ?? []).filter((item) => !item.labeled);
+  const deduplicatedFields = safeFields.filter((value) => {
+    if (!value.value?.trim()) return true;
+    const field = fields.get(value.key);
+    if (!field) return false;
+    return !copyCoveredByExistingText(
+      normalizePosterCopy(value.value),
+      field.semanticRole,
+      existingUnlabeledText,
+    );
+  });
   const expectedFacts = Array.from(new Set([
     ...detectProvidedMajorTemplateFacts(request.brief),
     ...plan.expectedFacts,
   ])).slice(0, 16);
   const filledRoles = new Set<TemplatePosterSemanticRole>();
   const filledCopy = new Set<string>();
-  for (const value of safeFields) {
+  for (const value of deduplicatedFields) {
     if (!value.value?.trim()) continue;
     const field = fields.get(value.key);
     if (!field) continue;
@@ -315,9 +326,10 @@ export function validatePosterDesignerPlan(
     if (operation.kind !== 'add_text') return true;
     const copy = normalizePosterCopy(operation.text ?? '');
     if (copy && filledCopy.has(copy)) return false;
+    if (copy && copyCoveredByExistingText(copy, operation.semanticRole, template.existingText ?? [])) return false;
     return !operation.semanticRole || !filledRoles.has(operation.semanticRole);
   });
-  return { ...plan, fields: safeFields, operations, expectedFacts };
+  return { ...plan, fields: deduplicatedFields, operations, expectedFacts };
 }
 
 export function validatePosterDesignerReview(
@@ -341,4 +353,23 @@ function normalizePosterCopy(value: string): string {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
+}
+
+function copyCoveredByExistingText(
+  normalizedCopy: string,
+  role: TemplatePosterSemanticRole | null,
+  existingText: readonly { text: string; semanticRole: TemplatePosterSemanticRole | null }[],
+): boolean {
+  const copyTokens = new Set(normalizedCopy.split(/\s+/).filter(Boolean));
+  if (copyTokens.size === 0) return false;
+  for (const item of existingText) {
+    if (normalizePosterCopy(item.text) === normalizedCopy) return true;
+  }
+  if (!role || role === 'other' || role === 'extra_details' || copyTokens.size > 6) return false;
+  const roleTokens = new Set(
+    existingText
+      .filter((item) => item.semanticRole === role)
+      .flatMap((item) => normalizePosterCopy(item.text).split(/\s+/).filter(Boolean)),
+  );
+  return roleTokens.size > 0 && [...copyTokens].every((token) => roleTokens.has(token));
 }
