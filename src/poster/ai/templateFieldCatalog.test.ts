@@ -4,6 +4,7 @@ import {
   buildTemplatePosterExistingText,
   inferTemplateFieldSemanticRole,
   inferTemplateFieldSupportedFacts,
+  inferVisibleTextSemanticRole,
 } from './templateFieldCatalog';
 import type { PosterTemplateDefinition } from '../templateTypes';
 
@@ -120,5 +121,9 @@ describe('template field catalog constraints', () => {
       expect.objectContaining({ text: 'SUNDAY', semanticRole: 'title', labeled: false }),
       expect.objectContaining({ text: 'SERVICE', semanticRole: 'title', labeled: false }),
     ]));
+  });
+
+  it('recognizes an unlabeled Start at caption as part of the time column', () => {
+    expect(inferVisibleTextSemanticRole('START AT')).toBe('time');
   });
 });

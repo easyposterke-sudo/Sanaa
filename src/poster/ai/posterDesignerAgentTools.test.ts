@@ -276,4 +276,79 @@ describe('poster designer browser tools', () => {
     expect(stabilized.adjustedElementIds).toContain('time-two');
     expect(Math.abs((first?.top ?? 0) - (second?.top ?? 0))).toBeGreaterThan(50);
   });
+
+  it('anchors organization and theme copy to the centered title axis', () => {
+    const source = project();
+    source.elements.push(
+      {
+        id: 'organization', type: 'text', text: 'Christ Ekklesia Fellowship Chapel',
+        left: 540, top: 30, width: 360, fontSize: 30, fontFamily: 'Inter', fill: '#ffffff',
+        textAlign: 'center', scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 3,
+      },
+      {
+        id: 'theme', type: 'text', text: 'God the Loving Father',
+        left: 100, top: 300, width: 600, fontSize: 42, fontFamily: 'Inter', fill: '#ffffff',
+        textAlign: 'center', scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 4,
+      },
+    );
+    const bindings = [
+      { key: 'event_title', label: 'Event title', sourceElementId: 'title-1', kind: 'text' as const },
+      { key: 'church_name', label: 'Church name', sourceElementId: 'organization', kind: 'text' as const },
+      { key: 'theme', label: 'Theme', sourceElementId: 'theme', kind: 'text' as const },
+    ];
+    const summaries = collectPosterDesignerElementSummaries(source, bindings);
+    expect(validatePosterDesignerLayout(source, summaries, ['title', 'organization', 'theme'])).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'off_axis' })]),
+    );
+    const stabilized = stabilizePosterDesignerLayout(source, summaries);
+    const organization = stabilized.project.elements.find((element) => element.id === 'organization');
+    const theme = stabilized.project.elements.find((element) => element.id === 'theme');
+    expect(organization?.left).toBeCloseTo(320, -1);
+    expect(theme?.left).toBeCloseTo(200, -1);
+    expect(stabilized.skillVersion).toBe('poster-layout-skill/1.0.0');
+  });
+
+  it('centers related text on the panel that contains it', () => {
+    const source = project();
+    source.elements.push(
+      {
+        id: 'footer-panel', type: 'rect', left: 100, top: 700, width: 800, height: 220,
+        fill: '#172554', scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 3,
+      },
+      {
+        id: 'pastor', type: 'text', text: 'Lead pastor: Pst David Kituyi',
+        left: 180, top: 750, width: 400, fontSize: 34, fontFamily: 'Inter', fill: '#ffffff',
+        textAlign: 'center', scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 4,
+      },
+    );
+    const bindings = [
+      { key: 'lead_pastor', label: 'Lead pastor', sourceElementId: 'pastor', kind: 'text' as const },
+    ];
+    const summaries = collectPosterDesignerElementSummaries(source, bindings);
+    const stabilized = stabilizePosterDesignerLayout(source, summaries);
+    expect(stabilized.project.elements.find((element) => element.id === 'pastor')?.left).toBeCloseTo(300, -1);
+  });
+
+  it('detects repeated service times even when their wording and formatting differ', () => {
+    const source = project();
+    source.elements.push(
+      {
+        id: 'times-one', type: 'text', text: 'First service starts at 8am | Second service starts at 9:30am',
+        left: 100, top: 600, width: 800, fontSize: 28, fontFamily: 'Inter', fill: '#ffffff',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 3,
+      },
+      {
+        id: 'times-two', type: 'text', text: 'First service: 8:00 AM | Second service: 9:30 AM',
+        left: 100, top: 670, width: 800, fontSize: 28, fontFamily: 'Inter', fill: '#ffffff',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 4,
+      },
+    );
+    const summaries = collectPosterDesignerElementSummaries(source, []);
+    expect(validatePosterDesignerLayout(source, summaries, ['time'])).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'duplicate_text',
+        elementIds: expect.arrayContaining(['times-one', 'times-two']),
+      }),
+    ]));
+  });
 });

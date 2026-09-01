@@ -58,6 +58,7 @@ interface AgentResult {
   deterministicIssueCount: number;
   revisionPasses: number;
   safetyAdjustments: number;
+  layoutSkillVersion: string;
   appliedOperations: number;
   skippedOperations: number;
 }
@@ -196,6 +197,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
       let latestReview: PosterDesignerReview | null = null;
       let latestReviewSource: 'openai' | 'fallback' | null = null;
       let visualInspectionUsed = false;
+      const layoutAdjustedElementIds = new Set<string>();
       let workingBindings = initialTools.fieldBindings;
       let latestSummaries: ReturnType<typeof collectPosterDesignerElementSummaries> = [];
 
@@ -203,8 +205,16 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
       for (let iteration = 1; iteration <= 4; iteration += 1) {
         setStage('inspecting');
         await waitForCanvasRender();
-        const renderedProject = usePosterStore.getState().getProject();
-        const summaries = collectPosterDesignerElementSummaries(renderedProject, workingBindings);
+        let renderedProject = usePosterStore.getState().getProject();
+        let summaries = collectPosterDesignerElementSummaries(renderedProject, workingBindings);
+        const alignmentPass = stabilizePosterDesignerLayout(renderedProject, summaries);
+        if (alignmentPass.adjustedElementIds.length > 0) {
+          alignmentPass.adjustedElementIds.forEach((id) => layoutAdjustedElementIds.add(id));
+          onApply({ project: alignmentPass.project, fieldBindings: workingBindings });
+          await waitForCanvasRender();
+          renderedProject = usePosterStore.getState().getProject();
+          summaries = collectPosterDesignerElementSummaries(renderedProject, workingBindings);
+        }
         latestSummaries = summaries;
         const issues = validatePosterDesignerLayout(
           renderedProject,
@@ -264,6 +274,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         latestSummaries,
       );
       if (stabilization.adjustedElementIds.length > 0) {
+        stabilization.adjustedElementIds.forEach((id) => layoutAdjustedElementIds.add(id));
         onApply({ project: stabilization.project, fieldBindings: workingBindings });
         await waitForCanvasRender();
         const finalProject = usePosterStore.getState().getProject();
@@ -285,7 +296,8 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         visualInspectionUsed,
         deterministicIssueCount,
         revisionPasses,
-        safetyAdjustments: stabilization.adjustedElementIds.length,
+        safetyAdjustments: layoutAdjustedElementIds.size,
+        layoutSkillVersion: stabilization.skillVersion,
         appliedOperations,
         skippedOperations,
       });
@@ -469,7 +481,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
                   <div><dt className="font-semibold">Agent tools</dt><dd>{result.appliedOperations} applied</dd></div>
                   <div><dt className="font-semibold">Final checks</dt><dd>{result.deterministicIssueCount} issue{result.deterministicIssueCount === 1 ? '' : 's'}</dd></div>
                   <div><dt className="font-semibold">Corrections</dt><dd>{result.revisionPasses} pass{result.revisionPasses === 1 ? '' : 'es'}</dd></div>
-                  <div><dt className="font-semibold">Layout guard</dt><dd>{result.safetyAdjustments} adjustment{result.safetyAdjustments === 1 ? '' : 's'}</dd></div>
+                  <div><dt className="font-semibold">Layout skill</dt><dd>{result.safetyAdjustments} anchored · {result.layoutSkillVersion}</dd></div>
                   <div><dt className="font-semibold">Planner</dt><dd>{result.source === 'openai' ? 'AI' : 'safe fallback'}</dd></div>
                   <div><dt className="font-semibold">Critic</dt><dd>{result.reviewSource === 'openai' ? 'AI visual critic' : 'safe fallback'}</dd></div>
                 </dl>

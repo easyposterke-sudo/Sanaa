@@ -70,7 +70,10 @@ export function inferVisibleTextSemanticRole(
   ) return 'title';
   if (/\b(?:church|chapel|fellowship|ministry|ministries)\b/.test(copy)) return 'organization';
   if (/^(?:every\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?$/.test(copy)) return 'day';
-  if (/\b\d{1,2}(?::\d{2}|\.\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/.test(copy)) return 'time';
+  if (
+    /\b\d{1,2}(?::\d{2}|\.\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/.test(copy) ||
+    /^(?:start|starts|starting|begins?)\s+at$/.test(copy)
+  ) return 'time';
   if (/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/.test(copy)) return 'date';
   if (/\b(?:pastor|pst|speaker|guest|minister|host)\b/.test(copy)) return 'person_name';
   if (/^(?:theme|motto|scripture|verse)\b/.test(copy)) return 'theme';

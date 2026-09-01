@@ -11,6 +11,7 @@ import {
   type PosterDesignerReviewRequest,
   type PosterDesignerStartRequest,
 } from '../../shared/ai/posterDesignerAgent';
+import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { TemplatePosterSemanticRole } from '../../shared/ai/templatePoster';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
@@ -236,9 +237,13 @@ Critic policy:
 - Return only the required JSON object.`;
 
 function buildDesignPrompt(request: PosterDesignerStartRequest): string {
+  const posterType = /church|chapel|fellowship|ministry|worship|service/i.test(request.brief)
+    ? 'church_ministry' as const
+    : 'event' as const;
   return `Plan the first editable draft.
 
 Prompt version: ${POSTER_DESIGNER_AGENT_PROMPT_VERSION}
+${formatPosterLayoutSkillForPrompt({ phase: 'planning', posterType })}
 ${JSON.stringify({
     brief: request.brief,
     categoryId: request.categoryId,
@@ -262,9 +267,17 @@ function buildReviewPrompt(input: {
   concept: string;
   maxRevisions: number;
 }): string {
+  const posterType = /church|chapel|fellowship|ministry|worship|service/i.test(input.brief)
+    ? 'church_ministry' as const
+    : 'event' as const;
   return `Review revision ${input.request.iteration} of ${input.maxRevisions}.
 
 The brief is authoritative. The concept explains the intended design. The geometry and issues are trusted application measurements.
+${formatPosterLayoutSkillForPrompt({
+    phase: 'critique',
+    posterType,
+    failureModes: input.request.issues.map((issue) => issue.code),
+  })}
 ${JSON.stringify({
     brief: input.brief,
     concept: input.concept,
