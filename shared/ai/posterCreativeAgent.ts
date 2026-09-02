@@ -5,8 +5,8 @@ import {
   type PosterReconstructionPlan,
 } from './posterReconstruction';
 
-export const POSTER_CREATIVE_AGENT_SCHEMA_VERSION = 1 as const;
-export const POSTER_CREATIVE_AGENT_PROMPT_VERSION = 'poster-creative-agent-v1' as const;
+export const POSTER_CREATIVE_AGENT_SCHEMA_VERSION = 2 as const;
+export const POSTER_CREATIVE_AGENT_PROMPT_VERSION = 'poster-creative-agent-v2-image-treatment' as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -230,6 +230,10 @@ export function creativePlanElement(
     angle: 0,
     opacity: 1,
     fill: '#ffffff',
+    textFillType: 'solid',
+    textFillStart: null,
+    textFillEnd: null,
+    textFillAngle: 0,
     stroke: null,
     strokeWidthRatio: 0,
     text: '',
@@ -250,6 +254,11 @@ export function creativePlanElement(
     pathTension: 0.28,
     imageRole: 'none',
     imageMask: 'none',
+    imageCutout: false,
+    imageEdge: 'none',
+    imageFadeDirection: 'radial',
+    imageFadeAmount: 0.35,
+    imageFadeMinOpacity: 0,
     imageHasOverlays: false,
     replacementRecommended: false,
     replacementReason: '',

@@ -25,6 +25,8 @@ import {
 import {
   annotateReferencePlan,
   buildReferenceFieldAnchors,
+  resolveReferenceCanvasSize,
+  shouldPrepareReferenceCutout,
   stabilizeReferenceFieldLayout,
   type ReferenceFieldAnchor,
 } from '../ai/referenceAgentPipeline';
@@ -38,10 +40,10 @@ import {
 } from '../services/posterDesignerAgentApi';
 import { downloadStockPhoto, searchStockPhotos } from '../services/stockPhotosApi';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
+import { removeImageBackground } from '../services/backgroundRemovalApi';
 import { fetchPosterTemplateById } from '../services/posterTemplatesApi';
 import { usePosterStore } from '../store/posterStore';
 import { instantiateTemplate } from '../templateMerge';
-import { recommendTemplateCanvasSize } from '../templateCanvasSize';
 import type { PosterTemplateDefinition, PosterTemplateFieldBinding } from '../templateTypes';
 import type { PosterProject } from '../types';
 
@@ -245,7 +247,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         expectedFacts = response.plan.expectedFacts;
         skillsUsed = ['brief_interpreter', 'template_adapter', 'geometry_inspector', 'visual_critic'];
       } else if (resolvedStrategy === 'reference' && reference) {
-        const recommendedCanvas = recommendTemplateCanvasSize(reference.sourceWidth, reference.sourceHeight);
+        const recommendedCanvas = resolveReferenceCanvasSize(reference.sourceWidth, reference.sourceHeight);
         const reconstruction = await timed('reference_reconstruction', () => requestPosterReconstruction({
           reference: { dataUrl: reference.dataUrl, width: reference.width, height: reference.height },
           quality: 'quality',
@@ -268,7 +270,6 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           fields: compiledReference.fieldBindings,
           thumbnail: reference.dataUrl.length <= 300_000 ? reference.dataUrl : undefined,
         };
-        referenceAnchors = buildReferenceFieldAnchors(referencePlan);
         const response = await timed('content_mapping', () => startPosterDesignerAgent({
           sessionId,
           brief: brief.trim(),
@@ -300,6 +301,11 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         }
         const instantiated = await timed('template_build', () => instantiateTemplate(referenceTemplate, values, { clearMissingTextFields: true }));
         const themedProject = themeEnabled ? applyTemplateTheme(instantiated.project, themeColor) : instantiated.project;
+        referenceAnchors = buildReferenceFieldAnchors(
+          referencePlan,
+          themedProject,
+          instantiated.fieldBindings,
+        );
         initialTools = applyPosterDesignerOperations(themedProject, instantiated.fieldBindings, response.plan.operations);
         baseDesign = `Reconstructed ${recommendedCanvas.label}`;
         concept = `Reference-faithful editable reconstruction of ${reference.fileName}, with supplied facts mapped into its original visual regions.`;
@@ -857,6 +863,20 @@ async function resolvePlanImageReplacements(
       };
     } catch {
       // Preserve compilation progress and leave a clean placeholder when optional stock is unavailable.
+    }
+  }));
+  const cutoutRegions = plan.elements.filter(
+    (element) => shouldPrepareReferenceCutout(element) && Boolean(replacements[element.key]),
+  );
+  await Promise.all(cutoutRegions.map(async (element) => {
+    const replacement = replacements[element.key];
+    if (!replacement) return;
+    try {
+      const cutout = await withTimeout(removeImageBackground(replacement.src), 45_000, null);
+      if (cutout) replacements[element.key] = { ...replacement, src: cutout };
+    } catch {
+      // Background removal is an optional fidelity enhancement. Keep the clean replacement
+      // when the service is unavailable instead of failing the complete agent run.
     }
   }));
   return replacements;

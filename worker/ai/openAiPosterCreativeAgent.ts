@@ -158,7 +158,9 @@ Security and factual accuracy:
 Editable construction:
 - Create 10 to 30 useful layers when the brief supports them. Avoid a sparse text card and avoid decorative clutter.
 - Factual copy is always an editable text element. Use rect, circle, ellipse, line, triangle, star, or path for reproducible artwork. Never put factual text in an image.
+- Text may use textFillType linear with sampled textFillStart/textFillEnd and textFillAngle when the design calls for a real gradient; otherwise use textFillType solid, null endpoints, and angle 0.
 - Use image_region only for a photo, portrait, logo, icon, or complex decoration. Uploaded images must use the exact key user_image_N and imageRole person/photo as appropriate.
+- For image regions, set imageCutout true only for a foreground subject whose background must be removed. Set imageEdge fade with imageFadeDirection bottom only for a bottom fade, or radial for all-edge feathering; otherwise use imageCutout false, imageEdge none, imageFadeDirection radial, imageFadeAmount 0.35, and imageFadeMinOpacity 0.
 - A stock-photo region must set replacementRecommended true and give a concrete imageSearchQuery describing the visual content and composition, without people names or poster words.
 - Keep keys unique snake_case. Use only supported font tokens and schema values.
 

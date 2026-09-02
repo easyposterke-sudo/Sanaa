@@ -218,7 +218,14 @@ export async function compilePosterReconstruction(input: {
         ...(item.imageMask === 'rounded_rect'
           ? { maskCornerRadius: resolvedMaskCornerRadius(item.cornerStyle, item.cornerRadiusRatio) }
           : {}),
-        edge: 'none',
+        edge: item.imageEdge,
+        ...(item.imageEdge === 'fade'
+          ? {
+              edgeFadeDirection: item.imageFadeDirection,
+              edgeFadeAmount: item.imageFadeAmount,
+              edgeFadeMinOpacity: item.imageFadeMinOpacity,
+            }
+          : {}),
       } satisfies PosterImageElement;
     } else if (item.kind === 'path') {
       element = compilePathElement(item, box, canvasHeight, base, warnings);
@@ -535,6 +542,18 @@ function compileTextElement(
     fontSize,
     fontFamily,
     fill: item.fill ?? '#111111',
+    ...(item.textFillType === 'linear' && item.textFillStart && item.textFillEnd
+      ? {
+          fillGradient: {
+            type: 'linear' as const,
+            angle: item.textFillAngle,
+            stops: [
+              { offset: 0, color: item.textFillStart },
+              { offset: 1, color: item.textFillEnd },
+            ],
+          },
+        }
+      : {}),
     width: Math.max(12, box.width),
     fontWeight: item.fontWeight,
     fontStyle: item.fontStyle,

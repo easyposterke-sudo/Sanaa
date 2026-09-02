@@ -24,6 +24,10 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     opacity: 1,
     zIndex: 1,
     fill: '#112233',
+    textFillType: 'solid',
+    textFillStart: null,
+    textFillEnd: null,
+    textFillAngle: 0,
     stroke: null,
     strokeWidthRatio: 0,
     text: '',
@@ -44,6 +48,11 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     pathTension: 0.28,
     imageRole: 'none',
     imageMask: 'none',
+    imageCutout: false,
+    imageEdge: 'none',
+    imageFadeDirection: 'radial',
+    imageFadeAmount: 0.35,
+    imageFadeMinOpacity: 0,
     imageHasOverlays: false,
     replacementRecommended: false,
     replacementReason: '',
@@ -135,6 +144,43 @@ describe('compilePosterReconstruction', () => {
       },
     ]);
     expect(compiled.category).toBe('conference');
+  });
+
+  it('rebuilds detected headline gradients as editable gradient-filled text', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'gradient_title',
+          kind: 'text',
+          label: 'Gradient title',
+          text: 'SUNDAY',
+          textFillType: 'linear',
+          textFillStart: '#e90073',
+          textFillEnd: '#ff8a00',
+          textFillAngle: 0,
+          visibleLineCount: 1,
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'text',
+      text: 'SUNDAY',
+      fillGradient: {
+        type: 'linear',
+        angle: 0,
+        stops: [
+          { offset: 0, color: '#e90073' },
+          { offset: 1, color: '#ff8a00' },
+        ],
+      },
+    });
   });
 
   it('adds a locked tracing guide and carries review warnings', async () => {
@@ -690,6 +736,39 @@ describe('compilePosterReconstruction', () => {
     });
   });
 
+  it('preserves a detected bottom-only image fade instead of reversing it', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'speaker',
+          kind: 'image_region',
+          label: 'Speaker cutout with bottom fade',
+          imageRole: 'person',
+          imageCutout: true,
+          imageEdge: 'fade',
+          imageFadeDirection: 'bottom',
+          imageFadeAmount: 0.28,
+          imageFadeMinOpacity: 0.08,
+          replacementRecommended: true,
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'image',
+      edge: 'fade',
+      edgeFadeDirection: 'bottom',
+      edgeFadeAmount: 0.28,
+      edgeFadeMinOpacity: 0.08,
+    });
+  });
+
   it('rebuilds supported semantic icons as clean tintable SVG layers', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
@@ -827,6 +906,15 @@ describe('PosterReconstructionPlanSchema', () => {
       visibleLineCount: _visibleLineCount,
       cornerStyle: _cornerStyle,
       imageMask: _imageMask,
+      imageCutout: _imageCutout,
+      imageEdge: _imageEdge,
+      imageFadeDirection: _imageFadeDirection,
+      imageFadeAmount: _imageFadeAmount,
+      imageFadeMinOpacity: _imageFadeMinOpacity,
+      textFillType: _textFillType,
+      textFillStart: _textFillStart,
+      textFillEnd: _textFillEnd,
+      textFillAngle: _textFillAngle,
       ...legacyElement
     } = current.elements[0];
     const parsed = PosterReconstructionPlanSchema.parse({
@@ -838,6 +926,15 @@ describe('PosterReconstructionPlanSchema', () => {
       visibleLineCount: 0,
       cornerStyle: 'auto',
       imageMask: 'none',
+      imageCutout: false,
+      imageEdge: 'none',
+      imageFadeDirection: 'radial',
+      imageFadeAmount: 0.35,
+      imageFadeMinOpacity: 0,
+      textFillType: 'solid',
+      textFillStart: null,
+      textFillEnd: null,
+      textFillAngle: 0,
     });
   });
 

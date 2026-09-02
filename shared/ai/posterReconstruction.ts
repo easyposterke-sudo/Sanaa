@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 7 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 8 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v7-text-size-native-shapes-line-orientation' as const;
+  'poster-reconstruction-v8-editable-display-type-image-treatment' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -91,6 +91,10 @@ export const ReconstructionElementSchema = z
     opacity: z.number().min(0).max(1),
     zIndex: z.number().int().min(1).max(200),
     fill: NullableHexColorSchema,
+    textFillType: z.enum(['solid', 'linear']).default('solid'),
+    textFillStart: NullableHexColorSchema.default(null),
+    textFillEnd: NullableHexColorSchema.default(null),
+    textFillAngle: z.number().min(0).max(360).default(0),
     stroke: NullableHexColorSchema,
     strokeWidthRatio: z.number().min(0).max(0.05),
     text: z.string().max(500),
@@ -119,6 +123,11 @@ export const ReconstructionElementSchema = z
       'decoration',
     ]),
     imageMask: z.enum(['none', 'circle', 'ellipse', 'rounded_rect']).default('none'),
+    imageCutout: z.boolean().default(false),
+    imageEdge: z.enum(['none', 'fade']).default('none'),
+    imageFadeDirection: z.enum(['radial', 'bottom']).default('radial'),
+    imageFadeAmount: z.number().min(0).max(1).default(0.35),
+    imageFadeMinOpacity: z.number().min(0).max(1).default(0),
     imageHasOverlays: z.boolean(),
     replacementRecommended: z.boolean(),
     replacementReason: z.string().max(180),
@@ -254,6 +263,10 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         opacity: { type: 'number', minimum: 0, maximum: 1 },
         zIndex: { type: 'integer', minimum: 1, maximum: 200 },
         fill: nullable(hexJsonSchema),
+        textFillType: { type: 'string', enum: ['solid', 'linear'] },
+        textFillStart: nullable(hexJsonSchema),
+        textFillEnd: nullable(hexJsonSchema),
+        textFillAngle: { type: 'number', minimum: 0, maximum: 360 },
         stroke: nullable(hexJsonSchema),
         strokeWidthRatio: { type: 'number', minimum: 0, maximum: 0.05 },
         text: { type: 'string', maxLength: 500 },
@@ -295,6 +308,11 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
           type: 'string',
           enum: ['none', 'circle', 'ellipse', 'rounded_rect'],
         },
+        imageCutout: { type: 'boolean' },
+        imageEdge: { type: 'string', enum: ['none', 'fade'] },
+        imageFadeDirection: { type: 'string', enum: ['radial', 'bottom'] },
+        imageFadeAmount: { type: 'number', minimum: 0, maximum: 1 },
+        imageFadeMinOpacity: { type: 'number', minimum: 0, maximum: 1 },
         imageHasOverlays: { type: 'boolean' },
         replacementRecommended: { type: 'boolean' },
         replacementReason: { type: 'string', maxLength: 180 },
