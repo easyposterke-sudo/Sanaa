@@ -273,6 +273,7 @@ export class PosterDesignerAgent extends Agent<Cloudflare.Env, PosterDesignerAge
             brief: this.state.brief,
             concept: this.state.concept,
             maxRevisions: this.state.maxRevisions,
+            timeoutMs: 35_000,
           });
           review = result.value;
           source = 'openai';

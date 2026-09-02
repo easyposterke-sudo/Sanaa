@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PosterDesignerPlan, PosterDesignerReview } from '../../../shared/ai/posterDesignerAgent';
 import type { PosterCreativeComposition } from '../../../shared/ai/posterCreativeAgent';
+import type { PosterReconstructionPlan } from '../../../shared/ai/posterReconstruction';
 import { detectProvidedMajorTemplateFacts } from '../../../shared/ai/templatePoster';
 import { applyTemplateTheme } from '../ai/applyTemplateTheme';
 import {
@@ -17,7 +18,16 @@ import { capturePosterThumbnail } from '../canvasRef';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
 import { compileCreativePoster } from '../ai/compileCreativePoster';
-import type { ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
+import {
+  compilePosterReconstruction,
+  type ReconstructionImageReplacement,
+} from '../ai/compilePosterReconstruction';
+import {
+  annotateReferencePlan,
+  buildReferenceFieldAnchors,
+  stabilizeReferenceFieldLayout,
+  type ReferenceFieldAnchor,
+} from '../ai/referenceAgentPipeline';
 import { preparePortrait, prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
 import { findPosterTemplateById, getAllPosterTemplates } from '../posterTemplateList';
 import {
@@ -27,9 +37,11 @@ import {
   startPosterDesignerAgent,
 } from '../services/posterDesignerAgentApi';
 import { downloadStockPhoto, searchStockPhotos } from '../services/stockPhotosApi';
+import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { fetchPosterTemplateById } from '../services/posterTemplatesApi';
 import { usePosterStore } from '../store/posterStore';
 import { instantiateTemplate } from '../templateMerge';
+import { recommendTemplateCanvasSize } from '../templateCanvasSize';
 import type { PosterTemplateDefinition, PosterTemplateFieldBinding } from '../templateTypes';
 import type { PosterProject } from '../types';
 
@@ -73,6 +85,7 @@ interface AgentResult {
   skillsUsed: string[];
   elapsedMs: number;
   constraintAdjustments: number;
+  stageTimings: Record<string, number>;
 }
 
 export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesignerAgentWizardProps) {
@@ -174,6 +187,15 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
     const sessionId = crypto.randomUUID();
     setStage('planning');
     try {
+      const stageTimings: Record<string, number> = {};
+      const timed = async <T,>(name: string, task: () => Promise<T>): Promise<T> => {
+        const stageStartedAt = performance.now();
+        try {
+          return await task();
+        } finally {
+          stageTimings[name] = Math.round(performance.now() - stageStartedAt);
+        }
+      };
       let initialTools: ReturnType<typeof applyPosterDesignerOperations>;
       let baseDesign: string;
       let concept: string;
@@ -181,9 +203,10 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
       let expectedFacts: PosterDesignerPlan['expectedFacts'] = detectProvidedMajorTemplateFacts(brief.trim());
       let skillsUsed: string[] = [];
       let constraintAdjustments = 0;
+      let referenceAnchors: Record<string, ReferenceFieldAnchor> | null = null;
 
       if (resolvedStrategy === 'template') {
-        const response = await startPosterDesignerAgent({
+        const response = await timed('planning', () => startPosterDesignerAgent({
           sessionId,
           brief: brief.trim(),
           categoryId: categoryId || null,
@@ -200,7 +223,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           })),
           excludedTemplateIds: [],
           maxRevisions: 2,
-        });
+        }));
         setStage('building');
         const selectedTemplate = findPosterTemplateById(response.plan.templateId) ?? (await fetchPosterTemplateById(response.plan.templateId));
         const values: Record<string, string> = {};
@@ -213,7 +236,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
             if (image) values[field.key] = image.asset.dataUrl;
           } else if (field.value !== null) values[field.key] = field.value;
         }
-        const instantiated = await instantiateTemplate(selectedTemplate, values, { clearMissingTextFields: true });
+        const instantiated = await timed('template_build', () => instantiateTemplate(selectedTemplate, values, { clearMissingTextFields: true }));
         const themedProject = themeEnabled ? applyTemplateTheme(instantiated.project, themeColor) : instantiated.project;
         initialTools = applyPosterDesignerOperations(themedProject, instantiated.fieldBindings, response.plan.operations);
         baseDesign = selectedTemplate.name;
@@ -221,9 +244,71 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         source = response.source;
         expectedFacts = response.plan.expectedFacts;
         skillsUsed = ['brief_interpreter', 'template_adapter', 'geometry_inspector', 'visual_critic'];
+      } else if (resolvedStrategy === 'reference' && reference) {
+        const recommendedCanvas = recommendTemplateCanvasSize(reference.sourceWidth, reference.sourceHeight);
+        const reconstruction = await timed('reference_reconstruction', () => requestPosterReconstruction({
+          reference: { dataUrl: reference.dataUrl, width: reference.width, height: reference.height },
+          quality: 'quality',
+        }));
+        const referencePlan = annotateReferencePlan(reconstruction.plan);
+        const replacements = await timed('image_resolution', () => resolvePlanImageReplacements(referencePlan, images));
+        const compiledReference = await timed('reference_compile', () => compilePosterReconstruction({
+          plan: referencePlan,
+          reference,
+          canvasSize: { width: recommendedCanvas.width, height: recommendedCanvas.height },
+          referenceGuideOpacity: 0,
+          imageReplacements: replacements,
+        }));
+        const referenceTemplate: PosterTemplateDefinition = {
+          id: `agent_reference_${sessionId}`,
+          name: `Reference: ${reference.fileName}`.slice(0, 100),
+          category: categoryId || compiledReference.category,
+          description: 'A temporary editable reconstruction of the uploaded reference poster.',
+          project: compiledReference.project,
+          fields: compiledReference.fieldBindings,
+          thumbnail: reference.dataUrl.length <= 300_000 ? reference.dataUrl : undefined,
+        };
+        referenceAnchors = buildReferenceFieldAnchors(referencePlan);
+        const response = await timed('content_mapping', () => startPosterDesignerAgent({
+          sessionId,
+          brief: brief.trim(),
+          categoryId: categoryId || null,
+          themeColor: themeEnabled ? themeColor : null,
+          images: images.map((image, index) => ({ index, name: image.name.trim(), role: image.role.trim() })),
+          templates: [{
+            id: referenceTemplate.id,
+            name: referenceTemplate.name,
+            category: referenceTemplate.category,
+            description: referenceTemplate.description ?? '',
+            fields: buildTemplatePosterCatalogFields(referenceTemplate),
+            existingText: buildTemplatePosterExistingText(referenceTemplate),
+            preview: templatePreview(referenceTemplate),
+          }],
+          excludedTemplateIds: [],
+          maxRevisions: 2,
+        }));
+        setStage('building');
+        const values: Record<string, string> = {};
+        for (const field of referenceTemplate.fields ?? []) {
+          if ((field.kind ?? 'text') === 'text') values[field.key] = '';
+        }
+        for (const field of response.plan.fields) {
+          if (field.imageIndex !== null) {
+            const image = images[field.imageIndex];
+            if (image) values[field.key] = image.asset.dataUrl;
+          } else if (field.value !== null) values[field.key] = field.value;
+        }
+        const instantiated = await timed('template_build', () => instantiateTemplate(referenceTemplate, values, { clearMissingTextFields: true }));
+        const themedProject = themeEnabled ? applyTemplateTheme(instantiated.project, themeColor) : instantiated.project;
+        initialTools = applyPosterDesignerOperations(themedProject, instantiated.fieldBindings, response.plan.operations);
+        baseDesign = `Reconstructed ${recommendedCanvas.label}`;
+        concept = `Reference-faithful editable reconstruction of ${reference.fileName}, with supplied facts mapped into its original visual regions.`;
+        source = response.source;
+        expectedFacts = response.plan.expectedFacts;
+        skillsUsed = ['reference_analyzer', 'editable_reconstructor', 'brief_interpreter', 'template_adapter', 'geometry_inspector'];
       } else {
         const canvasProject = usePosterStore.getState().getProject();
-        const creative = await composeCreativePoster({
+        const creative = await timed('planning', () => composeCreativePoster({
           sessionId,
           mode: resolvedStrategy,
           brief: brief.trim(),
@@ -233,15 +318,15 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           images: images.map((image, index) => ({ index, name: image.name.trim(), role: image.role.trim() })),
           reference: reference ? { dataUrl: reference.dataUrl, width: reference.width, height: reference.height } : null,
           maxRevisions: 2,
-        });
+        }));
         setStage('building');
-        const replacements = await resolveCreativeImageReplacements(creative.composition, images);
-        const compiled = await compileCreativePoster({
+        const replacements = await timed('image_resolution', () => resolveCreativeImageReplacements(creative.composition, images));
+        const compiled = await timed('original_compile', () => compileCreativePoster({
           composition: creative.composition,
           canvasSize: { width: canvasProject.canvasWidth, height: canvasProject.canvasHeight },
           reference: resolvedStrategy === 'reference' ? reference : null,
           imageReplacements: replacements,
-        });
+        }));
         initialTools = applyPosterDesignerOperations(compiled.project, compiled.fieldBindings, []);
         baseDesign = resolvedStrategy === 'reference' ? 'Reference-guided editable design' : 'Original editable design';
         concept = creative.composition.concept;
@@ -260,15 +345,17 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
       let visualInspectionUsed = false;
       const layoutAdjustedElementIds = new Set<string>();
       let workingBindings = initialTools.fieldBindings;
-      let latestSummaries: ReturnType<typeof collectPosterDesignerElementSummaries> = [];
 
-      // One correction pass followed by a final inspection. This keeps the run bounded and responsive.
-      for (let iteration = 1; iteration <= 2; iteration += 1) {
+      // One bounded visual critique. The final quality gate is deterministic so a second
+      // serial vision request cannot add minutes or undo reference anchors.
+      for (let iteration = 1; iteration <= 1; iteration += 1) {
         setStage('inspecting');
         await waitForCanvasRender();
         let renderedProject = usePosterStore.getState().getProject();
         let summaries = collectPosterDesignerElementSummaries(renderedProject, workingBindings);
-        const alignmentPass = stabilizePosterDesignerLayout(renderedProject, summaries);
+        const alignmentPass = referenceAnchors
+          ? stabilizeReferenceFieldLayout(renderedProject, workingBindings, summaries, referenceAnchors)
+          : stabilizePosterDesignerLayout(renderedProject, summaries);
         if (alignmentPass.adjustedElementIds.length > 0) {
           alignmentPass.adjustedElementIds.forEach((id) => layoutAdjustedElementIds.add(id));
           onApply({ project: alignmentPass.project, fieldBindings: workingBindings });
@@ -276,7 +363,6 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           renderedProject = usePosterStore.getState().getProject();
           summaries = collectPosterDesignerElementSummaries(renderedProject, workingBindings);
         }
-        latestSummaries = summaries;
         const issues = validatePosterDesignerLayout(
           renderedProject,
           summaries,
@@ -284,16 +370,16 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         );
         deterministicIssueCount = issues.length;
         const previewDataUrl = visualReview
-          ? await capturePosterThumbnail(
+          ? await timed('preview_capture', () => withTimeout(capturePosterThumbnail(
               renderedProject.canvasWidth,
               renderedProject.canvasHeight,
               renderedProject.canvasBackground ?? {
                 type: 'solid',
                 color: renderedProject.canvasBackgroundColor ?? '#ffffff',
               },
-            )
+            ), 8_000, null))
           : null;
-        const reviewResponse = await reviewPosterDesignerDraft({
+        const reviewResponse = await timed('visual_review', () => reviewPosterDesignerDraft({
           sessionId,
           iteration,
           elements: summaries,
@@ -301,13 +387,11 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           preview: previewDataUrl
             ? previewMetadata(previewDataUrl, renderedProject.canvasWidth, renderedProject.canvasHeight)
             : null,
-        });
+        }));
         latestReview = reviewResponse.review;
         latestReviewSource = reviewResponse.source;
         visualInspectionUsed ||= Boolean(previewDataUrl);
-        const isFinalInspection = iteration === 2;
         if (
-          isFinalInspection ||
           reviewResponse.review.operations.length === 0 ||
           reviewResponse.review.stopReason === 'quality_passed'
         ) {
@@ -330,22 +414,23 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         await waitForCanvasRender();
       }
 
-      const stabilization = stabilizePosterDesignerLayout(
-        usePosterStore.getState().getProject(),
-        latestSummaries,
-      );
+      let finalProjectBeforeStabilization = usePosterStore.getState().getProject();
+      let finalSummariesBeforeStabilization = collectPosterDesignerElementSummaries(finalProjectBeforeStabilization, workingBindings);
+      const stabilization = referenceAnchors
+        ? stabilizeReferenceFieldLayout(finalProjectBeforeStabilization, workingBindings, finalSummariesBeforeStabilization, referenceAnchors)
+        : stabilizePosterDesignerLayout(finalProjectBeforeStabilization, finalSummariesBeforeStabilization);
       if (stabilization.adjustedElementIds.length > 0) {
         stabilization.adjustedElementIds.forEach((id) => layoutAdjustedElementIds.add(id));
         onApply({ project: stabilization.project, fieldBindings: workingBindings });
         await waitForCanvasRender();
-        const finalProject = usePosterStore.getState().getProject();
-        const finalSummaries = collectPosterDesignerElementSummaries(finalProject, workingBindings);
-        deterministicIssueCount = validatePosterDesignerLayout(
-          finalProject,
-          finalSummaries,
-          expectedFacts,
-        ).length;
       }
+      finalProjectBeforeStabilization = usePosterStore.getState().getProject();
+      finalSummariesBeforeStabilization = collectPosterDesignerElementSummaries(finalProjectBeforeStabilization, workingBindings);
+      deterministicIssueCount = validatePosterDesignerLayout(
+        finalProjectBeforeStabilization,
+        finalSummariesBeforeStabilization,
+        expectedFacts,
+      ).length;
 
       setResult({
         templateName: baseDesign,
@@ -365,6 +450,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         skillsUsed,
         elapsedMs: Math.round(performance.now() - startedAt),
         constraintAdjustments,
+        stageTimings,
       });
       setStage('complete');
     } catch (caught) {
@@ -609,6 +695,12 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
                   <div><dt className="font-semibold">Elapsed</dt><dd>{formatElapsed(result.elapsedMs)}</dd></div>
                 </dl>
                 {result.skillsUsed.length > 0 && <p className="mt-3 text-xs leading-5"><span className="font-semibold">Skills:</span> {result.skillsUsed.join(', ')}</p>}
+                {Object.keys(result.stageTimings).length > 0 && (
+                  <p className="mt-2 text-xs leading-5">
+                    <span className="font-semibold">Timing:</span>{' '}
+                    {Object.entries(result.stageTimings).map(([name, milliseconds]) => `${name.replaceAll('_', ' ')} ${formatElapsed(milliseconds)}`).join(' · ')}
+                  </p>
+                )}
                 {result.review && <p className="mt-3 text-xs leading-5">{result.review.summary}</p>}
                 {result.visualReviewRequested && !result.visualInspectionUsed && (
                   <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -693,19 +785,20 @@ async function resolveCreativeImageReplacements(
 
   const stockRegions = composition.plan.elements
     .filter((element) => element.kind === 'image_region' && element.replacementRecommended && element.imageSearchQuery.trim() && !replacements[element.key])
-    .slice(0, 3);
+    .slice(0, 2);
   await Promise.all(stockRegions.map(async (element) => {
     try {
       const orientation = Math.abs(element.box.width - element.box.height) < 0.06
         ? 'square'
         : element.box.width > element.box.height ? 'landscape' : 'portrait';
-      const candidates = await searchStockPhotos({
+      const candidates = await withTimeout(searchStockPhotos({
         query: element.imageSearchQuery,
         orientation,
         color: element.imageDominantColor,
-      });
+      }), 12_000, []);
       if (!candidates[0]) return;
-      const asset = await downloadStockPhoto(candidates[0]);
+      const asset = await withTimeout(downloadStockPhoto(candidates[0]), 12_000, null);
+      if (!asset) return;
       replacements[element.key] = {
         src: asset.dataUrl,
         width: asset.width,
@@ -717,6 +810,74 @@ async function resolveCreativeImageReplacements(
     }
   }));
   return replacements;
+}
+
+async function resolvePlanImageReplacements(
+  plan: PosterReconstructionPlan,
+  images: readonly BriefImage[],
+): Promise<Record<string, ReconstructionImageReplacement>> {
+  const replacements: Record<string, ReconstructionImageReplacement> = {};
+  const usedImageIndexes = new Set<number>();
+  for (const element of plan.elements) {
+    const explicit = /^user_image_(\d+)$/.exec(element.key);
+    if (!explicit) continue;
+    const imageIndex = Number(explicit[1]);
+    const image = images[imageIndex];
+    if (!image) continue;
+    usedImageIndexes.add(imageIndex);
+    replacements[element.key] = preparedReplacement(image.asset);
+  }
+  const personRegions = plan.elements.filter((element) => element.kind === 'image_region' && element.imageRole === 'person' && !replacements[element.key]);
+  for (const region of personRegions) {
+    const imageIndex = images.findIndex((_image, index) => !usedImageIndexes.has(index));
+    if (imageIndex < 0) break;
+    usedImageIndexes.add(imageIndex);
+    replacements[region.key] = preparedReplacement(images[imageIndex]!.asset);
+  }
+
+  const stockRegions = plan.elements
+    .filter((element) => element.kind === 'image_region' && element.replacementRecommended && element.imageSearchQuery.trim() && !replacements[element.key])
+    .slice(0, 2);
+  await Promise.all(stockRegions.map(async (element) => {
+    try {
+      const orientation = Math.abs(element.box.width - element.box.height) < 0.06
+        ? 'square'
+        : element.box.width > element.box.height ? 'landscape' : 'portrait';
+      const candidates = await withTimeout(searchStockPhotos({
+        query: element.imageSearchQuery,
+        orientation,
+        color: element.imageDominantColor,
+      }), 12_000, []);
+      if (!candidates[0]) return;
+      const asset = await withTimeout(downloadStockPhoto(candidates[0]), 12_000, null);
+      if (!asset) return;
+      replacements[element.key] = {
+        ...preparedReplacement(asset),
+        credit: `Photo by ${candidates[0].photographer} on Pexels`,
+      };
+    } catch {
+      // Preserve compilation progress and leave a clean placeholder when optional stock is unavailable.
+    }
+  }));
+  return replacements;
+}
+
+function preparedReplacement(asset: PreparedPosterImage): ReconstructionImageReplacement {
+  return { src: asset.dataUrl, width: asset.width, height: asset.height };
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function formatElapsed(milliseconds: number): string {

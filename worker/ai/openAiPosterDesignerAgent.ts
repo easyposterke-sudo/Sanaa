@@ -68,6 +68,7 @@ export async function planWithPosterDesignerAgent(input: {
     schema: posterDesignerPlanJsonSchema(input.request.templates.map((template) => template.id)),
     systemPrompt: DESIGN_SYSTEM_PROMPT,
     userContent: content,
+    reasoningEffort: 'medium',
   });
   const parsed = parseJson(payload.data, PosterDesignerPlanSchema, 'design plan');
   const validated = validatePosterDesignerPlan(input.request, parsed);
@@ -112,6 +113,7 @@ export async function reviewWithPosterDesignerAgent(input: {
     schema: POSTER_DESIGNER_REVIEW_JSON_SCHEMA,
     systemPrompt: REVIEW_SYSTEM_PROMPT,
     userContent: content,
+    reasoningEffort: 'low',
   });
   const parsed = parseJson(payload.data, PosterDesignerReviewSchema, 'design review');
   const validated = validatePosterDesignerReview(input.request, parsed);
@@ -303,6 +305,7 @@ async function requestStructuredOutput(input: {
   schema: Record<string, unknown>;
   systemPrompt: string;
   userContent: Array<Record<string, unknown>>;
+  reasoningEffort: 'low' | 'medium';
 }): Promise<{
   data: OpenAiResponsesPayload;
   requestId: string | null;
@@ -322,7 +325,7 @@ async function requestStructuredOutput(input: {
       body: JSON.stringify({
         model: input.model,
         store: false,
-        reasoning: { effort: 'medium' },
+        reasoning: { effort: input.reasoningEffort },
         max_output_tokens: input.maxOutputTokens,
         input: [
           { role: 'system', content: [{ type: 'input_text', text: input.systemPrompt }] },
