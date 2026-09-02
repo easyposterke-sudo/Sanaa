@@ -9,6 +9,12 @@ import {
   type PosterDesignerStartResponse,
 } from '../../../shared/ai/posterDesignerAgent';
 import { apiFetch } from '../../lib/api';
+import {
+  PosterCreativeComposeRequestSchema,
+  PosterCreativeCompositionSchema,
+  type PosterCreativeComposeRequestInput,
+  type PosterCreativeComposeResponse,
+} from '../../../shared/ai/posterCreativeAgent';
 
 export class PosterDesignerAgentError extends Error {
   constructor(
@@ -36,6 +42,27 @@ export async function startPosterDesignerAgent(
     source: parseSource(data.source),
     model: typeof data.model === 'string' ? data.model : null,
     requestId: typeof data.requestId === 'string' ? data.requestId : '',
+  };
+}
+
+export async function composeCreativePoster(
+  input: PosterCreativeComposeRequestInput,
+): Promise<PosterCreativeComposeResponse> {
+  const request = PosterCreativeComposeRequestSchema.parse(input);
+  const response = await apiFetch('/api/ai/poster-designer-agent/compose', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+    timeoutMs: 120_000,
+  });
+  const data = await readResponse(response, 'The creative agent could not compose this poster.');
+  return {
+    composition: PosterCreativeCompositionSchema.parse(data.composition),
+    source: parseSource(data.source),
+    model: typeof data.model === 'string' ? data.model : null,
+    requestId: typeof data.requestId === 'string' ? data.requestId : '',
+    inputTokens: typeof data.inputTokens === 'number' ? data.inputTokens : null,
+    outputTokens: typeof data.outputTokens === 'number' ? data.outputTokens : null,
   };
 }
 

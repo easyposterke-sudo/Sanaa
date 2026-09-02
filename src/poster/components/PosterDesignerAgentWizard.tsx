@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import type { PosterDesignerReview } from '../../../shared/ai/posterDesignerAgent';
+import type { PosterDesignerPlan, PosterDesignerReview } from '../../../shared/ai/posterDesignerAgent';
+import type { PosterCreativeComposition } from '../../../shared/ai/posterCreativeAgent';
+import { detectProvidedMajorTemplateFacts } from '../../../shared/ai/templatePoster';
 import { applyTemplateTheme } from '../ai/applyTemplateTheme';
 import {
   applyPosterDesignerOperations,
@@ -14,13 +16,17 @@ import {
 import { capturePosterThumbnail } from '../canvasRef';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
-import { preparePortrait, type PreparedPosterImage } from '../ai/preparePosterImage';
+import { compileCreativePoster } from '../ai/compileCreativePoster';
+import type { ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
+import { preparePortrait, prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
 import { findPosterTemplateById, getAllPosterTemplates } from '../posterTemplateList';
 import {
   PosterDesignerAgentError,
+  composeCreativePoster,
   reviewPosterDesignerDraft,
   startPosterDesignerAgent,
 } from '../services/posterDesignerAgentApi';
+import { downloadStockPhoto, searchStockPhotos } from '../services/stockPhotosApi';
 import { fetchPosterTemplateById } from '../services/posterTemplatesApi';
 import { usePosterStore } from '../store/posterStore';
 import { instantiateTemplate } from '../templateMerge';
@@ -47,6 +53,8 @@ interface BriefImage {
   asset: PreparedPosterImage;
 }
 
+type AgentStrategy = 'auto' | 'template' | 'original' | 'reference';
+
 interface AgentResult {
   templateName: string;
   concept: string;
@@ -61,18 +69,25 @@ interface AgentResult {
   layoutSkillVersion: string;
   appliedOperations: number;
   skippedOperations: number;
+  strategy: Exclude<AgentStrategy, 'auto'>;
+  skillsUsed: string[];
+  elapsedMs: number;
+  constraintAdjustments: number;
 }
 
 export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesignerAgentWizardProps) {
   useModalScrollLock(open);
   const { categories, loading: categoriesLoading } = usePosterTemplateCategories();
   const [brief, setBrief] = useState('');
+  const [strategy, setStrategy] = useState<AgentStrategy>('auto');
+  const [reference, setReference] = useState<PreparedPosterImage | null>(null);
   const [categoryId, setCategoryId] = useState('');
   const [images, setImages] = useState<BriefImage[]>([]);
   const [themeEnabled, setThemeEnabled] = useState(false);
   const [themeColor, setThemeColor] = useState('#6d28d9');
   const [visualReview, setVisualReview] = useState(true);
   const [preparingImages, setPreparingImages] = useState(false);
+  const [preparingReference, setPreparingReference] = useState(false);
   const [stage, setStage] = useState<AgentStage>('idle');
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AgentResult | null>(null);
@@ -117,17 +132,26 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
     }
   };
 
+  const handleReference = async (file: File | null) => {
+    if (!file) return;
+    setPreparingReference(true);
+    setError(null);
+    try {
+      setReference(await prepareTemplateReference(file));
+      setStrategy('reference');
+    } catch (caught) {
+      setError(messageFromError(caught));
+    } finally {
+      setPreparingReference(false);
+    }
+  };
+
   const handleGenerate = async () => {
+    const startedAt = performance.now();
     setError(null);
     setResult(null);
     if (brief.trim().length < 10) {
       setError('Describe the poster and the information that must appear.');
-      return;
-    }
-    if (templates.length === 0) {
-      setError(categoryId
-        ? 'No fillable templates are assigned to this category yet.'
-        : 'Create and label at least one template before testing the agent.');
       return;
     }
     if (themeEnabled && !/^#[0-9a-fA-F]{6}$/.test(themeColor)) {
@@ -135,60 +159,97 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
       return;
     }
 
+    const resolvedStrategy: Exclude<AgentStrategy, 'auto'> = strategy === 'auto'
+      ? reference ? 'reference' : templates.length > 0 ? 'template' : 'original'
+      : strategy;
+    if (resolvedStrategy === 'template' && templates.length === 0) {
+      setError('No fillable template is available for this category. Choose Original design instead.');
+      return;
+    }
+    if (resolvedStrategy === 'reference' && !reference) {
+      setError('Add the poster or design reference that the agent should follow.');
+      return;
+    }
+
     const sessionId = crypto.randomUUID();
     setStage('planning');
     try {
-      const response = await startPosterDesignerAgent({
-        sessionId,
-        brief: brief.trim(),
-        categoryId: categoryId || null,
-        themeColor: themeEnabled ? themeColor : null,
-        images: images.map((image, index) => ({
-          index,
-          name: image.name.trim(),
-          role: image.role.trim(),
-        })),
-        templates: templates.slice(0, 100).map((template, index) => ({
-          id: template.id,
-          name: template.name,
-          category: template.category,
-          description: template.description ?? '',
-          fields: buildTemplatePosterCatalogFields(template),
-          existingText: buildTemplatePosterExistingText(template),
-          preview: visualReview && index < 8 ? templatePreview(template) : null,
-        })),
-        excludedTemplateIds: [],
-        maxRevisions: 4,
-      });
+      let initialTools: ReturnType<typeof applyPosterDesignerOperations>;
+      let baseDesign: string;
+      let concept: string;
+      let source: 'openai' | 'fallback';
+      let expectedFacts: PosterDesignerPlan['expectedFacts'] = detectProvidedMajorTemplateFacts(brief.trim());
+      let skillsUsed: string[] = [];
+      let constraintAdjustments = 0;
 
-      setStage('building');
-      const selectedTemplate =
-        findPosterTemplateById(response.plan.templateId) ??
-        (await fetchPosterTemplateById(response.plan.templateId));
-      const values: Record<string, string> = {};
-      for (const field of selectedTemplate.fields ?? []) {
-        if ((field.kind ?? 'text') === 'text') values[field.key] = '';
-      }
-      for (const field of response.plan.fields) {
-        if (field.imageIndex !== null) {
-          const image = images[field.imageIndex];
-          if (image) values[field.key] = image.asset.dataUrl;
-        } else if (field.value !== null) {
-          values[field.key] = field.value;
+      if (resolvedStrategy === 'template') {
+        const response = await startPosterDesignerAgent({
+          sessionId,
+          brief: brief.trim(),
+          categoryId: categoryId || null,
+          themeColor: themeEnabled ? themeColor : null,
+          images: images.map((image, index) => ({ index, name: image.name.trim(), role: image.role.trim() })),
+          templates: templates.slice(0, 100).map((template, index) => ({
+            id: template.id,
+            name: template.name,
+            category: template.category,
+            description: template.description ?? '',
+            fields: buildTemplatePosterCatalogFields(template),
+            existingText: buildTemplatePosterExistingText(template),
+            preview: visualReview && index < 8 ? templatePreview(template) : null,
+          })),
+          excludedTemplateIds: [],
+          maxRevisions: 2,
+        });
+        setStage('building');
+        const selectedTemplate = findPosterTemplateById(response.plan.templateId) ?? (await fetchPosterTemplateById(response.plan.templateId));
+        const values: Record<string, string> = {};
+        for (const field of selectedTemplate.fields ?? []) {
+          if ((field.kind ?? 'text') === 'text') values[field.key] = '';
         }
+        for (const field of response.plan.fields) {
+          if (field.imageIndex !== null) {
+            const image = images[field.imageIndex];
+            if (image) values[field.key] = image.asset.dataUrl;
+          } else if (field.value !== null) values[field.key] = field.value;
+        }
+        const instantiated = await instantiateTemplate(selectedTemplate, values, { clearMissingTextFields: true });
+        const themedProject = themeEnabled ? applyTemplateTheme(instantiated.project, themeColor) : instantiated.project;
+        initialTools = applyPosterDesignerOperations(themedProject, instantiated.fieldBindings, response.plan.operations);
+        baseDesign = selectedTemplate.name;
+        concept = response.plan.concept;
+        source = response.source;
+        expectedFacts = response.plan.expectedFacts;
+        skillsUsed = ['brief_interpreter', 'template_adapter', 'geometry_inspector', 'visual_critic'];
+      } else {
+        const canvasProject = usePosterStore.getState().getProject();
+        const creative = await composeCreativePoster({
+          sessionId,
+          mode: resolvedStrategy,
+          brief: brief.trim(),
+          categoryId: categoryId || null,
+          themeColor: themeEnabled ? themeColor : null,
+          canvas: { width: canvasProject.canvasWidth, height: canvasProject.canvasHeight },
+          images: images.map((image, index) => ({ index, name: image.name.trim(), role: image.role.trim() })),
+          reference: reference ? { dataUrl: reference.dataUrl, width: reference.width, height: reference.height } : null,
+          maxRevisions: 2,
+        });
+        setStage('building');
+        const replacements = await resolveCreativeImageReplacements(creative.composition, images);
+        const compiled = await compileCreativePoster({
+          composition: creative.composition,
+          canvasSize: { width: canvasProject.canvasWidth, height: canvasProject.canvasHeight },
+          reference: resolvedStrategy === 'reference' ? reference : null,
+          imageReplacements: replacements,
+        });
+        initialTools = applyPosterDesignerOperations(compiled.project, compiled.fieldBindings, []);
+        baseDesign = resolvedStrategy === 'reference' ? 'Reference-guided editable design' : 'Original editable design';
+        concept = creative.composition.concept;
+        source = creative.source;
+        skillsUsed = creative.composition.skillsUsed;
+        constraintAdjustments = compiled.constraintAdjustments;
       }
 
-      const instantiated = await instantiateTemplate(selectedTemplate, values, {
-        clearMissingTextFields: true,
-      });
-      const themedProject = themeEnabled
-        ? applyTemplateTheme(instantiated.project, themeColor)
-        : instantiated.project;
-      const initialTools = applyPosterDesignerOperations(
-        themedProject,
-        instantiated.fieldBindings,
-        response.plan.operations,
-      );
       onApply({ project: initialTools.project, fieldBindings: initialTools.fieldBindings });
       let appliedOperations = initialTools.appliedOperationIds.length;
       let skippedOperations = initialTools.skipped.length;
@@ -201,8 +262,8 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
       let workingBindings = initialTools.fieldBindings;
       let latestSummaries: ReturnType<typeof collectPosterDesignerElementSummaries> = [];
 
-      // Three genuine correction passes followed by a fourth inspection-only pass.
-      for (let iteration = 1; iteration <= 4; iteration += 1) {
+      // One correction pass followed by a final inspection. This keeps the run bounded and responsive.
+      for (let iteration = 1; iteration <= 2; iteration += 1) {
         setStage('inspecting');
         await waitForCanvasRender();
         let renderedProject = usePosterStore.getState().getProject();
@@ -219,7 +280,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         const issues = validatePosterDesignerLayout(
           renderedProject,
           summaries,
-          response.plan.expectedFacts,
+          expectedFacts,
         );
         deterministicIssueCount = issues.length;
         const previewDataUrl = visualReview
@@ -244,7 +305,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         latestReview = reviewResponse.review;
         latestReviewSource = reviewResponse.source;
         visualInspectionUsed ||= Boolean(previewDataUrl);
-        const isFinalInspection = iteration === 4;
+        const isFinalInspection = iteration === 2;
         if (
           isFinalInspection ||
           reviewResponse.review.operations.length === 0 ||
@@ -282,14 +343,14 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         deterministicIssueCount = validatePosterDesignerLayout(
           finalProject,
           finalSummaries,
-          response.plan.expectedFacts,
+          expectedFacts,
         ).length;
       }
 
       setResult({
-        templateName: selectedTemplate.name,
-        concept: response.plan.concept,
-        source: response.source,
+        templateName: baseDesign,
+        concept,
+        source,
         reviewSource: latestReviewSource,
         review: latestReview,
         visualReviewRequested: visualReview,
@@ -300,6 +361,10 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
         layoutSkillVersion: stabilization.skillVersion,
         appliedOperations,
         skippedOperations,
+        strategy: resolvedStrategy,
+        skillsUsed,
+        elapsedMs: Math.round(performance.now() - startedAt),
+        constraintAdjustments,
       });
       setStage('complete');
     } catch (caught) {
@@ -327,13 +392,13 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
               </span>
             </div>
             <p className="mt-1 max-w-3xl text-sm text-zinc-500 dark:text-zinc-400">
-              The agent may adapt a template, understand unlabeled visible copy, inspect the rendered draft, and make up to three bounded visual corrections.
+              Build from a template, follow a reference poster, or compose an original editable design with native text, images, shapes, paths, constraints, and bounded visual review.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            disabled={busy || preparingImages}
+            disabled={busy || preparingImages || preparingReference}
             className="shrink-0 rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-800"
           >
             Close
@@ -342,6 +407,61 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
 
         <div className="grid min-h-0 flex-1 gap-5 overflow-y-auto overscroll-y-contain p-4 sm:p-6 lg:grid-cols-[1.15fr_0.85fr]">
           <section className="space-y-5">
+            <div>
+              <label htmlFor="agent-design-strategy" className="text-sm font-semibold text-zinc-900 dark:text-white">
+                Design strategy
+              </label>
+              <select
+                id="agent-design-strategy"
+                value={strategy}
+                onChange={(event) => setStrategy(event.target.value as AgentStrategy)}
+                disabled={busy}
+                className={inputClass}
+              >
+                <option value="auto">Auto — choose the best available path</option>
+                <option value="template">Adapt an existing template</option>
+                <option value="original">Create an original editable design</option>
+                <option value="reference">Follow an uploaded reference poster</option>
+              </select>
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Auto follows an uploaded reference first, otherwise uses a suitable template, and creates from scratch when no template is available.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Reference poster</h3>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Optional. The agent borrows visual grammar, not the old poster wording.</p>
+                </div>
+                <label className="cursor-pointer rounded-lg border border-cyan-500 px-3 py-2 text-sm font-medium text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/30">
+                  {preparingReference ? 'Preparing…' : reference ? 'Replace reference' : 'Add reference'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    disabled={busy || preparingReference}
+                    onChange={(event) => {
+                      const input = event.currentTarget;
+                      const file = input.files?.[0] ?? null;
+                      input.value = '';
+                      void handleReference(file);
+                    }}
+                  />
+                </label>
+              </div>
+              {reference && (
+                <div className="mt-3 flex items-center gap-3">
+                  <img src={reference.dataUrl} alt="Design reference" className="h-28 w-24 rounded-md bg-zinc-100 object-contain dark:bg-zinc-950" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium text-zinc-800 dark:text-zinc-200">{reference.fileName}</p>
+                    <p className="mt-1 text-xs text-zinc-500">{reference.sourceWidth} × {reference.sourceHeight}</p>
+                    <button type="button" onClick={() => setReference(null)} disabled={busy} className="mt-2 text-xs text-red-600 hover:underline dark:text-red-400">Remove reference</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <label htmlFor="agent-poster-category" className="text-sm font-semibold text-zinc-900 dark:text-white">
                 Poster category <span className="font-normal text-zinc-400">(optional)</span>
@@ -478,13 +598,17 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
                 <p className="mt-2 text-xs leading-5 text-emerald-900 dark:text-emerald-200">{result.concept}</p>
                 <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-emerald-900 dark:text-emerald-200">
                   <div><dt className="font-semibold">Base design</dt><dd>{result.templateName}</dd></div>
+                  <div><dt className="font-semibold">Strategy</dt><dd>{result.strategy}</dd></div>
                   <div><dt className="font-semibold">Agent tools</dt><dd>{result.appliedOperations} applied</dd></div>
                   <div><dt className="font-semibold">Final checks</dt><dd>{result.deterministicIssueCount} issue{result.deterministicIssueCount === 1 ? '' : 's'}</dd></div>
                   <div><dt className="font-semibold">Corrections</dt><dd>{result.revisionPasses} pass{result.revisionPasses === 1 ? '' : 'es'}</dd></div>
                   <div><dt className="font-semibold">Layout skill</dt><dd>{result.safetyAdjustments} anchored · {result.layoutSkillVersion}</dd></div>
                   <div><dt className="font-semibold">Planner</dt><dd>{result.source === 'openai' ? 'AI' : 'safe fallback'}</dd></div>
                   <div><dt className="font-semibold">Critic</dt><dd>{result.reviewSource === 'openai' ? 'AI visual critic' : 'safe fallback'}</dd></div>
+                  <div><dt className="font-semibold">Constraint compiler</dt><dd>{result.constraintAdjustments} adjustment{result.constraintAdjustments === 1 ? '' : 's'}</dd></div>
+                  <div><dt className="font-semibold">Elapsed</dt><dd>{formatElapsed(result.elapsedMs)}</dd></div>
                 </dl>
+                {result.skillsUsed.length > 0 && <p className="mt-3 text-xs leading-5"><span className="font-semibold">Skills:</span> {result.skillsUsed.join(', ')}</p>}
                 {result.review && <p className="mt-3 text-xs leading-5">{result.review.summary}</p>}
                 {result.visualReviewRequested && !result.visualInspectionUsed && (
                   <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300">
@@ -510,7 +634,7 @@ export function PosterDesignerAgentWizard({ open, onClose, onApply }: PosterDesi
           <button
             type="button"
             onClick={() => void handleGenerate()}
-            disabled={busy || preparingImages || brief.trim().length < 10}
+            disabled={busy || preparingImages || preparingReference || brief.trim().length < 10}
             className="rounded-lg bg-cyan-600 px-5 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? stageLabel(stage) : result ? 'Generate another agent draft' : 'Start Agent Designer'}
@@ -547,6 +671,57 @@ function AgentProgress({ stage }: { stage: AgentStage }) {
       </ol>
     </div>
   );
+}
+
+async function resolveCreativeImageReplacements(
+  composition: PosterCreativeComposition,
+  images: readonly BriefImage[],
+): Promise<Record<string, ReconstructionImageReplacement>> {
+  const replacements: Record<string, ReconstructionImageReplacement> = {};
+  for (const element of composition.plan.elements) {
+    const match = /^user_image_(\d+)$/.exec(element.key);
+    if (!match) continue;
+    const image = images[Number(match[1])];
+    if (image) {
+      replacements[element.key] = {
+        src: image.asset.dataUrl,
+        width: image.asset.width,
+        height: image.asset.height,
+      };
+    }
+  }
+
+  const stockRegions = composition.plan.elements
+    .filter((element) => element.kind === 'image_region' && element.replacementRecommended && element.imageSearchQuery.trim() && !replacements[element.key])
+    .slice(0, 3);
+  await Promise.all(stockRegions.map(async (element) => {
+    try {
+      const orientation = Math.abs(element.box.width - element.box.height) < 0.06
+        ? 'square'
+        : element.box.width > element.box.height ? 'landscape' : 'portrait';
+      const candidates = await searchStockPhotos({
+        query: element.imageSearchQuery,
+        orientation,
+        color: element.imageDominantColor,
+      });
+      if (!candidates[0]) return;
+      const asset = await downloadStockPhoto(candidates[0]);
+      replacements[element.key] = {
+        src: asset.dataUrl,
+        width: asset.width,
+        height: asset.height,
+        credit: `Photo by ${candidates[0].photographer} on Pexels`,
+      };
+    } catch {
+      // The reconstruction compiler will leave an editable placeholder for a failed optional stock search.
+    }
+  }));
+  return replacements;
+}
+
+function formatElapsed(milliseconds: number): string {
+  const seconds = Math.max(1, Math.round(milliseconds / 1000));
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
 async function waitForCanvasRender(): Promise<void> {

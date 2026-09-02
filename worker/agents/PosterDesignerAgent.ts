@@ -8,13 +8,22 @@ import {
   type PosterDesignerStartResponse,
 } from '../../shared/ai/posterDesignerAgent';
 import {
+  PosterCreativeComposeRequestSchema,
+  type PosterCreativeComposition,
+  type PosterCreativeComposeResponse,
+} from '../../shared/ai/posterCreativeAgent';
+import {
   createFallbackPosterDesignerPlan,
   createFallbackPosterDesignerReview,
   planWithPosterDesignerAgent,
   reviewWithPosterDesignerAgent,
 } from '../ai/openAiPosterDesignerAgent';
+import {
+  composePosterWithOpenAI,
+  createFallbackCreativeComposition,
+} from '../ai/openAiPosterCreativeAgent';
 
-type PosterDesignerAgentStatus = 'idle' | 'planning' | 'draft_ready' | 'reviewing' | 'complete' | 'error';
+type PosterDesignerAgentStatus = 'idle' | 'planning' | 'composing' | 'draft_ready' | 'reviewing' | 'complete' | 'error';
 
 export type PosterDesignerAgentState = {
   schemaVersion: 1;
@@ -26,6 +35,7 @@ export type PosterDesignerAgentState = {
   iteration: number;
   maxRevisions: number;
   plan: PosterDesignerPlan | null;
+  creativeComposition: PosterCreativeComposition | null;
   reviews: Array<{
     iteration: number;
     score: number;
@@ -51,6 +61,7 @@ const INITIAL_STATE: PosterDesignerAgentState = {
   iteration: 0,
   maxRevisions: 1,
   plan: null,
+  creativeComposition: null,
   reviews: [],
   lastError: null,
   updatedAt: new Date(0).toISOString(),
@@ -74,8 +85,84 @@ export class PosterDesignerAgent extends Agent<Cloudflare.Env, PosterDesignerAge
     }
     const path = new URL(request.url).pathname;
     if (path.endsWith('/start')) return rpcResponse(await this.startDesign(json));
+    if (path.endsWith('/compose')) return rpcResponse(await this.composeDesign(json));
     if (path.endsWith('/review')) return rpcResponse(await this.reviewDesign(json));
     return new Response('Not found', { status: 404 });
+  }
+
+  async composeDesign(raw: unknown): Promise<PosterDesignerAgentRpcResult<PosterCreativeComposeResponse>> {
+    const parsed = PosterCreativeComposeRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, error: 'The creative poster request is invalid.', code: 'INVALID_REQUEST', status: 400 };
+    }
+    const request = parsed.data;
+    this.setState({
+      ...INITIAL_STATE,
+      sessionId: request.sessionId,
+      status: 'composing',
+      brief: request.brief,
+      maxRevisions: request.maxRevisions,
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      const model = this.env.OPENAI_MODEL || 'gpt-5.6-luna';
+      let composition: PosterCreativeComposition;
+      let source: 'openai' | 'fallback';
+      let requestId: string = crypto.randomUUID();
+      let inputTokens: number | null = null;
+      let outputTokens: number | null = null;
+      if (this.env.OPENAI_API_KEY) {
+        try {
+          const result = await composePosterWithOpenAI({
+            apiKey: this.env.OPENAI_API_KEY,
+            model,
+            request,
+          });
+          composition = result.value;
+          source = 'openai';
+          requestId = result.openAiRequestId ?? requestId;
+          inputTokens = result.inputTokens;
+          outputTokens = result.outputTokens;
+        } catch (error) {
+          console.error(JSON.stringify({
+            message: 'creative poster composition fell back',
+            sessionId: request.sessionId,
+            mode: request.mode,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+          composition = createFallbackCreativeComposition(request);
+          source = 'fallback';
+        }
+      } else {
+        composition = createFallbackCreativeComposition(request);
+        source = 'fallback';
+      }
+
+      this.setState({
+        ...this.state,
+        status: 'draft_ready',
+        concept: composition.concept,
+        creativeComposition: composition,
+        lastError: null,
+        updatedAt: new Date().toISOString(),
+      });
+      return {
+        ok: true,
+        data: {
+          composition,
+          source,
+          model: source === 'openai' ? model : null,
+          requestId,
+          inputTokens,
+          outputTokens,
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The creative agent could not compose the poster.';
+      this.setState({ ...this.state, status: 'error', lastError: message, updatedAt: new Date().toISOString() });
+      return { ok: false, error: message, code: 'AGENT_COMPOSE_FAILED', status: 500 };
+    }
   }
 
   async startDesign(raw: unknown): Promise<PosterDesignerAgentRpcResult<PosterDesignerStartResponse>> {
@@ -158,7 +245,7 @@ export class PosterDesignerAgent extends Agent<Cloudflare.Env, PosterDesignerAge
       return { ok: false, error: 'The poster preview report is invalid.', code: 'INVALID_REQUEST', status: 400 };
     }
     const request = parsed.data;
-    if (!this.state.plan || this.state.sessionId !== request.sessionId) {
+    if ((!this.state.plan && !this.state.creativeComposition) || this.state.sessionId !== request.sessionId) {
       return { ok: false, error: 'This design session is not available.', code: 'AGENT_SESSION_NOT_FOUND', status: 404 };
     }
     if (request.iteration > this.state.maxRevisions) {

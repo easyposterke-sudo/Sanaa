@@ -3,6 +3,7 @@ import {
   PosterDesignerReviewRequestSchema,
   PosterDesignerStartRequestSchema,
 } from '../shared/ai/posterDesignerAgent';
+import { PosterCreativeComposeRequestSchema } from '../shared/ai/posterCreativeAgent';
 import {
   POSTER_PLAN_PROMPT_VERSION,
   POSTER_PLAN_SCHEMA_VERSION,
@@ -628,6 +629,46 @@ app.post('/api/ai/poster-designer-agent/start', async (context) => {
   const instanceName = await posterDesignerInstanceName(context.get('ownerId'), parsed.data.sessionId);
   const agent = context.env.POSTER_DESIGNER_AGENT.getByName(instanceName);
   const response = await agent.fetch(new Request('https://poster-designer-agent.internal/start', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(parsed.data),
+  }));
+  const headers = new Headers(response.headers);
+  headers.set('cache-control', 'private, no-store');
+  headers.set('x-easyposter-request-id', requestId);
+  return new Response(response.body, { status: response.status, headers });
+});
+
+app.post('/api/ai/poster-designer-agent/compose', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const contentType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return context.json(
+      { error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(await readBoundedText(context.req.raw, maxAiRequestBytes(context.env)));
+  } catch (error) {
+    if (error instanceof RangeError) throw error;
+    return context.json(
+      { error: 'The creative poster request is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const parsed = PosterCreativeComposeRequestSchema.safeParse(json);
+  if (!parsed.success) {
+    return context.json(
+      { error: 'The creative poster request is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const instanceName = await posterDesignerInstanceName(context.get('ownerId'), parsed.data.sessionId);
+  const agent = context.env.POSTER_DESIGNER_AGENT.getByName(instanceName);
+  const response = await agent.fetch(new Request('https://poster-designer-agent.internal/compose', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(parsed.data),
