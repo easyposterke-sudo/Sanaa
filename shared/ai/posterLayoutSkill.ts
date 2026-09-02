@@ -1,4 +1,4 @@
-export const POSTER_LAYOUT_SKILL_VERSION = 'poster-layout-skill/1.0.0' as const;
+export const POSTER_LAYOUT_SKILL_VERSION = 'poster-layout-skill/1.1.0' as const;
 
 export type PosterLayoutSkillPhase = 'planning' | 'layout' | 'critique';
 export type PosterLayoutSkillPosterType = 'universal' | 'event' | 'church_ministry';
@@ -72,7 +72,23 @@ export const POSTER_LAYOUT_SKILL_RULES: readonly PosterLayoutSkillRule[] = [
     posterTypes: ['universal'],
     strength: 'hard',
     failureModes: ['off_axis', 'arbitrary_placement'],
-    directive: 'Text inside a card or panel must align to that container and use deliberate, visually balanced padding.',
+    directive: 'Text inside a card or panel must align to that container and use deliberate padding. Preserve intentional columns: center full-width rows on the card, but align each column on its own axis.',
+  },
+  {
+    id: 'layout.portrait-exclusion',
+    phases: ['planning', 'layout', 'critique'],
+    posterTypes: ['event', 'church_ministry'],
+    strength: 'hard',
+    failureModes: ['text_image_overlap', 'arbitrary_placement'],
+    directive: 'Treat foreground portraits as exclusion zones. Supporting copy, especially the theme and logistics, must occupy readable negative space beside or below the subject and must not sit behind a person.',
+  },
+  {
+    id: 'layout.theme-prominence',
+    phases: ['planning', 'layout', 'critique'],
+    posterTypes: ['event', 'church_ministry'],
+    strength: 'hard',
+    failureModes: ['theme_too_small', 'weak_hierarchy'],
+    directive: 'The theme is a P1 subheading: it must be clearly readable at thumbnail size, smaller than the title but visibly larger or stronger than ordinary logistics copy.',
   },
   {
     id: 'layout.protected-art',
@@ -125,4 +141,3 @@ export function formatPosterLayoutSkillForPrompt(input: {
     ...rules.map((rule) => `- [${rule.strength.toUpperCase()} ${rule.id}] ${rule.directive}`),
   ].join('\n');
 }
-

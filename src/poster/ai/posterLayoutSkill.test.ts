@@ -10,10 +10,12 @@ describe('poster layout skill retrieval', () => {
       phase: 'planning',
       posterType: 'church_ministry',
     });
-    expect(POSTER_LAYOUT_SKILL_VERSION).toBe('poster-layout-skill/1.0.0');
+    expect(POSTER_LAYOUT_SKILL_VERSION).toBe('poster-layout-skill/1.1.0');
     expect(rules.map((rule) => rule.id)).toEqual(expect.arrayContaining([
       'layout.dominant-alignment',
       'layout.theme-anchor',
+      'layout.theme-prominence',
+      'layout.portrait-exclusion',
       'layout.logistics-group',
     ]));
   });

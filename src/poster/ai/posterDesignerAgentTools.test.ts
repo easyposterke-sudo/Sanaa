@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { PosterDesignerOperation } from '../../../shared/ai/posterDesignerAgent';
+import type {
+  PosterDesignerElementSummary,
+  PosterDesignerOperation,
+} from '../../../shared/ai/posterDesignerAgent';
 import type { PosterProject } from '../types';
 import {
   applyPosterDesignerOperations,
@@ -305,7 +308,7 @@ describe('poster designer browser tools', () => {
     const theme = stabilized.project.elements.find((element) => element.id === 'theme');
     expect(organization?.left).toBeCloseTo(320, -1);
     expect(theme?.left).toBeCloseTo(200, -1);
-    expect(stabilized.skillVersion).toBe('poster-layout-skill/1.0.0');
+    expect(stabilized.skillVersion).toBe('poster-layout-skill/1.1.0');
   });
 
   it('centers related text on the panel that contains it', () => {
@@ -350,5 +353,139 @@ describe('poster designer browser tools', () => {
         elementIds: expect.arrayContaining(['times-one', 'times-two']),
       }),
     ]));
+  });
+
+  it('keeps separate logistics columns instead of collapsing all panel text to its center', () => {
+    const source = project();
+    source.elements = [
+      {
+        id: 'panel', type: 'rect', left: 50, top: 400, width: 900, height: 450,
+        fill: '#ffffff', scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 1,
+      },
+      {
+        id: 'day', type: 'text', text: 'Sunday', left: 150, top: 480, width: 250,
+        fontSize: 40, fontFamily: 'Inter', fill: '#111111', textAlign: 'center',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 2,
+      },
+      {
+        id: 'date', type: 'text', text: '23rd August 2026', left: 180, top: 550, width: 250,
+        fontSize: 30, fontFamily: 'Inter', fill: '#111111', textAlign: 'center',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 3,
+      },
+      {
+        id: 'time-label', type: 'text', text: 'START AT', left: 590, top: 480, width: 220,
+        fontSize: 30, fontFamily: 'Inter', fill: '#111111', textAlign: 'center',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 4,
+      },
+      {
+        id: 'time', type: 'text', text: '8am', left: 610, top: 550, width: 220,
+        fontSize: 40, fontFamily: 'Inter', fill: '#111111', textAlign: 'center',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 5,
+      },
+    ];
+    const bindings = [
+      { key: 'day', label: 'Day', sourceElementId: 'day', kind: 'text' as const },
+      { key: 'date', label: 'Date', sourceElementId: 'date', kind: 'text' as const },
+      { key: 'time_label', label: 'Start at', sourceElementId: 'time-label', kind: 'text' as const },
+      { key: 'time', label: 'Time', sourceElementId: 'time', kind: 'text' as const },
+    ];
+    const stabilized = stabilizePosterDesignerLayout(
+      source,
+      collectPosterDesignerElementSummaries(source, bindings),
+    );
+    const byId = new Map(stabilized.project.elements.map((element) => [element.id, element]));
+    const day = byId.get('day');
+    const date = byId.get('date');
+    const timeLabel = byId.get('time-label');
+    const time = byId.get('time');
+    expect((day?.left ?? 0) + 125).toBeCloseTo((date?.left ?? 0) + 125, -1);
+    expect((timeLabel?.left ?? 0) + 110).toBeCloseTo((time?.left ?? 0) + 110, -1);
+    expect((day?.left ?? 0) + 125).toBeLessThan(400);
+    expect((time?.left ?? 0) + 110).toBeGreaterThan(600);
+  });
+
+  it('promotes a tiny theme to a readable subheading size', () => {
+    const source = project();
+    source.elements.push({
+      id: 'small-theme', type: 'text', text: 'God the Loving Father', left: 200, top: 300,
+      width: 600, fontSize: 12, fontFamily: 'Inter', fill: '#ffffff', textAlign: 'center',
+      scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 3,
+    });
+    const bindings = [
+      { key: 'event_title', label: 'Event title', sourceElementId: 'title-1', kind: 'text' as const },
+      { key: 'theme', label: 'Theme', sourceElementId: 'small-theme', kind: 'text' as const },
+    ];
+    const summaries = collectPosterDesignerElementSummaries(source, bindings);
+    expect(validatePosterDesignerLayout(source, summaries, ['title', 'theme'])).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'theme_too_small', severity: 'error' })]),
+    );
+    const stabilized = stabilizePosterDesignerLayout(source, summaries);
+    const theme = stabilized.project.elements.find((element) => element.id === 'small-theme');
+    expect(theme?.type).toBe('text');
+    if (theme?.type !== 'text') throw new Error('Expected theme text.');
+    expect(theme.fontSize).toBeGreaterThanOrEqual(27);
+  });
+
+  it('moves a theme out from behind a foreground portrait', () => {
+    const source = project();
+    source.elements.push(
+      {
+        id: 'portrait', type: 'image', src: 'portrait.png', left: 40, top: 80,
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 3,
+      },
+      {
+        id: 'portrait-theme', type: 'text', text: 'God the Loving Father', left: 250, top: 320,
+        width: 420, fontSize: 16, fontFamily: 'Inter', fill: '#ffffff', textAlign: 'center',
+        scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 4,
+      },
+    );
+    const summaries: PosterDesignerElementSummary[] = [
+      {
+        id: 'title-1', type: 'text', semanticRole: 'title', text: 'Sunday Worship',
+        box: { x: 0.1, y: 0.1, width: 0.7, height: 0.09 }, fontSizeRatio: 0.07,
+        textAlign: 'center', fill: '#ffffff', zIndex: 1, agentCreated: false, locked: false,
+      },
+      {
+        id: 'portrait', type: 'image', semanticRole: null, text: null,
+        box: { x: 0.04, y: 0.08, width: 0.43, height: 0.65 }, fontSizeRatio: null,
+        textAlign: null, fill: null, zIndex: 3, agentCreated: false, locked: false,
+      },
+      {
+        id: 'portrait-theme', type: 'text', semanticRole: 'theme', text: 'God the Loving Father',
+        box: { x: 0.25, y: 0.32, width: 0.42, height: 0.04 }, fontSizeRatio: 0.016,
+        textAlign: 'center', fill: '#ffffff', zIndex: 4, agentCreated: false, locked: false,
+      },
+    ];
+    expect(validatePosterDesignerLayout(source, summaries, ['title', 'theme'])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'text_image_overlap', severity: 'error' }),
+        expect.objectContaining({ code: 'theme_too_small', severity: 'error' }),
+      ]),
+    );
+    const stabilized = stabilizePosterDesignerLayout(source, summaries);
+    const theme = stabilized.project.elements.find((element) => element.id === 'portrait-theme');
+    expect(theme?.type).toBe('text');
+    if (theme?.type !== 'text') throw new Error('Expected portrait theme text.');
+    expect(theme.left).toBeGreaterThanOrEqual(490);
+    expect(theme.fontSize).toBeGreaterThanOrEqual(27);
+    expect(theme.textAlign).toBe('center');
+  });
+
+  it('applies text alignment when move_resize defines a text column', () => {
+    const operation: PosterDesignerOperation = {
+      ...addThemeOperation(),
+      id: 'move_theme_column',
+      kind: 'move_resize',
+      elementId: 'title-1',
+      text: null,
+      box: { x: 0.2, y: 0.2, width: 0.6, height: 0.1 },
+      textAlign: 'right',
+    };
+    const result = applyPosterDesignerOperations(project(), [], [operation]);
+    expect(result.project.elements.find((element) => element.id === 'title-1')).toMatchObject({
+      left: 200,
+      width: 600,
+      textAlign: 'right',
+    });
   });
 });

@@ -26,7 +26,7 @@ export function buildTemplatePosterExistingText(
   );
   const canvasWidth = Math.max(1, template.project.canvasWidth);
   const canvasHeight = Math.max(1, template.project.canvasHeight);
-  return template.project.elements
+  const visibleText = template.project.elements
     .filter((element) => element.opacity > 0 && (element.type === 'text' || element.type === '3d-text'))
     .slice(0, 120)
     .flatMap((element) => {
@@ -52,6 +52,7 @@ export function buildTemplatePosterExistingText(
         },
       }];
     });
+  return refineVisibleTextSemanticRoles(visibleText);
 }
 
 /** Infer useful meaning from visible copy even when a template creator did not label the layer. */
@@ -65,11 +66,11 @@ export function inferVisibleTextSemanticRole(
   const prominent = Math.max(fontSizeRatio ?? 0, heightRatio ?? 0) >= 0.05;
   if (
     /\b(?:sunday|worship|church|morning|evening)\s+(?:service|worship)\b/.test(copy) ||
-    (prominent && /^(?:sunday|service|worship)$/.test(copy)) ||
     (prominent && /\b(?:conference|summit|crusade|concert|festival|seminar)\b/.test(copy))
   ) return 'title';
   if (/\b(?:church|chapel|fellowship|ministry|ministries)\b/.test(copy)) return 'organization';
   if (/^(?:every\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s?$/.test(copy)) return 'day';
+  if (prominent && /^(?:service|worship)$/.test(copy)) return 'title';
   if (
     /\b\d{1,2}(?::\d{2}|\.\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)\b/.test(copy) ||
     /^(?:start|starts|starting|begins?)\s+at$/.test(copy)
@@ -82,6 +83,43 @@ export function inferVisibleTextSemanticRole(
   if (/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/i.test(text)) return 'email';
   if (/(?:\+\d[\d\s().-]{7,}\d|\b0\d{8,14}\b)/.test(text)) return 'phone';
   return null;
+}
+
+/**
+ * A single prominent “Sunday” is usually a logistics day, not a headline.
+ * Promote it to title only when it is geometrically paired with a nearby
+ * prominent “Service/Worship” layer, as in split template headline artwork.
+ */
+export function refineVisibleTextSemanticRoles<
+  T extends {
+    text: string | null;
+    semanticRole: TemplatePosterSemanticRole | null;
+    fontSizeRatio: number | null;
+    box: { x: number; y: number; width: number; height: number };
+  },
+>(items: readonly T[]): T[] {
+  const titlePartners = items.filter((item) =>
+    item.semanticRole === 'title' &&
+    /^(?:service|worship)$/.test(normalizeVisibleCopy(item.text ?? '')) &&
+    (item.fontSizeRatio ?? item.box.height) >= 0.05);
+  return items.map((item) => {
+    if (item.semanticRole !== 'day' || !/^sunday$/.test(normalizeVisibleCopy(item.text ?? ''))) return item;
+    const paired = titlePartners.some((partner) => {
+      const verticalGap = Math.max(
+        0,
+        Math.max(item.box.y, partner.box.y) - Math.min(item.box.y + item.box.height, partner.box.y + partner.box.height),
+      );
+      const centerDelta = Math.abs(
+        item.box.x + item.box.width / 2 - (partner.box.x + partner.box.width / 2),
+      );
+      return verticalGap <= 0.12 && centerDelta <= 0.24;
+    });
+    return paired ? { ...item, semanticRole: 'title' as const } : item;
+  });
+}
+
+function normalizeVisibleCopy(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 export function buildTemplatePosterCatalogField(

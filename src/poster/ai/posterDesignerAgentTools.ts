@@ -16,6 +16,7 @@ import { generateElementId } from '../utils/generateElementId';
 import {
   inferTemplateFieldSemanticRole,
   inferVisibleTextSemanticRole,
+  refineVisibleTextSemanticRoles,
 } from './templateFieldCatalog';
 
 export type PosterDesignerToolResult = {
@@ -205,6 +206,7 @@ export function applyPosterDesignerOperations(
             box.height * project.canvasHeight,
             requestedFontSize,
           ),
+          ...(operation.textAlign ? { textAlign: operation.textAlign } : {}),
         });
       } else if (isShapeWithDimensions(element)) {
         const baseWidth = element.width ?? (element.radius ? element.radius * 2 : undefined);
@@ -287,7 +289,7 @@ export function collectPosterDesignerElementSummaries(
     );
   }
   const fabricBounds = readFabricBounds(project.canvasWidth, project.canvasHeight);
-  return project.elements
+  const summaries = project.elements
     .filter((element) => element.opacity > 0 && !element.excludeFromExport)
     .slice(0, 120)
     .map((element) => {
@@ -319,6 +321,7 @@ export function collectPosterDesignerElementSummaries(
         locked: element.locked ?? false,
       };
     });
+  return refineVisibleTextSemanticRoles(summaries);
 }
 
 export function validatePosterDesignerLayout(
@@ -348,6 +351,27 @@ export function validatePosterDesignerLayout(
   }
 
   const textElements = summaries.filter((element) => Boolean(element.text));
+  const foregroundImages = foregroundImageSummaries(summaries);
+  for (const element of textElements) {
+    if (element.type === 'text' && element.semanticRole === 'theme' && (element.fontSizeRatio ?? 0) < 0.026) {
+      issues.push({
+        code: 'theme_too_small',
+        severity: 'error',
+        elementIds: [element.id],
+        message: 'The theme is too small for its P1 subheading role and will disappear at thumbnail size.',
+      });
+    }
+    if (!isPortraitExcludedTextRole(element.semanticRole)) continue;
+    const obstacle = foregroundImages.find((image) => overlapRatio(element.box, image.box) > 0.08);
+    if (obstacle) {
+      issues.push({
+        code: 'text_image_overlap',
+        severity: 'error',
+        elementIds: [element.id, obstacle.id],
+        message: 'Supporting text crosses a foreground image or portrait instead of using clear negative space.',
+      });
+    }
+  }
   for (let leftIndex = 0; leftIndex < textElements.length; leftIndex += 1) {
     const left = textElements[leftIndex]!;
     for (let rightIndex = leftIndex + 1; rightIndex < textElements.length; rightIndex += 1) {
@@ -592,26 +616,44 @@ function applyDeterministicAlignmentSkill(input: {
   const titleBox = unionBoxes(title.map((summary) => input.boxes.get(summary.id)).filter(isDefined));
   const titleAlignment = dominantTextAlignment(title);
   const centeredComposition = titleAlignment === 'center' || (
-    titleAlignment === null && titleBox !== null && Math.abs(boxCenterX(titleBox) - 0.5) <= 0.08
+    titleAlignment === null && titleBox !== null && (
+      Math.abs(boxCenterX(titleBox) - 0.5) <= 0.12 || titleBox.width >= 0.58
+    )
   );
   const primaryAnchor = titleBox
     ? centeredComposition ? 0.5 : titleBox.x
     : 0.5;
 
-  for (const role of ['organization', 'theme'] as const) {
-    for (const summary of visibleText.filter((candidate) => candidate.semanticRole === role)) {
-      if (centeredComposition) {
-        alignSummaryCenterX(input, summary, primaryAnchor, 'center');
-      } else if (titleBox) {
-        alignSummaryLeft(input, summary, primaryAnchor, 'left');
-      }
+  for (const summary of visibleText.filter((candidate) => candidate.semanticRole === 'organization')) {
+    if (centeredComposition) {
+      alignSummaryCenterX(input, summary, primaryAnchor, 'center');
+    } else if (titleBox) {
+      alignSummaryLeft(input, summary, primaryAnchor, 'left');
     }
+  }
+
+  const foregroundImages = foregroundImageSummaries(input.summaries);
+  const portraitRegion = largestForegroundImageRegion(foregroundImages);
+  const themeAnchor = portraitRegion
+    ? negativeSpaceRegionBeside(portraitRegion).centerX
+    : primaryAnchor;
+  for (const summary of visibleText.filter((candidate) => candidate.semanticRole === 'theme')) {
+    if (portraitRegion) {
+      placeThemeInNegativeSpace(input, summary, portraitRegion, titleBox);
+    } else if (centeredComposition) {
+      alignSummaryCenterX(input, summary, themeAnchor, 'center');
+    } else if (titleBox) {
+      alignSummaryLeft(input, summary, primaryAnchor, 'left');
+    }
+    ensureThemeProminence(input, summary, title);
   }
 
   const dayDate = visibleText.filter((summary) => summary.semanticRole === 'day' || summary.semanticRole === 'date');
   const times = visibleText.filter((summary) => summary.semanticRole === 'time');
+  const people = visibleText.filter((summary) => summary.semanticRole === 'person_name');
   alignStackOnExistingAxis(input, dayDate);
   alignStackOnExistingAxis(input, times);
+  alignStackOnExistingAxis(input, people);
 
   const dayDateBox = unionBoxes(dayDate.map((summary) => input.boxes.get(summary.id)).filter(isDefined));
   const timeBox = unionBoxes(times.map((summary) => input.boxes.get(summary.id)).filter(isDefined));
@@ -662,14 +704,21 @@ function validatePosterAlignmentAnchors(
   const titleBox = unionBoxes(title.map((summary) => summary.box));
   const titleAlignment = dominantTextAlignment(title);
   const centeredComposition = titleAlignment === 'center' || (
-    titleAlignment === null && titleBox !== null && Math.abs(boxCenterX(titleBox) - 0.5) <= 0.08
+    titleAlignment === null && titleBox !== null && (
+      Math.abs(boxCenterX(titleBox) - 0.5) <= 0.12 || titleBox.width >= 0.58
+    )
   );
   if (titleBox) {
     const anchor = centeredComposition ? 0.5 : titleBox.x;
+    const portraitRegion = largestForegroundImageRegion(foregroundImageSummaries(summaries));
     for (const summary of text.filter((candidate) =>
       candidate.semanticRole === 'organization' || candidate.semanticRole === 'theme')) {
-      const delta = centeredComposition
-        ? Math.abs(boxCenterX(summary.box) - anchor)
+      const usePortraitRegion = summary.semanticRole === 'theme' && portraitRegion !== null;
+      const expectedCenter = usePortraitRegion
+        ? negativeSpaceRegionBeside(portraitRegion).centerX
+        : anchor;
+      const delta = centeredComposition || usePortraitRegion
+        ? Math.abs(boxCenterX(summary.box) - expectedCenter)
         : Math.abs(summary.box.x - anchor);
       if (delta > POSTER_LAYOUT_METRICS.anchorTolerance) {
         issues.push({
@@ -716,10 +765,22 @@ function validatePosterAlignmentAnchors(
   for (const panel of panels) {
     const contained = text.filter((summary) => boxContains(panel.box, summary.box, 0.82));
     if (contained.length === 0) continue;
-    const centered = contained.filter((summary) => summary.textAlign === 'center');
-    if (centered.length < Math.ceil(contained.length / 2)) continue;
-    const offAxis = centered.filter((summary) =>
-      Math.abs(boxCenterX(summary.box) - boxCenterX(panel.box)) > POSTER_LAYOUT_METRICS.anchorTolerance);
+    const spanning = contained.filter((summary) => summary.box.width >= panel.box.width * 0.55);
+    const columns = clusterByHorizontalAxis(
+      contained.filter((summary) => !spanning.includes(summary)),
+      (summary) => summary.box,
+    );
+    const singleCenteredColumn = columns.length === 1 &&
+      columns[0]!.filter((summary) => summary.textAlign === 'center').length >= Math.ceil(columns[0]!.length / 2);
+    const offAxis = [
+      ...spanning.filter((summary) =>
+        summary.textAlign === 'center' &&
+        Math.abs(boxCenterX(summary.box) - boxCenterX(panel.box)) > POSTER_LAYOUT_METRICS.anchorTolerance),
+      ...(singleCenteredColumn
+        ? columns[0]!.filter((summary) =>
+            Math.abs(boxCenterX(summary.box) - boxCenterX(panel.box)) > POSTER_LAYOUT_METRICS.anchorTolerance)
+        : []),
+    ];
     if (offAxis.length > 0) {
       issues.push({
         code: 'off_axis',
@@ -727,6 +788,18 @@ function validatePosterAlignmentAnchors(
         elementIds: [panel.id, ...offAxis.slice(0, 7).map((summary) => summary.id)],
         message: 'Centered text inside a panel is not centered on the panel anchor.',
       });
+    }
+    for (const column of columns) {
+      if (column.length < 2) continue;
+      const centers = column.map((summary) => boxCenterX(summary.box));
+      if (Math.max(...centers) - Math.min(...centers) > POSTER_LAYOUT_METRICS.anchorTolerance) {
+        issues.push({
+          code: 'misaligned_group',
+          severity: 'warning',
+          elementIds: column.slice(0, 8).map((summary) => summary.id),
+          message: 'Text inside one information-card column does not share an exact alignment axis.',
+        });
+      }
     }
   }
   return issues;
@@ -748,13 +821,33 @@ function alignTextInsidePanels(
     const contained = text.filter((summary) =>
       !assigned.has(summary.id) && boxContains(panel.box, input.boxes.get(summary.id) ?? summary.box, 0.82));
     if (contained.length === 0) continue;
-    const centerAligned = contained.filter((summary) => summary.textAlign === 'center');
-    if (centerAligned.length < Math.ceil(contained.length / 2)) continue;
-    const anchor = boxCenterX(panel.box);
-    for (const summary of contained) {
-      alignSummaryCenterX(input, summary, anchor, 'center');
-      assigned.add(summary.id);
+    const spanning = contained.filter((summary) => {
+      const box = input.boxes.get(summary.id) ?? summary.box;
+      return box.width >= panel.box.width * 0.55;
+    });
+    for (const summary of spanning) {
+      if (summary.textAlign === 'center') {
+        alignSummaryCenterX(input, summary, boxCenterX(panel.box), 'center');
+      }
     }
+    const columns = clusterByHorizontalAxis(
+      contained.filter((summary) => !spanning.includes(summary)),
+      (summary) => input.boxes.get(summary.id) ?? summary.box,
+    );
+    if (columns.length === 1) {
+      const column = columns[0]!;
+      const centerAligned = column.filter((summary) => summary.textAlign === 'center');
+      if (centerAligned.length >= Math.ceil(column.length / 2)) {
+        for (const summary of column) {
+          alignSummaryCenterX(input, summary, boxCenterX(panel.box), 'center');
+        }
+      } else {
+        alignStackOnExistingAxis(input, column);
+      }
+    } else {
+      for (const column of columns) alignStackOnExistingAxis(input, column);
+    }
+    contained.forEach((summary) => assigned.add(summary.id));
   }
 }
 
@@ -767,6 +860,17 @@ function alignStackOnExistingAxis(
   if (boxes.length < 2) return;
   const centers = boxes.map(boxCenterX);
   if (Math.max(...centers) - Math.min(...centers) > 0.2) return;
+  const alignment = dominantTextAlignment(summaries);
+  if (alignment === 'left') {
+    const target = median(boxes.map((box) => box.x));
+    for (const summary of summaries) alignSummaryLeft(input, summary, target, 'left');
+    return;
+  }
+  if (alignment === 'right') {
+    const target = median(boxes.map((box) => box.x + box.width));
+    for (const summary of summaries) alignSummaryRight(input, summary, target, 'right');
+    return;
+  }
   const target = median(centers);
   for (const summary of summaries) alignSummaryCenterX(input, summary, target, 'center');
 }
@@ -795,6 +899,18 @@ function alignSummaryLeft(
   setTextAlignment(input, summary, textAlign);
 }
 
+function alignSummaryRight(
+  input: Parameters<typeof applyDeterministicAlignmentSkill>[0],
+  summary: PosterDesignerElementSummary,
+  right: number,
+  textAlign: 'right',
+): void {
+  const box = input.boxes.get(summary.id);
+  if (!box) return;
+  shiftSummary(input, summary, right - (box.x + box.width), 0);
+  setTextAlignment(input, summary, textAlign);
+}
+
 function shiftGroupY(
   input: Parameters<typeof applyDeterministicAlignmentSkill>[0],
   summaries: readonly PosterDesignerElementSummary[],
@@ -818,7 +934,9 @@ function shiftSummary(
   const safeY = clamp(box.y + deltaY, POSTER_LAYOUT_METRICS.safeMargin, 1 - POSTER_LAYOUT_METRICS.safeMargin - box.height);
   const appliedX = safeX - box.x;
   const appliedY = safeY - box.y;
-  if (Math.abs(appliedX) <= POSTER_LAYOUT_METRICS.opticalTolerance && Math.abs(appliedY) <= POSTER_LAYOUT_METRICS.opticalTolerance) return;
+  // Alignment corrections must be exact. Even a one-to-two percent drift is
+  // clearly visible in stacked dates, times, and labels at poster scale.
+  if (Math.abs(appliedX) <= 0.001 && Math.abs(appliedY) <= 0.001) return;
   element.left += appliedX * input.project.canvasWidth;
   element.top += appliedY * input.project.canvasHeight;
   box.x = safeX;
@@ -836,6 +954,173 @@ function setTextAlignment(
   if (!element || element.type !== 'text' || element.textAlign === alignment) return;
   element.textAlign = alignment;
   input.adjusted.add(summary.id);
+}
+
+function placeThemeInNegativeSpace(
+  input: Parameters<typeof applyDeterministicAlignmentSkill>[0],
+  summary: PosterDesignerElementSummary,
+  foreground: PosterDesignerElementSummary['box'],
+  titleBox: PosterDesignerElementSummary['box'] | null,
+): void {
+  if (summary.locked) return;
+  const element = input.elementById.get(summary.id);
+  const box = input.boxes.get(summary.id);
+  if (!element || element.type !== 'text' || !box) return;
+  const region = negativeSpaceRegionBeside(foreground);
+  const usableRegion = region.width >= 0.24
+    ? region
+    : {
+        x: POSTER_LAYOUT_METRICS.safeMargin,
+        width: 1 - POSTER_LAYOUT_METRICS.safeMargin * 2,
+        centerX: 0.5,
+      };
+  const desiredWidth = clamp(
+    Math.max(box.width, 0.28),
+    0.22,
+    usableRegion.width,
+  );
+  const targetX = usableRegion.x + (usableRegion.width - desiredWidth) / 2;
+  const besidePortrait = region.width >= 0.24;
+  const titleBottom = titleBox ? titleBox.y + titleBox.height : box.y;
+  const targetY = besidePortrait
+    ? Math.max(box.y, titleBottom + POSTER_LAYOUT_METRICS.compactGap)
+    : Math.max(box.y, foreground.y + foreground.height + POSTER_LAYOUT_METRICS.groupGap);
+  setTextBox(input, summary, {
+    x: targetX,
+    y: targetY,
+    width: desiredWidth,
+    height: Math.max(box.height, 0.045),
+  }, 'center');
+}
+
+function ensureThemeProminence(
+  input: Parameters<typeof applyDeterministicAlignmentSkill>[0],
+  summary: PosterDesignerElementSummary,
+  title: readonly PosterDesignerElementSummary[],
+): void {
+  if (summary.locked) return;
+  const element = input.elementById.get(summary.id);
+  const box = input.boxes.get(summary.id);
+  if (!element || element.type !== 'text' || !box) return;
+  const titleSize = Math.max(0, ...title.map((item) => item.fontSizeRatio ?? 0));
+  const targetRatio = clamp(titleSize > 0 ? titleSize * 0.34 : 0.032, 0.028, 0.045);
+  if (element.fontSize / input.project.canvasHeight >= targetRatio) return;
+  const availableHeight = Math.max(box.height, 0.055) * input.project.canvasHeight;
+  const nextSize = fitTextFontSize(
+    element.text,
+    box.width * input.project.canvasWidth,
+    availableHeight,
+    targetRatio * input.project.canvasHeight,
+  );
+  if (nextSize <= element.fontSize * 1.04) return;
+  element.fontSize = nextSize;
+  box.height = Math.max(
+    box.height,
+    estimatedWrappedLineCount(element.text, box.width * input.project.canvasWidth, nextSize) *
+      nextSize * (element.lineHeight ?? 1.05) / input.project.canvasHeight,
+  );
+  input.adjusted.add(summary.id);
+}
+
+function setTextBox(
+  input: Parameters<typeof applyDeterministicAlignmentSkill>[0],
+  summary: PosterDesignerElementSummary,
+  next: PosterDesignerElementSummary['box'],
+  alignment: NonNullable<PosterTextElement['textAlign']>,
+): void {
+  if (summary.locked) return;
+  const element = input.elementById.get(summary.id);
+  const box = input.boxes.get(summary.id);
+  if (!element || element.type !== 'text' || !box) return;
+  const width = clamp(next.width, 0.03, 1 - POSTER_LAYOUT_METRICS.safeMargin * 2);
+  const height = clamp(next.height, 0.02, 1 - POSTER_LAYOUT_METRICS.safeMargin * 2);
+  const x = clamp(next.x, POSTER_LAYOUT_METRICS.safeMargin, 1 - POSTER_LAYOUT_METRICS.safeMargin - width);
+  const y = clamp(next.y, POSTER_LAYOUT_METRICS.safeMargin, 1 - POSTER_LAYOUT_METRICS.safeMargin - height);
+  const changed = Math.abs(box.x - x) > 0.001 ||
+    Math.abs(box.y - y) > 0.001 ||
+    Math.abs(box.width - width) > 0.001 ||
+    element.textAlign !== alignment;
+  if (!changed) return;
+  element.left += (x - box.x) * input.project.canvasWidth;
+  element.top += (y - box.y) * input.project.canvasHeight;
+  element.width = width * input.project.canvasWidth / Math.max(0.001, Math.abs(element.scaleX));
+  element.textAlign = alignment;
+  box.x = x;
+  box.y = y;
+  box.width = width;
+  box.height = height;
+  input.adjusted.add(summary.id);
+}
+
+function foregroundImageSummaries(
+  summaries: readonly PosterDesignerElementSummary[],
+): PosterDesignerElementSummary[] {
+  return summaries.filter((summary) => {
+    if (summary.type !== 'image') return false;
+    const area = summary.box.width * summary.box.height;
+    return area >= 0.055 && area <= 0.5 && summary.box.width >= 0.14 && summary.box.height >= 0.22;
+  });
+}
+
+function largestForegroundImageRegion(
+  images: readonly PosterDesignerElementSummary[],
+): PosterDesignerElementSummary['box'] | null {
+  return [...images]
+    .sort((left, right) => right.box.width * right.box.height - left.box.width * left.box.height)[0]?.box ?? null;
+}
+
+function negativeSpaceRegionBeside(
+  obstacle: PosterDesignerElementSummary['box'],
+): { x: number; width: number; centerX: number } {
+  const margin = POSTER_LAYOUT_METRICS.safeMargin;
+  const gap = POSTER_LAYOUT_METRICS.groupGap;
+  const left = {
+    x: margin,
+    width: Math.max(0, obstacle.x - gap - margin),
+  };
+  const rightX = obstacle.x + obstacle.width + gap;
+  const right = {
+    x: rightX,
+    width: Math.max(0, 1 - margin - rightX),
+  };
+  const selected = right.width >= left.width ? right : left;
+  return { ...selected, centerX: selected.x + selected.width / 2 };
+}
+
+function clusterByHorizontalAxis<T>(
+  items: readonly T[],
+  boxFor: (item: T) => PosterDesignerElementSummary['box'],
+  threshold = 0.11,
+): T[][] {
+  const ordered = [...items].sort((left, right) => boxCenterX(boxFor(left)) - boxCenterX(boxFor(right)));
+  const clusters: T[][] = [];
+  for (const item of ordered) {
+    const center = boxCenterX(boxFor(item));
+    const cluster = clusters.at(-1);
+    if (!cluster) {
+      clusters.push([item]);
+      continue;
+    }
+    const clusterCenter = median(cluster.map((member) => boxCenterX(boxFor(member))));
+    if (Math.abs(center - clusterCenter) <= threshold) cluster.push(item);
+    else clusters.push([item]);
+  }
+  return clusters;
+}
+
+function isPortraitExcludedTextRole(role: TemplatePosterSemanticRole | null): boolean {
+  return role !== null && [
+    'theme',
+    'date',
+    'day',
+    'time',
+    'venue',
+    'contact',
+    'phone',
+    'website',
+    'email',
+    'extra_details',
+  ].includes(role);
 }
 
 function unionBoxes(

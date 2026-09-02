@@ -126,4 +126,8 @@ describe('template field catalog constraints', () => {
   it('recognizes an unlabeled Start at caption as part of the time column', () => {
     expect(inferVisibleTextSemanticRole('START AT')).toBe('time');
   });
+
+  it('keeps a standalone prominent Sunday in the logistics group as a day', () => {
+    expect(inferVisibleTextSemanticRole('SUNDAY', 0.1, 0.1)).toBe('day');
+  });
 });

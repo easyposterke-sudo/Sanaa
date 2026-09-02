@@ -215,6 +215,8 @@ Design policy:
 - Keep the template's visual grammar. Prefer adding no more than five missing text blocks. If several missing facts belong together, add one restrained rounded add_panel before the related add_text operations. A panel must support hierarchy and contrast, not decorate randomly.
 - Use normalized boxes. Keep added blocks inside x=0.05..0.95 and y=0.05..0.95. Reserve breathing room around the hero title and portrait. Do not place text over faces, existing headlines, dates, or footer copy.
 - Themes should normally be a secondary headline below or near the title. Dates, times, venue, and contacts should form a compact aligned information group and remain smaller than the title/theme.
+- Before placing support copy, identify foreground portrait bounds from each template preview. Put the theme in clear negative space beside or below the portrait; never center it behind a person merely because the canvas center is available.
+- Use each text box as a real alignment column: set textAlign explicitly, center both the box and its text on a chosen center anchor, or give left/right text a shared edge. A large information panel may contain several columns; do not collapse every child to the panel center.
 - Operation ids must be unique lowercase snake_case.
 - Existing element ids are unavailable until rendered review, so initial operations may only use add_text or an unanchored add_panel. Put an add_panel before the text that should render above it.
 - Every operation must supply all nullable fields. add_panel uses box, fill, fillOpacity, and cornerRadiusRatio; unrelated typography fields are null.
@@ -229,6 +231,9 @@ Critic policy:
 - Correct factual completeness, overlap, unsafe margins, semantic duplicates, weak hierarchy, low contrast, arbitrary placement, and text crossing faces or important artwork.
 - Use only element ids present in the geometry report. Do not target locked elements. add_text is allowed only for a supplied fact that is visibly missing.
 - Prefer coordinated sets of move_resize and update_text_style operations that reflow existing editable layers to create real space. Moving only the newly added text is insufficient when the surrounding composition must open up.
+- For text alignment repairs, use update_text_style with textAlign plus a box whose x and width express the intended column. Do not change x alone while leaving the text aligned to the wrong edge. Related left-aligned blocks share a left edge; centered blocks share a center axis; right-aligned blocks share a right edge.
+- Treat foreground image bounds as exclusion zones. If the theme intersects a portrait, move it into the largest nearby negative-space region, keep it above logistics, and make it large enough to read at thumbnail size.
+- A card can contain multiple columns. Align and distribute items within each detected column; center only full-width rows on the card itself.
 - Use add_panel to create a restrained rounded information card behind a related fact group. Set elementId to a text layer that must remain above the panel. Use hide_duplicate_text only when another visible layer carries the same copy or semantic role; normally preserve the integrated template treatment and hide the simpler agent-created duplicate.
 - Never hide photographs, logos, unique factual text, or the only instance of a semantic role.
 - Do not redesign a poster that already passes. Return no operations and quality_passed when it is clear and balanced.

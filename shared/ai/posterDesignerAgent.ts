@@ -9,7 +9,7 @@ import {
 } from './templatePoster';
 
 export const POSTER_DESIGNER_AGENT_SCHEMA_VERSION = 1 as const;
-export const POSTER_DESIGNER_AGENT_PROMPT_VERSION = 'poster-designer-agent-v4' as const;
+export const POSTER_DESIGNER_AGENT_PROMPT_VERSION = 'poster-designer-agent-v5' as const;
 
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
@@ -138,6 +138,8 @@ export const PosterDesignerValidationIssueSchema = z
       'off_axis',
       'misaligned_group',
       'uneven_spacing',
+      'text_image_overlap',
+      'theme_too_small',
     ]),
     severity: z.enum(['warning', 'error']),
     elementIds: z.array(z.string().trim().min(1).max(120)).max(8),
