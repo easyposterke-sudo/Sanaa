@@ -13,11 +13,7 @@ import { PosterMobileScaleFader } from './PosterMobileScaleFader';
 import { TemplateAuthoringBanner } from './TemplateAuthoringBanner';
 import { TemplateElementLabelModal } from './TemplateElementLabelModal';
 import { SavePosterTemplateModal } from './SavePosterTemplateModal';
-import { AIPosterWizard } from './AIPosterWizard';
-import { AIPosterAssistant } from './AIPosterAssistant';
-import { PosterDesignerAgentWizard } from './PosterDesignerAgentWizard';
 import { TemplateCreatorWizard } from './TemplateCreatorWizard';
-import type { AIPosterSession } from '../ai/aiPosterSession';
 import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
 import { usePosterStore } from '../store/posterStore';
 import { useAuthStore } from '../../auth/authStore';
@@ -89,10 +85,6 @@ export function PosterLayout() {
   const handleAutomatic3DRendered = useCallback((elementId: string) => {
     setAutomatic3DRenderIds((ids) => ids.filter((id) => id !== elementId));
   }, []);
-  const [aiWizardOpen, setAiWizardOpen] = useState(false);
-  const [posterDesignerAgentOpen, setPosterDesignerAgentOpen] = useState(false);
-  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
-  const [aiPosterSession, setAiPosterSession] = useState<AIPosterSession | null>(null);
   const [templateCreatorOpen, setTemplateCreatorOpen] = useState(false);
   const [showCanvasSizeModal, setShowCanvasSizeModal] = useState(false);
   const [templateAuthoring, setTemplateAuthoring] = useState<TemplateAuthoringState | null>(null);
@@ -718,29 +710,6 @@ export function PosterLayout() {
     ? 'max-lg:top-[calc(env(safe-area-inset-top,0px)+3.5rem+3rem)]'
     : 'max-lg:top-[calc(env(safe-area-inset-top,0px)+3rem)]';
 
-  const applyAIPoster = useCallback(
-    (compiled: { project: PosterProject; fieldBindings: PosterTemplateFieldBinding[] }) => {
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.removeItem('poster_edit_my_project_id');
-        sessionStorage.removeItem('poster_edit_my_project_updated_at');
-      }
-      lastCloudSaveRef.current = null;
-      coldAutosaveBaselineRef.current = null;
-      setTemplateAuthoring(null);
-      setLabelTargetId(null);
-      setShowCanvasSizeModal(false);
-      loadProject(compiled.project, { fieldBindings: compiled.fieldBindings });
-      setAutomatic3DRenderIds(
-        compiled.project.elements
-          .filter((element) => element.type === '3d-text')
-          .map((element) => element.id),
-      );
-      setCloudDirty(true);
-      if (!window.matchMedia('(min-width: 1024px)').matches) setLeftOpen(false);
-    },
-    [loadProject],
-  );
-
   const applyTemplateCreatorDraft = useCallback(
     (compiled: CompiledPosterReconstruction) => {
       if (typeof sessionStorage !== 'undefined') {
@@ -899,9 +868,6 @@ export function PosterLayout() {
           <PosterLeftSidebar
             readOnly={readOnly}
             onOpen3DModal={(m) => setThreeTextModal(m)}
-            onOpenPosterDesignerAgent={() => setPosterDesignerAgentOpen(true)}
-            onOpenAIWizard={() => setAiWizardOpen(true)}
-            onOpenAIAssistant={aiPosterSession ? () => setAiAssistantOpen(true) : undefined}
             onOpenTemplateCreator={() => setTemplateCreatorOpen(true)}
           />
         </aside>
@@ -957,33 +923,6 @@ export function PosterLayout() {
         elementIds={automatic3DRenderIds}
         onRendered={handleAutomatic3DRendered}
       />
-      <AIPosterWizard
-        open={aiWizardOpen}
-        onClose={() => setAiWizardOpen(false)}
-        onApply={(compiled, meta) => {
-          applyAIPoster(compiled);
-          setAiPosterSession(meta.session);
-        }}
-      />
-      <PosterDesignerAgentWizard
-        open={posterDesignerAgentOpen}
-        onClose={() => setPosterDesignerAgentOpen(false)}
-        onApply={(compiled) => {
-          applyAIPoster(compiled);
-          setAiPosterSession(null);
-        }}
-      />
-      {aiPosterSession && (
-        <AIPosterAssistant
-          open={aiAssistantOpen}
-          session={aiPosterSession}
-          onClose={() => setAiAssistantOpen(false)}
-          onApply={(compiled, session) => {
-            applyAIPoster(compiled);
-            setAiPosterSession(session);
-          }}
-        />
-      )}
       <TemplateCreatorWizard
         open={templateCreatorOpen}
         onClose={() => setTemplateCreatorOpen(false)}

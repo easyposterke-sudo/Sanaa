@@ -162,7 +162,7 @@ export function TemplateCategoryManagerModal({
             <div className="min-w-0">
               <h2 id="category-manager-title" className="text-lg font-semibold">{editingId ? 'Edit category' : 'Add a category'}</h2>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Define optional reminders shown in Create with AI. None of these inputs will block generation.
+                Define optional category metadata for future template-driven tools.
               </p>
             </div>
             <button type="button" onClick={onClose} disabled={busy} className="self-end rounded-lg px-3 py-2 text-sm text-zinc-500 hover:bg-zinc-100 sm:self-auto dark:hover:bg-zinc-800">Close</button>

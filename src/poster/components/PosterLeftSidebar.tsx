@@ -90,18 +90,12 @@ function layerKindLabel(el: PosterElement): string {
 interface PosterLeftSidebarProps {
   readOnly?: boolean;
   onOpen3DModal?: (mode: 'add') => void;
-  onOpenPosterDesignerAgent?: () => void;
-  onOpenAIWizard?: () => void;
-  onOpenAIAssistant?: () => void;
   onOpenTemplateCreator?: () => void;
 }
 
 export function PosterLeftSidebar({
   readOnly = false,
   onOpen3DModal,
-  onOpenPosterDesignerAgent,
-  onOpenAIWizard,
-  onOpenAIAssistant,
   onOpenTemplateCreator,
 }: PosterLeftSidebarProps) {
   const navigate = useNavigate();
@@ -314,62 +308,6 @@ export function PosterLeftSidebar({
         >
           Manage my templates
         </button>
-      )}
-      {onOpenPosterDesignerAgent && (
-        <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-900 dark:bg-cyan-950/30">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-cyan-900 dark:text-cyan-200">
-              Agent Designer Lab
-            </h3>
-            <span className="rounded-full bg-cyan-200/70 px-2 py-0.5 text-[9px] font-bold uppercase text-cyan-900 dark:bg-cyan-900 dark:text-cyan-100">
-              Experimental
-            </span>
-          </div>
-          <p className="mt-1 text-[11px] leading-relaxed text-cyan-800 dark:text-cyan-300">
-            Adapts a template, adds missing information, inspects the rendered draft, and revises it safely.
-          </p>
-          <button
-            type="button"
-            onClick={guard(onOpenPosterDesignerAgent)}
-            className="mt-3 w-full rounded-lg bg-cyan-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700"
-          >
-            Test Agent Designer
-          </button>
-        </div>
-      )}
-      {onOpenAIWizard && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
-            Reference to poster
-          </h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-400">
-            Analyze one poster, then build editable 3D text, shapes, portraits, and event details.
-          </p>
-          <button
-            type="button"
-            onClick={guard(onOpenAIWizard)}
-            className="mt-3 w-full rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
-          >
-            Create with AI
-          </button>
-        </div>
-      )}
-      {onOpenAIAssistant && (
-        <div className="rounded-xl border border-emerald-200 bg-white p-3 dark:border-emerald-900 dark:bg-zinc-900">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">
-            AI design assistant
-          </h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-            Change colors or fonts, or ask for another design while keeping your event details.
-          </p>
-          <button
-            type="button"
-            onClick={guard(onOpenAIAssistant)}
-            className="mt-3 w-full rounded-lg border border-emerald-500 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
-          >
-            Ask AI to edit
-          </button>
-        </div>
       )}
       <div>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
