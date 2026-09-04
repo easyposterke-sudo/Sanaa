@@ -324,7 +324,11 @@ function compilePathElement(
   >,
   warnings: string[],
 ): PosterPathElement {
-  const minimumPoints = item.pathClosed ? 3 : 2;
+  const pathUsage = item.pathUsage === 'not_applicable'
+    ? (item.pathClosed ? 'closed_fill' : 'open_stroke')
+    : item.pathUsage;
+  const pathClosed = pathUsage === 'closed_fill';
+  const minimumPoints = pathClosed ? 3 : 2;
   const sourcePoints = item.pathPoints.length >= minimumPoints
     ? item.pathPoints
     : [
@@ -336,6 +340,17 @@ function compilePathElement(
   if (item.pathPoints.length < minimumPoints) {
     warnings.push(`“${item.label}” did not contain enough path anchors, so a rectangular path was used.`);
   }
+  if (item.pathUsage !== 'not_applicable' && item.pathClosed !== pathClosed) {
+    warnings.push(
+      `“${item.label}” had conflicting path geometry; its ${pathUsage === 'closed_fill' ? 'filled region was closed' : 'standalone stroke was kept open'}.`,
+    );
+  }
+  if (pathUsage === 'open_stroke' && item.fill) {
+    warnings.push(`“${item.label}” was classified as a standalone open stroke, so its fill was removed.`);
+  }
+  if (pathUsage === 'closed_fill' && !item.fill) {
+    warnings.push(`“${item.label}” was closed as a filled region, but its fill color needs review.`);
+  }
 
   const strokeWidth = item.stroke ? item.strokeWidthRatio * canvasHeight : 0;
   const inset = Math.min(strokeWidth / 2, box.width * 0.24, box.height * 0.24);
@@ -346,8 +361,8 @@ function compilePathElement(
   }));
   const pathPoints: PosterPathPoint[] = anchors.map((anchor, index) => {
     if (!anchor.smooth) return { x: anchor.x, y: anchor.y };
-    const previous = anchors[index - 1] ?? (item.pathClosed ? anchors.at(-1) : undefined);
-    const next = anchors[index + 1] ?? (item.pathClosed ? anchors[0] : undefined);
+    const previous = anchors[index - 1] ?? (pathClosed ? anchors.at(-1) : undefined);
+    const next = anchors[index + 1] ?? (pathClosed ? anchors[0] : undefined);
     if (!previous || !next) return { x: anchor.x, y: anchor.y };
     const directionX = next.x - previous.x;
     const directionY = next.y - previous.y;
@@ -372,11 +387,12 @@ function compilePathElement(
     ...base,
     layerName: `AI path: ${item.label}`,
     type: 'path',
-    fill: item.fill ?? 'transparent',
+    fill: pathUsage === 'open_stroke' ? 'transparent' : (item.fill ?? 'transparent'),
+    fillOpacity: pathUsage === 'open_stroke' ? 0 : 1,
     stroke: item.stroke ?? undefined,
     strokeWidth,
     pathPoints,
-    closed: item.pathClosed,
+    closed: pathClosed,
     fillRule: 'nonzero',
   };
 }

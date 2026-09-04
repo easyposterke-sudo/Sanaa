@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 11 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 12 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v11-verified-text-extrusion' as const;
+  'poster-reconstruction-v12-path-region-classification' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -114,6 +114,7 @@ export const ReconstructionElementSchema = z
     cornerRadiusRatio: z.number().min(0).max(0.5),
     cornerStyle: z.enum(['auto', 'sharp', 'subtle', 'rounded', 'pill']).default('auto'),
     pathPoints: z.array(ReconstructionPathPointSchema).max(8),
+    pathUsage: z.enum(['not_applicable', 'open_stroke', 'closed_fill']).default('not_applicable'),
     pathClosed: z.boolean(),
     pathTension: z.number().min(0.1).max(0.45),
     imageRole: z.enum([
@@ -325,6 +326,10 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
           type: 'array',
           maxItems: 8,
           items: pathPointJsonSchema,
+        },
+        pathUsage: {
+          type: 'string',
+          enum: ['not_applicable', 'open_stroke', 'closed_fill'],
         },
         pathClosed: { type: 'boolean' },
         pathTension: { type: 'number', minimum: 0.1, maximum: 0.45 },

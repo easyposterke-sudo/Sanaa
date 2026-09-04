@@ -203,6 +203,7 @@ function reconstructionTextElement(fontCatalogId: string | null) {
     cornerRadiusRatio: 0,
     cornerStyle: 'auto',
     pathPoints: [],
+    pathUsage: 'not_applicable',
     pathClosed: false,
     pathTension: 0.28,
     imageRole: 'none',

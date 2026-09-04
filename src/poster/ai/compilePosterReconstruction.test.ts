@@ -46,6 +46,7 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     cornerRadiusRatio: 0,
     cornerStyle: 'auto',
     pathPoints: [],
+    pathUsage: 'not_applicable',
     pathClosed: false,
     pathTension: 0.28,
     imageRole: 'none',
@@ -954,6 +955,7 @@ describe('compilePosterReconstruction', () => {
           fill: '#18b6a5',
           stroke: '#ffc21c',
           strokeWidthRatio: 0.02,
+          pathUsage: 'closed_fill',
           pathClosed: true,
           pathTension: 0.28,
           pathPoints: [
@@ -997,6 +999,88 @@ describe('compilePosterReconstruction', () => {
     });
     expect(path.pathPoints[3]).toEqual({ x: 985, y: 15 });
   });
+
+  it('closes and fills a footer panel when its decorative wave separates two regions', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'white_footer_wave',
+          kind: 'path',
+          label: 'White footer beneath pink wave',
+          box: { x: 0, y: 0.72, width: 1, height: 0.28 },
+          fill: '#ffffff',
+          stroke: '#d31370',
+          strokeWidthRatio: 0.006,
+          pathUsage: 'closed_fill',
+          pathClosed: false,
+          pathPoints: [
+            { x: 0, y: 0.02, smooth: false },
+            { x: 0.34, y: 0.36, smooth: true },
+            { x: 0.65, y: 0.16, smooth: true },
+            { x: 1, y: 0.28, smooth: false },
+            { x: 1, y: 1, smooth: false },
+            { x: 0, y: 1, smooth: false },
+          ],
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 904,
+        height: 1280,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'path',
+      fill: '#ffffff',
+      fillOpacity: 1,
+      stroke: '#d31370',
+      closed: true,
+    });
+    expect(compiled.warnings).toContain(
+      '“White footer beneath pink wave” had conflicting path geometry; its filled region was closed.',
+    );
+  });
+
+  it('removes fill and closure from a standalone decorative stroke', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'standalone_swoosh',
+          kind: 'path',
+          label: 'Standalone swoosh',
+          fill: '#ffffff',
+          stroke: '#d31370',
+          strokeWidthRatio: 0.006,
+          pathUsage: 'open_stroke',
+          pathClosed: true,
+          pathPoints: [
+            { x: 0, y: 0.2, smooth: false },
+            { x: 0.5, y: 0.8, smooth: true },
+            { x: 1, y: 0.2, smooth: false },
+          ],
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 904,
+        height: 1280,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'path',
+      fill: 'transparent',
+      fillOpacity: 0,
+      stroke: '#d31370',
+      closed: false,
+    });
+    expect(compiled.warnings).toContain(
+      '“Standalone swoosh” was classified as a standalone open stroke, so its fill was removed.',
+    );
+  });
 });
 
 describe('PosterReconstructionPlanSchema', () => {
@@ -1024,6 +1108,7 @@ describe('PosterReconstructionPlanSchema', () => {
       textFillStart: _textFillStart,
       textFillEnd: _textFillEnd,
       textFillAngle: _textFillAngle,
+      pathUsage: _pathUsage,
       ...legacyElement
     } = current.elements[0];
     const parsed = PosterReconstructionPlanSchema.parse({
@@ -1044,6 +1129,7 @@ describe('PosterReconstructionPlanSchema', () => {
       textFillStart: null,
       textFillEnd: null,
       textFillAngle: 0,
+      pathUsage: 'not_applicable',
     });
   });
 
