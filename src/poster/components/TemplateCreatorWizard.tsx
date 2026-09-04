@@ -21,6 +21,7 @@ import {
   type StockPhotoCandidate,
 } from '../services/stockPhotosApi';
 import {
+  EDITABLE_POSTER_CANVAS_SIZE_PRESETS,
   normalizeTemplateCanvasDimension,
   recommendTemplateCanvasSize,
   TEMPLATE_CANVAS_SIZE_PRESETS,
@@ -67,9 +68,12 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
   if (!open) return null;
 
   const creatingPoster = mode === 'poster';
+  const canvasSizePresets = creatingPoster
+    ? EDITABLE_POSTER_CANVAS_SIZE_PRESETS
+    : TEMPLATE_CANVAS_SIZE_PRESETS;
 
   const recommendedPreset = reference
-    ? recommendTemplateCanvasSize(reference.sourceWidth, reference.sourceHeight)
+    ? recommendTemplateCanvasSize(reference.sourceWidth, reference.sourceHeight, canvasSizePresets)
     : null;
   const originalCanvasSize = reference
     ? {
@@ -93,6 +97,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
       const recommended = recommendTemplateCanvasSize(
         prepared.sourceWidth,
         prepared.sourceHeight,
+        canvasSizePresets,
       );
       setReference(prepared);
       setCanvasSize({
@@ -319,7 +324,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                   </strong>.
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  {TEMPLATE_CANVAS_SIZE_PRESETS.map((preset) => {
+                  {canvasSizePresets.map((preset) => {
                     const selected = canvasSize?.id === preset.id;
                     const recommended = preset.id === recommendedPreset.id;
                     return (

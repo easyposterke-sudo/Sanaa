@@ -51,12 +51,34 @@ export const TEMPLATE_CANVAS_SIZE_PRESETS: readonly TemplateCanvasSizePreset[] =
   },
 ];
 
+export const EDITABLE_POSTER_CANVAS_SIZE_PRESETS: readonly TemplateCanvasSizePreset[] =
+  TEMPLATE_CANVAS_SIZE_PRESETS.map((preset) => {
+    if (preset.id === 'a4-portrait') {
+      return {
+        ...preset,
+        description: 'Matches the editor A4 canvas',
+        width: 794,
+        height: 1123,
+      };
+    }
+    if (preset.id === 'a4-landscape') {
+      return {
+        ...preset,
+        description: 'Matches the editor A4 canvas',
+        width: 1123,
+        height: 794,
+      };
+    }
+    return preset;
+  });
+
 export function recommendTemplateCanvasSize(
   sourceWidth: number,
   sourceHeight: number,
+  presets: readonly TemplateCanvasSizePreset[] = TEMPLATE_CANVAS_SIZE_PRESETS,
 ): TemplateCanvasSizePreset {
   const aspect = safeDimension(sourceWidth) / safeDimension(sourceHeight);
-  return TEMPLATE_CANVAS_SIZE_PRESETS.reduce((best, candidate) => {
+  return presets.reduce((best, candidate) => {
     const bestDistance = aspectDistance(aspect, best.width / best.height);
     const candidateDistance = aspectDistance(aspect, candidate.width / candidate.height);
     return candidateDistance < bestDistance ? candidate : best;

@@ -53,6 +53,7 @@ import {
   TEXT_TAPER_MIN,
 } from '../textEffects';
 import { normalizePosterTextBackground } from '../textBackground';
+import { isPosterFontWeightBold } from '../textFontStyle';
 
 interface PosterRightSidebarProps {
   readOnly?: boolean;
@@ -1823,10 +1824,7 @@ function PosterTextControls({
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [fontMenuOpen]);
 
-  const isBold =
-    text.fontWeight === 'bold' ||
-    text.fontWeight === 700 ||
-    text.fontWeight === '700';
+  const isBold = isPosterFontWeightBold(text.fontWeight);
   const isItalic = text.fontStyle === 'italic';
   const hasUnderline = text.underline === true;
   const hasStrike = text.linethrough === true;
