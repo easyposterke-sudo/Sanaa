@@ -91,12 +91,14 @@ interface PosterLeftSidebarProps {
   readOnly?: boolean;
   onOpen3DModal?: (mode: 'add') => void;
   onOpenTemplateCreator?: () => void;
+  onOpenEditablePosterCreator?: () => void;
 }
 
 export function PosterLeftSidebar({
   readOnly = false,
   onOpen3DModal,
   onOpenTemplateCreator,
+  onOpenEditablePosterCreator,
 }: PosterLeftSidebarProps) {
   const navigate = useNavigate();
   const addElement = usePosterStore((s) => s.addElement);
@@ -297,6 +299,23 @@ export function PosterLeftSidebar({
             className="mt-3 w-full rounded-lg bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
           >
             Create template from poster
+          </button>
+        </div>
+      )}
+      {onOpenEditablePosterCreator && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-900 dark:bg-sky-950/30">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-300">
+            Editable Poster
+          </h3>
+          <p className="mt-1 text-[11px] leading-relaxed text-sky-700 dark:text-sky-400">
+            Turn a flat poster into editable layers and open the result directly in the editor.
+          </p>
+          <button
+            type="button"
+            onClick={guard(onOpenEditablePosterCreator)}
+            className="mt-3 w-full rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-sky-700"
+          >
+            Create editable poster
           </button>
         </div>
       )}

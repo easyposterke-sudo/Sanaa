@@ -86,6 +86,7 @@ export function PosterLayout() {
     setAutomatic3DRenderIds((ids) => ids.filter((id) => id !== elementId));
   }, []);
   const [templateCreatorOpen, setTemplateCreatorOpen] = useState(false);
+  const [templateCreatorMode, setTemplateCreatorMode] = useState<'template' | 'poster'>('template');
   const [showCanvasSizeModal, setShowCanvasSizeModal] = useState(false);
   const [templateAuthoring, setTemplateAuthoring] = useState<TemplateAuthoringState | null>(null);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
@@ -740,6 +741,30 @@ export function PosterLayout() {
     [loadProject],
   );
 
+  const applyEditablePosterDraft = useCallback(
+    (compiled: CompiledPosterReconstruction) => {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('poster_edit_my_project_id');
+        sessionStorage.removeItem('poster_edit_my_project_updated_at');
+      }
+      lastCloudSaveRef.current = null;
+      coldAutosaveBaselineRef.current = null;
+      setTemplateAuthoring(null);
+      setSaveTemplateModalOpen(false);
+      setLabelTargetId(null);
+      setShowCanvasSizeModal(false);
+      loadProject(compiled.project);
+      setAutomatic3DRenderIds(
+        compiled.project.elements
+          .filter((element) => element.type === '3d-text')
+          .map((element) => element.id),
+      );
+      setCloudDirty(true);
+      if (!window.matchMedia('(min-width: 1024px)').matches) setLeftOpen(false);
+    },
+    [loadProject],
+  );
+
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden overscroll-none bg-zinc-100 dark:bg-zinc-950">
       {autosaveError && (
@@ -868,7 +893,14 @@ export function PosterLayout() {
           <PosterLeftSidebar
             readOnly={readOnly}
             onOpen3DModal={(m) => setThreeTextModal(m)}
-            onOpenTemplateCreator={() => setTemplateCreatorOpen(true)}
+            onOpenTemplateCreator={() => {
+              setTemplateCreatorMode('template');
+              setTemplateCreatorOpen(true);
+            }}
+            onOpenEditablePosterCreator={() => {
+              setTemplateCreatorMode('poster');
+              setTemplateCreatorOpen(true);
+            }}
           />
         </aside>
 
@@ -925,8 +957,15 @@ export function PosterLayout() {
       />
       <TemplateCreatorWizard
         open={templateCreatorOpen}
+        mode={templateCreatorMode}
         onClose={() => setTemplateCreatorOpen(false)}
-        onApply={(compiled) => applyTemplateCreatorDraft(compiled)}
+        onApply={(compiled) => {
+          if (templateCreatorMode === 'poster') {
+            applyEditablePosterDraft(compiled);
+          } else {
+            applyTemplateCreatorDraft(compiled);
+          }
+        }}
       />
     </div>
   );

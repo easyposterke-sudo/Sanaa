@@ -36,19 +36,21 @@ interface CanvasSizeSelection {
 interface TemplateCreatorWizardProps {
   open: boolean;
   onClose: () => void;
+  mode?: 'template' | 'poster';
   onApply: (
     compiled: CompiledPosterReconstruction,
     meta: { source: PosterReconstructionSource; model: string | null },
   ) => void;
 }
 
-export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreatorWizardProps) {
+export function TemplateCreatorWizard({ open, onClose, mode = 'template', onApply }: TemplateCreatorWizardProps) {
   useModalScrollLock(open);
   const [reference, setReference] = useState<PreparedPosterImage | null>(null);
   const [canvasSize, setCanvasSize] = useState<CanvasSizeSelection | null>(null);
   const [customWidth, setCustomWidth] = useState('1080');
   const [customHeight, setCustomHeight] = useState('1080');
   const [guideOpacity, setGuideOpacity] = useState(0.22);
+  const [includeReferenceGuide, setIncludeReferenceGuide] = useState(true);
   const [preparing, setPreparing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,8 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
   const [preparingReplacement, setPreparingReplacement] = useState<string | null>(null);
 
   if (!open) return null;
+
+  const creatingPoster = mode === 'poster';
 
   const recommendedPreset = reference
     ? recommendTemplateCanvasSize(reference.sourceWidth, reference.sourceHeight)
@@ -82,6 +86,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
     setCandidates({});
     setReplacementMessages({});
     setReplacements({});
+    setIncludeReferenceGuide(true);
     setPreparing(true);
     try {
       const prepared = await prepareTemplateReference(file);
@@ -114,7 +119,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
       plan: current.plan,
       reference,
       canvasSize,
-      referenceGuideOpacity: guideOpacity,
+      referenceGuideOpacity: creatingPoster && !includeReferenceGuide ? 0 : guideOpacity,
       imageReplacements: replacements,
     });
     onApply(compiled, { source: current.source, model: current.model });
@@ -230,17 +235,18 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
       className="fixed inset-0 z-[90] flex items-center justify-center overflow-hidden overscroll-none bg-black/65 p-2 sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="template-creator-title"
+      aria-labelledby="poster-reconstruction-title"
     >
       <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-3 py-3 sm:gap-4 sm:px-5 sm:py-4 dark:border-zinc-700">
           <div className="min-w-0">
-            <h2 id="template-creator-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
-              Create a template from a flat poster
+            <h2 id="poster-reconstruction-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
+              {creatingPoster ? 'Create an editable poster' : 'Create a template from a flat poster'}
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-              AI reconstructs editable text, basic shapes, and image regions. You polish the draft,
-              confirm the fillable fields, then save it to your template library.
+              {creatingPoster
+                ? 'AI reconstructs editable text, basic shapes, and image regions, then opens the result directly in the editor.'
+                : 'AI reconstructs editable text, basic shapes, and image regions. You polish the draft, confirm the fillable fields, then save it to your template library.'}
             </p>
           </div>
           <button
@@ -280,7 +286,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
             {reference && (
               <img
                 src={reference.dataUrl}
-                alt="Template reconstruction reference"
+                alt="Poster reconstruction reference"
                 className="mt-3 max-h-[42dvh] w-full rounded-xl bg-zinc-100 object-contain sm:max-h-[55vh] dark:bg-zinc-950"
               />
             )}
@@ -434,35 +440,87 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
             )}
 
             <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">3. Tracing guide</h3>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                The original poster is placed behind the reconstructed layers as a locked guide.
-                Replace or delete it before publishing so old names and photographs do not remain.
-              </p>
-              <label className="mt-3 block text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                Guide opacity: {Math.round(guideOpacity * 100)}%
-                <input
-                  type="range"
-                  min="0"
-                  max="0.6"
-                  step="0.02"
-                  value={guideOpacity}
-                  onChange={(event) => setGuideOpacity(Number(event.target.value))}
-                  className="mt-2 w-full accent-violet-600"
-                  disabled={submitting}
-                />
-              </label>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                3. {creatingPoster ? 'Original reference' : 'Tracing guide'}
+              </h3>
+              {creatingPoster ? (
+                <>
+                  <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
+                    <input
+                      type="checkbox"
+                      checked={includeReferenceGuide}
+                      onChange={(event) => setIncludeReferenceGuide(event.target.checked)}
+                      disabled={submitting}
+                      className="mt-0.5 h-4 w-4 accent-sky-600"
+                    />
+                    <span>
+                      <span className="block text-xs font-semibold text-zinc-800 dark:text-zinc-100">
+                        Keep the original reference poster behind the editable layers
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                        {includeReferenceGuide
+                          ? 'It will be added as a locked, non-exporting layer to help you compare the reconstruction.'
+                          : 'It will not be included in the Layers panel.'}
+                      </span>
+                    </span>
+                  </label>
+                  {includeReferenceGuide && (
+                    <label className="mt-3 block text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                      Reference opacity: {Math.round(guideOpacity * 100)}%
+                      <input
+                        type="range"
+                        min="0.02"
+                        max="0.6"
+                        step="0.02"
+                        value={guideOpacity}
+                        onChange={(event) => setGuideOpacity(Number(event.target.value))}
+                        className="mt-2 w-full accent-sky-600"
+                        disabled={submitting}
+                      />
+                    </label>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                    The original poster is placed behind the reconstructed layers as a locked guide.
+                    Replace or delete it before publishing so old names and photographs do not remain.
+                  </p>
+                  <label className="mt-3 block text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                    Guide opacity: {Math.round(guideOpacity * 100)}%
+                    <input
+                      type="range"
+                      min="0"
+                      max="0.6"
+                      step="0.02"
+                      value={guideOpacity}
+                      onChange={(event) => setGuideOpacity(Number(event.target.value))}
+                      className="mt-2 w-full accent-violet-600"
+                      disabled={submitting}
+                    />
+                  </label>
+                </>
+              )}
             </div>
 
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300">
               <p className="font-semibold text-zinc-800 dark:text-zinc-100">What happens next</p>
-              <ol className="mt-2 list-decimal space-y-1 pl-4">
-                <li>The editable draft opens in the canvas.</li>
-                <li>Likely titles, dates, names, and photos are labeled automatically.</li>
-                <li>Correct fonts, crops, backgrounds, and any missed decoration.</li>
-                <li>Click text or image layers to add or correct template fields.</li>
-                <li>Save the finished template to the cloud library.</li>
-              </ol>
+              {creatingPoster ? (
+                <ol className="mt-2 list-decimal space-y-1 pl-4">
+                  <li>The reconstructed poster opens directly in the editor.</li>
+                  <li>Every detected part is available as an editable layer.</li>
+                  <li>Correct fonts, crops, backgrounds, and any missed decoration.</li>
+                  <li>Save or export the poster normally when you are finished.</li>
+                </ol>
+              ) : (
+                <ol className="mt-2 list-decimal space-y-1 pl-4">
+                  <li>The editable draft opens in the canvas.</li>
+                  <li>Likely titles, dates, names, and photos are labeled automatically.</li>
+                  <li>Correct fonts, crops, backgrounds, and any missed decoration.</li>
+                  <li>Click text or image layers to add or correct template fields.</li>
+                  <li>Save the finished template to the cloud library.</li>
+                </ol>
+              )}
             </div>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
@@ -611,7 +669,7 @@ export function TemplateCreatorWizard({ open, onClose, onApply }: TemplateCreato
 function messageFromError(error: unknown): string {
   if (error instanceof PosterReconstructionError) return error.message;
   if (error instanceof Error) return error.message;
-  return 'The template draft could not be created.';
+  return 'The editable draft could not be created.';
 }
 
 function replacementItems(plan: PosterReconstructionPlan) {
