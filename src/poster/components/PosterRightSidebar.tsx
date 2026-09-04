@@ -544,45 +544,56 @@ function PathStyleControls({
   const fillNorm = normalizePosterShapeFill(path.fill, '#14b8a6');
   const fillColor =
     fillNorm.type === 'solid' || fillNorm.type === 'glass' ? fillNorm.color : '#14b8a6';
+  const hasVisibleFill = (path.fillOpacity ?? 1) > 0;
+  const fillMode = hasVisibleFill ? (fillNorm.type === 'glass' ? 'glass' : 'solid') : 'none';
   return (
     <div className="flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
       <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Path style</p>
       <div className="flex flex-col gap-1">
         <label className="text-xs text-zinc-500">Fill type</label>
         <select
-          value={fillNorm.type === 'glass' ? 'glass' : 'solid'}
+          value={fillMode}
           onChange={(event) => {
-            if (event.target.value === 'glass') {
+            if (event.target.value === 'none') {
+              updateElement(path.id, { fillOpacity: 0 });
+            } else if (event.target.value === 'glass') {
               updateElement(path.id, {
                 fill: { type: 'glass', color: fillColor, blur: 12 },
+                fillOpacity: 1,
               });
             } else {
-              updateElement(path.id, { fill: { type: 'solid', color: fillColor } });
+              updateElement(path.id, {
+                fill: { type: 'solid', color: fillColor },
+                fillOpacity: 1,
+              });
             }
           }}
           className="rounded border border-zinc-200 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
         >
+          <option value="none">None (open line)</option>
           <option value="solid">Solid</option>
           <option value="glass">Glass</option>
         </select>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-zinc-500">
-          {fillNorm.type === 'glass' ? 'Glass tint' : 'Fill'}
-        </span>
-        <ColorPickerPopover
-          color={/^#[0-9A-Fa-f]{6}$/i.test(fillColor) ? fillColor : '#14b8a6'}
-          onChange={(color) =>
-            updateElement(path.id, {
-              fill:
-                fillNorm.type === 'glass'
-                  ? { ...fillNorm, color }
-                  : { type: 'solid', color },
-            })
-          }
-        />
-      </div>
-      {fillNorm.type === 'glass' && (
+      {hasVisibleFill && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-zinc-500">
+            {fillNorm.type === 'glass' ? 'Glass tint' : 'Fill'}
+          </span>
+          <ColorPickerPopover
+            color={/^#[0-9A-Fa-f]{6}$/i.test(fillColor) ? fillColor : '#14b8a6'}
+            onChange={(color) =>
+              updateElement(path.id, {
+                fill:
+                  fillNorm.type === 'glass'
+                    ? { ...fillNorm, color }
+                    : { type: 'solid', color },
+              })
+            }
+          />
+        </div>
+      )}
+      {hasVisibleFill && fillNorm.type === 'glass' && (
         <>
           <PosterSlider
             label={`Glass blur (${fillNorm.blur}px)`}
@@ -619,18 +630,20 @@ function PathStyleControls({
           });
         }}
       />
-      <PosterSlider
-        label={`${fillNorm.type === 'glass' ? 'Translucency' : 'Fill opacity'} (${Math.round((path.fillOpacity ?? 1) * 100)}%)`}
-        min={0}
-        max={100}
-        step={5}
-        value={Math.round((path.fillOpacity ?? 1) * 100)}
-        onChange={(v) =>
-          updateElement(path.id, {
-            fillOpacity: Math.max(0, Math.min(1, v / 100)),
-          })
-        }
-      />
+      {hasVisibleFill && (
+        <PosterSlider
+          label={`${fillNorm.type === 'glass' ? 'Translucency' : 'Fill opacity'} (${Math.round((path.fillOpacity ?? 1) * 100)}%)`}
+          min={0}
+          max={100}
+          step={5}
+          value={Math.round((path.fillOpacity ?? 1) * 100)}
+          onChange={(v) =>
+            updateElement(path.id, {
+              fillOpacity: Math.max(0, Math.min(1, v / 100)),
+            })
+          }
+        />
+      )}
       <div className="flex flex-col gap-1">
         <button
           type="button"
@@ -638,12 +651,12 @@ function PathStyleControls({
             const stroke =
               path.stroke && (path.strokeWidth ?? 0) > 0 ? (path.stroke as string) : 'none';
             const svg = pathPointsToSvgPathElement(path.pathPoints, path.closed ?? false, {
-              fill: fillColor,
+              fill: hasVisibleFill ? fillColor : 'none',
               stroke,
               strokeWidth: path.strokeWidth ?? 0,
               islands: path.islands,
               fillRule: path.fillRule,
-              fillOpacity: path.fillOpacity,
+              fillOpacity: hasVisibleFill ? path.fillOpacity : undefined,
             });
             void navigator.clipboard?.writeText(svg);
           }}

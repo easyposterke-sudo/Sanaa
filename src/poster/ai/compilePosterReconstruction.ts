@@ -26,6 +26,11 @@ import {
   socialIconSvg,
   type SocialIconName,
 } from '../assets/social-icons';
+import {
+  isSemanticIconName,
+  semanticIconSvg,
+  type SemanticIconName,
+} from '../assets/semanticIconPngs';
 
 type PixelBox = { left: number; top: number; width: number; height: number };
 
@@ -1049,13 +1054,11 @@ function builtInIconDataUrl(
 ): string {
   const color = /^#[0-9a-f]{6}$/i.test(requestedColor) ? requestedColor : '#111111';
   if (isSocialIconName(icon)) return svgDataUrl(socialIconSvg(icon, color));
+  if (isSemanticIconName(icon)) return svgDataUrl(semanticIconSvg(icon, color));
 
-  const paths: Record<Exclude<typeof icon, SocialIconName>, string> = {
+  const paths: Record<Exclude<typeof icon, SocialIconName | SemanticIconName>, string> = {
     calendar: '<rect x="17" y="22" width="66" height="61" rx="8"/><path d="M17 39h66M34 13v18M66 13v18M32 53h8M47 53h8M62 53h8M32 68h8M47 68h8M62 68h8"/>',
     clock: '<circle cx="50" cy="50" r="36"/><path d="M50 29v23l17 11"/>',
-    location: '<path d="M50 89S22 62 22 39a28 28 0 1 1 56 0c0 23-28 50-28 50z"/><circle cx="50" cy="39" r="9"/>',
-    phone: '<path d="M29 15l15 18-10 11c8 16 16 24 32 32l11-10 18 15-7 12c-4 7-13 9-21 6C36 88 12 64 1 33-2 25 0 16 7 12l12-7z" transform="translate(3 -1) scale(.92)"/>',
-    web: '<circle cx="50" cy="50" r="37"/><path d="M13 50h74M50 13c13 12 19 24 19 37S63 75 50 87M50 13C37 25 31 37 31 50s6 25 19 37"/>',
   };
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><g fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">${paths[icon]}</g></svg>`;
   return svgDataUrl(svg);

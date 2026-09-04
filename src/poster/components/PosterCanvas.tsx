@@ -178,6 +178,8 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
   const setActiveIslandIndex = usePosterStore((s) => s.setActiveIslandIndex);
   const pathToolMode = usePosterStore((s) => s.pathToolMode);
   const setPathToolMode = usePosterStore((s) => s.setPathToolMode);
+  const penCreationMode = usePosterStore((s) => s.penCreationMode);
+  const penStrokeWidth = usePosterStore((s) => s.penStrokeWidth);
   const activePathId = usePosterStore((s) => s.activePathId);
   const setActivePathId = usePosterStore((s) => s.setActivePathId);
   const selectedPathNode = usePosterStore((s) => s.selectedPathNode);
@@ -521,6 +523,20 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
         return;
       }
 
+      if (
+        e.key === 'Enter' &&
+        usePosterStore.getState().activeTool === 'pen' &&
+        usePosterStore.getState().activePathId
+      ) {
+        e.preventDefault();
+        setPathEditTargetId(null);
+        setActivePathId(null);
+        setSelectedPathNode(null);
+        setSelectedPathHandle(null);
+        setActiveTool('select');
+        return;
+      }
+
       const key = e.key.toLowerCase();
       if (e.key === 'Escape') {
         setPathEditTargetId(null);
@@ -531,7 +547,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [setPathToolMode, setPathEditTargetId, setActivePathId, setSelectedPathNode, setSelectedPathHandle]);
+  }, [setPathToolMode, setPathEditTargetId, setActivePathId, setSelectedPathNode, setSelectedPathHandle, setActiveTool]);
 
   useEffect(() => {
     if (!imageCropTargetId) return;
@@ -1835,8 +1851,9 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
                   angle: 0,
                   opacity: 1,
                   fill: { type: 'solid', color: '#14b8a6' },
+                  fillOpacity: penCreationMode === 'line' ? 0 : 1,
                   stroke: '#0f172a',
-                  strokeWidth: 2,
+                  strokeWidth: penCreationMode === 'line' ? penStrokeWidth : 2,
                   pathPoints,
                   closed: false,
                 });
@@ -1857,6 +1874,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
                 setActiveIslandIndex(islandIdx ?? null);
               }}
               activeIslandIndex={activeIslandIndex}
+              allowClosePath={penCreationMode === 'shape'}
               fabricPathTransform={fabricPathTransform}
               fabricCanvasRef={canvasRef}
               pathPointSize={pathPointSize}
@@ -1927,6 +1945,7 @@ type PathEditOverlayProps = {
   ) => void;
   onSelectPathNode: (nodeIndex: number | null, islandIndex?: number) => void;
   activeIslandIndex: number | null;
+  allowClosePath: boolean;
   fabricPathTransform?: FabricPathXform;
   /** Use Fabric scene space for clicks — matches path `calcTransformMatrix` (fixes drift vs hand-divided coords). */
   fabricCanvasRef: RefObject<Canvas | null>;
@@ -1944,6 +1963,7 @@ function PathEditOverlay({
   onCreatePathAt,
   onSelectPathNode,
   activeIslandIndex,
+  allowClosePath,
   fabricPathTransform,
   fabricCanvasRef,
   pathPointSize,
@@ -2264,7 +2284,7 @@ function PathEditOverlay({
           const pt = getLocalPoint(e);
           const pathForPenClose = target?.type === 'path' ? target : activePath;
 
-          if (isPenMode && pathForPenClose) {
+          if (isPenMode && allowClosePath && pathForPenClose) {
             const subPts = activeIslandIndex != null ? (pathForPenClose.islands?.[activeIslandIndex] ?? []) : pathForPenClose.pathPoints;
             if (subPts.length >= 3) {
               const firstPt = subPts[0]!;
@@ -2473,7 +2493,7 @@ function PathEditOverlay({
                 }
                 return;
               }
-              if (isPenMode && (target?.type === 'path' || activePath)) {
+              if (isPenMode && allowClosePath && (target?.type === 'path' || activePath)) {
                 const p = (target?.type === 'path' ? target : activePath) as PosterPathElement;
                 const subPts = a.islandIdx != null ? (p.islands?.[a.islandIdx] ?? []) : p.pathPoints;
                 if (a.idx === 0 && subPts.length >= 3) {

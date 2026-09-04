@@ -75,6 +75,7 @@ export type PosterTool =
   | 'hand';
 export type ObjectSelectionMode = 'rectangle' | 'lasso' | 'magnetic' | 'ai';
 export type PathToolMode = 'pen' | 'pen-straight' | 'pen-curve' | 'direct' | 'convert';
+export type PenCreationMode = 'shape' | 'line';
 export type PathNodeSelection = { elementId: string; nodeIndex: number; islandIndex?: number };
 export type PathHandleSelection = PathNodeSelection & { kind: 'in' | 'out' };
 
@@ -116,6 +117,10 @@ interface PosterStore {
   confirmSelectionAsVector: () => void;
   pathToolMode: PathToolMode;
   setPathToolMode: (mode: PathToolMode) => void;
+  penCreationMode: PenCreationMode;
+  setPenCreationMode: (mode: PenCreationMode) => void;
+  penStrokeWidth: number;
+  setPenStrokeWidth: (width: number) => void;
   activePathId: string | null;
   setActivePathId: (id: string | null) => void;
   activeIslandIndex: number | null;
@@ -315,6 +320,11 @@ export const usePosterStore = create<PosterStore>((set, get) => ({
     }
     set(updates);
   },
+  penCreationMode: 'shape',
+  setPenCreationMode: (mode) => set({ penCreationMode: mode }),
+  penStrokeWidth: 4,
+  setPenStrokeWidth: (width) =>
+    set({ penStrokeWidth: Math.max(1, Math.min(48, width)) }),
   activePathId: null,
   setActivePathId: (id) => set((s) => ({
     activePathId: id,

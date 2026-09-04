@@ -32,6 +32,8 @@ function resetStore() {
     history: [[]],
     historyIndex: 0,
     fieldBindings: null,
+    penCreationMode: 'shape',
+    penStrokeWidth: 4,
   });
 }
 
@@ -219,6 +221,22 @@ describe('setCanvasBackground', () => {
   it('accepts a solid background', () => {
     usePosterStore.getState().setCanvasBackground({ type: 'solid', color: '#ff0000' });
     expect(usePosterStore.getState().canvasBackground).toEqual({ type: 'solid', color: '#ff0000' });
+  });
+});
+
+describe('pen creation settings', () => {
+  it('switches between filled shapes and open lines', () => {
+    usePosterStore.getState().setPenCreationMode('line');
+    expect(usePosterStore.getState().penCreationMode).toBe('line');
+    usePosterStore.getState().setPenCreationMode('shape');
+    expect(usePosterStore.getState().penCreationMode).toBe('shape');
+  });
+
+  it('clamps the default open-line thickness', () => {
+    usePosterStore.getState().setPenStrokeWidth(100);
+    expect(usePosterStore.getState().penStrokeWidth).toBe(48);
+    usePosterStore.getState().setPenStrokeWidth(0);
+    expect(usePosterStore.getState().penStrokeWidth).toBe(1);
   });
 });
 

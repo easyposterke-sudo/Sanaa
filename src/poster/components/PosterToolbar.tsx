@@ -101,12 +101,42 @@ export const PosterToolbar = memo(function PosterToolbar() {
   const setBlurBrushSize = usePosterStore((s) => s.setBlurBrushSize);
   const blurBrushStrength = usePosterStore((s) => s.blurBrushStrength);
   const setBlurBrushStrength = usePosterStore((s) => s.setBlurBrushStrength);
+  const penCreationMode = usePosterStore((s) => s.penCreationMode);
+  const setPenCreationMode = usePosterStore((s) => s.setPenCreationMode);
+  const penStrokeWidth = usePosterStore((s) => s.penStrokeWidth);
+  const setPenStrokeWidth = usePosterStore((s) => s.setPenStrokeWidth);
+  const activePathId = usePosterStore((s) => s.activePathId);
+  const setActivePathId = usePosterStore((s) => s.setActivePathId);
+  const setPathEditTargetId = usePosterStore((s) => s.setPathEditTargetId);
+  const setSelectedPathNode = usePosterStore((s) => s.setSelectedPathNode);
+  const setSelectedPathHandle = usePosterStore((s) => s.setSelectedPathHandle);
+  const setSelected = usePosterStore((s) => s.setSelected);
+  const updateElement = usePosterStore((s) => s.updateElement);
   const hasSelectedImage =
     selectedIds.length === 1 &&
     elements.find((element) => element.id === selectedIds[0])?.type === 'image';
 
   const handleToolClick = (toolId: PosterTool) => {
     setActiveTool(toolId);
+  };
+
+  const choosePenCreationMode = (mode: 'shape' | 'line') => {
+    if (mode !== penCreationMode) {
+      setActivePathId(null);
+      setPathEditTargetId(null);
+      setSelectedPathNode(null);
+      setSelectedPathHandle(null);
+      setSelected([]);
+    }
+    setPenCreationMode(mode);
+  };
+
+  const finishOpenLine = () => {
+    setActivePathId(null);
+    setPathEditTargetId(null);
+    setSelectedPathNode(null);
+    setSelectedPathHandle(null);
+    setActiveTool('select');
   };
 
   return (
@@ -160,6 +190,84 @@ export const PosterToolbar = memo(function PosterToolbar() {
                 </button>
               ))}
             </div>
+            )}
+
+            {tool.id === 'pen' && activeTool === 'pen' && (
+              <div className="absolute bottom-full left-1/2 z-50 mb-2 flex w-60 -translate-x-1/2 flex-col gap-2 rounded-md border border-zinc-200 bg-white/95 p-3 text-zinc-700 shadow-lg backdrop-blur-sm lg:bottom-auto lg:left-auto lg:right-full lg:top-0 lg:mb-0 lg:mr-4 lg:translate-x-0 dark:border-zinc-700 dark:bg-zinc-900/95 dark:text-zinc-200">
+                <p className="text-[11px] font-semibold">Pen drawing</p>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      choosePenCreationMode('shape');
+                    }}
+                    className={`rounded px-2 py-1.5 text-[11px] font-medium ${
+                      penCreationMode === 'shape'
+                        ? 'bg-[#1b7340] text-white'
+                        : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                    }`}
+                  >
+                    Filled shape
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      choosePenCreationMode('line');
+                    }}
+                    className={`rounded px-2 py-1.5 text-[11px] font-medium ${
+                      penCreationMode === 'line'
+                        ? 'bg-[#1b7340] text-white'
+                        : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                    }`}
+                  >
+                    Open line
+                  </button>
+                </div>
+                {penCreationMode === 'line' && (
+                  <>
+                    <label className="flex flex-col gap-1 text-[11px] font-medium">
+                      Line thickness ({penStrokeWidth}px)
+                      <input
+                        type="range"
+                        min={1}
+                        max={48}
+                        step={1}
+                        value={penStrokeWidth}
+                        onChange={(event) => {
+                          const width = Number(event.target.value);
+                          setPenStrokeWidth(width);
+                          if (activePathId) {
+                            const activePath = elements.find((element) => element.id === activePathId);
+                            updateElement(activePathId, {
+                              strokeWidth: width,
+                              stroke:
+                                activePath?.type === 'path'
+                                  ? (activePath.stroke ?? '#0f172a')
+                                  : '#0f172a',
+                            });
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!activePathId}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        finishOpenLine();
+                      }}
+                      className="rounded border border-zinc-300 px-2 py-1.5 text-[11px] font-semibold hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:hover:bg-zinc-800"
+                    >
+                      Finish open line
+                    </button>
+                    <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                      Click to add points. Press Enter or use Finish open line when done.
+                    </p>
+                  </>
+                )}
+              </div>
             )}
 
             {tool.id === 'blur-brush' && activeTool === 'blur-brush' && (

@@ -872,32 +872,38 @@ describe('compilePosterReconstruction', () => {
     });
   });
 
-  it('rebuilds supported semantic icons as clean tintable SVG layers', async () => {
-    const compiled = await compilePosterReconstruction({
-      plan: plan([
-        element({
-          key: 'venue_pin',
-          kind: 'image_region',
-          label: 'Location icon',
-          box: { x: 0.05, y: 0.8, width: 0.08, height: 0.06 },
-          imageRole: 'icon',
-          iconName: 'location',
-          imageDominantColor: '#176143',
-        }),
-      ]),
-      reference: {
-        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
-        width: 1000,
-        height: 1500,
-      },
-      referenceGuideOpacity: 0,
-    });
+  it.each(['location', 'phone', 'web'] as const)(
+    'rebuilds the supplied %s design as a clean tintable SVG layer',
+    async (iconName) => {
+      const compiled = await compilePosterReconstruction({
+        plan: plan([
+          element({
+            key: `${iconName}_icon`,
+            kind: 'image_region',
+            label: `${iconName} icon`,
+            box: { x: 0.05, y: 0.8, width: 0.08, height: 0.06 },
+            imageRole: 'icon',
+            iconName,
+            imageDominantColor: '#176143',
+          }),
+        ]),
+        reference: {
+          dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+          width: 1000,
+          height: 1500,
+        },
+        referenceGuideOpacity: 0,
+      });
 
-    const icon = compiled.project.elements[0];
-    expect(icon).toMatchObject({ type: 'image', layerName: 'AI icon: Location icon' });
-    if (icon?.type !== 'image') throw new Error('Expected an icon image.');
-    expect(decodeURIComponent(icon.src)).toContain('stroke="#176143"');
-  });
+      const icon = compiled.project.elements[0];
+      expect(icon).toMatchObject({ type: 'image', layerName: `AI icon: ${iconName} icon` });
+      if (icon?.type !== 'image') throw new Error('Expected an icon image.');
+      const svg = decodeURIComponent(icon.src);
+      expect(svg).toContain('fill="#176143"');
+      expect(svg).toContain('<image href="data:image/png;base64,');
+      expect(svg).toContain('mask="url(#icon-silhouette)"');
+    },
+  );
 
   it.each([
     'facebook',
