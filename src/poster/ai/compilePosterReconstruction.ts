@@ -229,6 +229,12 @@ export async function compilePosterReconstruction(input: {
               edgeFadeMinOpacity: item.imageFadeMinOpacity,
             }
           : {}),
+        adjustBrightness: item.imageBrightness,
+        adjustContrast: item.imageContrast,
+        adjustSaturation: item.imageSaturation,
+        adjustBlur: item.imageBlur,
+        adjustTintColor: item.imageTintColor ?? undefined,
+        adjustTintAmount: item.imageTintAmount,
       } satisfies PosterImageElement;
     } else if (item.kind === 'path') {
       element = compilePathElement(item, box, canvasHeight, base, warnings);

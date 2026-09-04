@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 9 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 10 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v9-custom-font-catalogue' as const;
+  'poster-reconstruction-v10-background-photo-treatment' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -129,6 +129,12 @@ export const ReconstructionElementSchema = z
     imageFadeDirection: z.enum(['radial', 'bottom']).default('radial'),
     imageFadeAmount: z.number().min(0).max(1).default(0.35),
     imageFadeMinOpacity: z.number().min(0).max(1).default(0),
+    imageBrightness: z.number().min(-100).max(100).default(0),
+    imageContrast: z.number().min(-100).max(100).default(0),
+    imageSaturation: z.number().min(-100).max(100).default(0),
+    imageBlur: z.number().min(0).max(100).default(0),
+    imageTintColor: NullableHexColorSchema.default(null),
+    imageTintAmount: z.number().min(0).max(100).default(0),
     imageHasOverlays: z.boolean(),
     replacementRecommended: z.boolean(),
     replacementReason: z.string().max(180),
@@ -339,6 +345,12 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         imageFadeDirection: { type: 'string', enum: ['radial', 'bottom'] },
         imageFadeAmount: { type: 'number', minimum: 0, maximum: 1 },
         imageFadeMinOpacity: { type: 'number', minimum: 0, maximum: 1 },
+        imageBrightness: { type: 'number', minimum: -100, maximum: 100 },
+        imageContrast: { type: 'number', minimum: -100, maximum: 100 },
+        imageSaturation: { type: 'number', minimum: -100, maximum: 100 },
+        imageBlur: { type: 'number', minimum: 0, maximum: 100 },
+        imageTintColor: nullable(hexJsonSchema),
+        imageTintAmount: { type: 'number', minimum: 0, maximum: 100 },
         imageHasOverlays: { type: 'boolean' },
         replacementRecommended: { type: 'boolean' },
         replacementReason: { type: 'string', maxLength: 180 },
