@@ -10,6 +10,7 @@ import {
   type ReconstructionImageReplacement,
 } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
+import { prepareReconstructionFontCatalog } from '../ai/prepareReconstructionFontCatalog';
 import {
   PosterReconstructionError,
   requestPosterReconstruction,
@@ -59,6 +60,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
     plan: PosterReconstructionPlan;
     source: PosterReconstructionSource;
     model: string | null;
+    fontFamilies: Readonly<Record<string, string>>;
   } | null>(null);
   const [candidates, setCandidates] = useState<Record<string, StockPhotoCandidate[]>>({});
   const [replacementMessages, setReplacementMessages] = useState<Record<string, string>>({});
@@ -118,6 +120,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
     plan: PosterReconstructionPlan;
     source: PosterReconstructionSource;
     model: string | null;
+    fontFamilies: Readonly<Record<string, string>>;
   }) => {
     if (!reference || !canvasSize) return;
     const compiled = await compilePosterReconstruction({
@@ -126,6 +129,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
       canvasSize,
       referenceGuideOpacity: creatingPoster && !includeReferenceGuide ? 0 : guideOpacity,
       imageReplacements: replacements,
+      fontCatalogFamilies: current.fontFamilies,
     });
     onApply(compiled, { source: current.source, model: current.model });
     onClose();
@@ -175,6 +179,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
         await compileAndApply(analysis);
         return;
       }
+      const fontCatalog = await prepareReconstructionFontCatalog().catch(() => null);
       const response = await requestPosterReconstruction({
           reference: {
             dataUrl: reference.dataUrl,
@@ -182,8 +187,14 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
             height: reference.height,
           },
           quality: 'quality',
+          ...(fontCatalog ? { fontCatalog: fontCatalog.request } : {}),
         });
-      const current = { plan: response.plan, source: response.source, model: response.model };
+      const current = {
+        plan: response.plan,
+        source: response.source,
+        model: response.model,
+        fontFamilies: fontCatalog?.families ?? {},
+      };
       if (replacementItems(response.plan).length === 0) {
         await compileAndApply(current);
         return;

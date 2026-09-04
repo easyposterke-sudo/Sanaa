@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
+import { POSTER_RECONSTRUCTION_SCHEMA_VERSION } from '../../shared/ai/posterReconstruction';
 import {
   OpenAiPosterReconstructionError,
   POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS,
@@ -122,4 +123,101 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
 
     expect(error).toMatchObject({ code: 'AI_TIMEOUT', status: 504 });
   });
+
+  it('attaches custom font specimens and accepts only catalogue IDs supplied by the client', async () => {
+    const responsePlan = {
+      schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION,
+      suggestedTemplateName: 'Font test',
+      category: 'general',
+      summary: 'A custom-font reconstruction.',
+      canvas: {
+        backgroundType: 'solid',
+        backgroundTop: '#ffffff',
+        backgroundBottom: '#ffffff',
+        gradientAngle: 0,
+      },
+      elements: [reconstructionTextElement('c_not_supplied')],
+      warnings: [],
+      confidence: 0.9,
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: 'resp_fonts',
+      status: 'completed',
+      output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(responsePlan) }] }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await reconstructPosterWithOpenAI({
+      apiKey: 'test-key',
+      model: 'test-model',
+      request: {
+        ...request,
+        fontCatalog: {
+          entries: [{ id: 'c_brand', label: 'Brand Display' }],
+          previewDataUrls: ['data:image/webp;base64,AAAA'],
+        },
+      },
+    });
+
+    expect(result.plan.elements[0]?.fontCatalogId).toBeNull();
+    const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const payload = JSON.parse(String(options.body)) as {
+      input: Array<{ role: string; content: Array<{ type: string; image_url?: string; text?: string }> }>;
+    };
+    const userContent = payload.input.find(({ role }) => role === 'user')?.content ?? [];
+    expect(userContent.some(({ text }) => text?.includes('c_brand'))).toBe(true);
+    expect(userContent.some(({ image_url }) => image_url === 'data:image/webp;base64,AAAA')).toBe(true);
+  });
 });
+
+function reconstructionTextElement(fontCatalogId: string | null) {
+  return {
+    key: 'headline',
+    kind: 'text',
+    label: 'Headline',
+    box: { x: 0.1, y: 0.1, width: 0.8, height: 0.2 },
+    angle: 0,
+    opacity: 1,
+    zIndex: 1,
+    fill: '#111111',
+    textFillType: 'solid',
+    textFillStart: null,
+    textFillEnd: null,
+    textFillAngle: 0,
+    stroke: null,
+    strokeWidthRatio: 0,
+    text: 'WE ARE OPEN',
+    fontFamily: 'arial',
+    fontCatalogId,
+    fontSizeRatio: 0.08,
+    fontWeight: '700',
+    fontStyle: 'normal',
+    textAlign: 'center',
+    charSpacing: 0,
+    lineHeight: 1.1,
+    visibleLineCount: 1,
+    textEffect: 'flat',
+    extrusionColor: null,
+    cornerRadiusRatio: 0,
+    cornerStyle: 'auto',
+    pathPoints: [],
+    pathClosed: false,
+    pathTension: 0.28,
+    imageRole: 'none',
+    imageMask: 'none',
+    imageCutout: false,
+    imageEdge: 'none',
+    imageFadeDirection: 'radial',
+    imageFadeAmount: 0.35,
+    imageFadeMinOpacity: 0,
+    imageHasOverlays: false,
+    replacementRecommended: false,
+    replacementReason: '',
+    imageSearchQuery: '',
+    imageDominantColor: null,
+    iconName: 'none',
+    suggestedFieldKey: null,
+    suggestedFieldLabel: '',
+    confidence: 0.9,
+  };
+}

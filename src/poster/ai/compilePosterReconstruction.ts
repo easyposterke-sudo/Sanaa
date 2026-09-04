@@ -89,6 +89,7 @@ export async function compilePosterReconstruction(input: {
   canvasSize?: { width: number; height: number };
   referenceGuideOpacity?: number;
   imageReplacements?: Readonly<Record<string, ReconstructionImageReplacement>>;
+  fontCatalogFamilies?: Readonly<Record<string, string>>;
 }): Promise<CompiledPosterReconstruction> {
   const plan = PosterReconstructionPlanSchema.parse(input.plan);
   const canvasWidth = normalizeCanvasDimension(input.canvasSize?.width, input.reference.width);
@@ -149,6 +150,7 @@ export async function compilePosterReconstruction(input: {
     const repairedBadge = repairedBadgeWording
       ? compileMisclassifiedTextBadge({
           item,
+          fontFamily: resolveReconstructionFontFamily(item, input.fontCatalogFamilies),
           box,
           canvasHeight,
           shapeId: uniqueId(`${id}_background`, usedIds),
@@ -180,10 +182,11 @@ export async function compilePosterReconstruction(input: {
     let element: PosterElement;
     if (item.kind === 'text') {
       const displayText = (item.text || item.label).trim();
+      const fontFamily = resolveReconstructionFontFamily(item, input.fontCatalogFamilies);
       if (item.textEffect === 'two_layer_3d' && displayText.length <= 80) {
-        element = compileThreeDTextElement(item, box, base);
+        element = compileThreeDTextElement(item, box, base, fontFamily);
       } else {
-        element = compileTextElement(item, box, canvasHeight, base);
+        element = compileTextElement(item, box, canvasHeight, base, fontFamily);
         if (item.textEffect === 'two_layer_3d') {
           warnings.push(`“${item.label}” was kept flat because the two-layer 3D preset accepts at most 80 characters per block.`);
         }
@@ -456,9 +459,9 @@ function compileThreeDTextElement(
   item: ReconstructionElement,
   box: PixelBox,
   base: Pick<Poster3DTextElement, 'id' | 'layerName' | 'zIndex'>,
+  fontFamily: string,
 ): Poster3DTextElement {
   const text = (item.text || item.label).trim();
-  const fontFamily = FONT_STACKS[item.fontFamily];
   const state = compileTwoLayer3DTextState({
     recipeId: TWO_LAYER_3D_TEXT_RECIPE_ID,
     text,
@@ -512,6 +515,7 @@ function compileTextElement(
   box: PixelBox,
   canvasHeight: number,
   base: Pick<PosterTextElement, 'id' | 'layerName' | 'left' | 'top' | 'scaleX' | 'scaleY' | 'angle' | 'opacity' | 'zIndex'>,
+  fontFamily: string,
 ): PosterTextElement {
   const displayText = item.text || item.label;
   const lines = displayText.split(/\r?\n/);
@@ -523,7 +527,6 @@ function compileTextElement(
   const verticalLineUnits = 1 + Math.max(0, lineCount - 1) * item.lineHeight;
   const boxLimitedSize = (box.height / verticalLineUnits) * 0.94;
   const initialFontSize = Math.max(6, Math.min(measuredSize, Math.max(8, boxLimitedSize)));
-  const fontFamily = FONT_STACKS[item.fontFamily];
   const fontSize = item.visibleLineCount > 0 && item.visibleLineCount === lineCount
     ? fitDetectedTextFontSize({
         lines,
@@ -643,6 +646,7 @@ function extractMisclassifiedBadgeWording(item: ReconstructionElement): string |
 
 function compileMisclassifiedTextBadge(input: {
   item: ReconstructionElement;
+  fontFamily: string;
   box: PixelBox;
   canvasHeight: number;
   shapeId: string;
@@ -706,7 +710,7 @@ function compileMisclassifiedTextBadge(input: {
     type: 'text',
     text,
     fontSize,
-    fontFamily: FONT_STACKS[item.fontFamily],
+    fontFamily: input.fontFamily,
     fill: textColor,
     width: textWidth,
     fontWeight: item.fontWeight === '400' ? '700' : item.fontWeight,
@@ -719,6 +723,16 @@ function compileMisclassifiedTextBadge(input: {
   };
 
   return { shape, text: textElement };
+}
+
+export function resolveReconstructionFontFamily(
+  item: Pick<ReconstructionElement, 'fontFamily' | 'fontCatalogId'>,
+  catalog?: Readonly<Record<string, string>>,
+): string {
+  const custom = item.fontCatalogId ? catalog?.[item.fontCatalogId] : undefined;
+  return typeof custom === 'string' && /^Editor3DCustom_[a-zA-Z0-9_-]+$/.test(custom)
+    ? custom
+    : FONT_STACKS[item.fontFamily];
 }
 
 function splitBadgeText(text: string): string {

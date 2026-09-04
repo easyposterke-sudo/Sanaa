@@ -1933,7 +1933,7 @@ function maxProjectBytes(env: Env): number {
 
 function maxAiRequestBytes(env: Env): number {
   const configured = Number(env.MAX_AI_REQUEST_BYTES);
-  return Number.isFinite(configured) && configured > 0 ? configured : 3 * 1024 * 1024;
+  return Number.isFinite(configured) && configured > 0 ? configured : 6 * 1024 * 1024;
 }
 
 function maxBackgroundRemovalBytes(env: Env): number {
@@ -2077,6 +2077,9 @@ async function buildPosterReconstructionCacheKey(
     model,
     schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION,
     promptVersion: POSTER_RECONSTRUCTION_PROMPT_VERSION,
+    fontCatalog: request.fontCatalog?.entries
+      .map(({ id, label }) => ({ id, label }))
+      .sort((a, b) => a.id.localeCompare(b.id)) ?? [],
   });
   return sha256Hex(new TextEncoder().encode(canonical));
 }

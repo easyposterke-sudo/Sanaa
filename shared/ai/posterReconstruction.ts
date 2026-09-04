@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 8 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 9 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v8-editable-display-type-image-treatment' as const;
+  'poster-reconstruction-v9-custom-font-catalogue' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -99,6 +99,7 @@ export const ReconstructionElementSchema = z
     strokeWidthRatio: z.number().min(0).max(0.05),
     text: z.string().max(500),
     fontFamily: z.enum(RECONSTRUCTION_FONT_TOKENS),
+    fontCatalogId: z.string().regex(/^c_[a-z0-9_]{1,40}$/).nullable().optional(),
     fontSizeRatio: z.number().min(0.004).max(0.3),
     fontWeight: z.enum(['400', '500', '600', '700', '800', '900']),
     fontStyle: z.enum(['normal', 'italic']),
@@ -164,6 +165,26 @@ export const PosterReconstructionPlanSchema = z
 
 export type PosterReconstructionPlan = z.infer<typeof PosterReconstructionPlanSchema>;
 
+export const ReconstructionFontCatalogEntrySchema = z
+  .object({
+    id: z.string().regex(/^c_[a-z0-9_]{1,40}$/),
+    label: z.string().trim().min(1).max(120),
+  })
+  .strict();
+
+export type ReconstructionFontCatalogEntry = z.infer<typeof ReconstructionFontCatalogEntrySchema>;
+
+export const ReconstructionFontCatalogSchema = z
+  .object({
+    entries: z.array(ReconstructionFontCatalogEntrySchema).max(200),
+    previewDataUrls: z
+      .array(z.string().regex(/^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=]+$/))
+      .max(6),
+  })
+  .strict();
+
+export type ReconstructionFontCatalog = z.infer<typeof ReconstructionFontCatalogSchema>;
+
 export const PosterReconstructionRequestSchema = z
   .object({
     reference: z
@@ -174,6 +195,7 @@ export const PosterReconstructionRequestSchema = z
       })
       .strict(),
     quality: z.enum(['quality']),
+    fontCatalog: ReconstructionFontCatalogSchema.optional(),
   })
   .strict();
 
@@ -271,6 +293,10 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         strokeWidthRatio: { type: 'number', minimum: 0, maximum: 0.05 },
         text: { type: 'string', maxLength: 500 },
         fontFamily: { type: 'string', enum: [...RECONSTRUCTION_FONT_TOKENS] },
+        fontCatalogId: nullable({
+          type: 'string',
+          pattern: '^c_[a-z0-9_]{1,40}$',
+        }),
         fontSizeRatio: { type: 'number', minimum: 0.004, maximum: 0.3 },
         fontWeight: { type: 'string', enum: ['400', '500', '600', '700', '800', '900'] },
         fontStyle: { type: 'string', enum: ['normal', 'italic'] },

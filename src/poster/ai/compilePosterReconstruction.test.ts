@@ -146,6 +146,36 @@ describe('compilePosterReconstruction', () => {
     expect(compiled.category).toBe('conference');
   });
 
+  it('resolves an approved custom font catalogue ID to its loaded editor family', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'custom_title',
+          kind: 'text',
+          label: 'Custom title',
+          text: 'WE ARE OPEN',
+          fontFamily: 'arial',
+          fontCatalogId: 'c_brand',
+          visibleLineCount: 1,
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+      fontCatalogFamilies: {
+        c_brand: 'Editor3DCustom_cloud-font-brand',
+      },
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'text',
+      fontFamily: 'Editor3DCustom_cloud-font-brand',
+    });
+  });
+
   it('rebuilds detected headline gradients as editable gradient-filled text', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
