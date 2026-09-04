@@ -40,6 +40,8 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     lineHeight: 1.16,
     visibleLineCount: 0,
     textEffect: 'flat',
+    textHasVisibleExtrusion: false,
+    textExtrusionDepthRatio: 0,
     extrusionColor: null,
     cornerRadiusRatio: 0,
     cornerStyle: 'auto',
@@ -284,6 +286,8 @@ describe('compilePosterReconstruction', () => {
           fontFamily: 'bebas_neue',
           fontWeight: '900',
           textEffect: 'two_layer_3d',
+          textHasVisibleExtrusion: true,
+          textExtrusionDepthRatio: 0.18,
           fill: '#f4efe3',
           extrusionColor: '#176143',
           suggestedFieldKey: 'event_title',
@@ -315,6 +319,55 @@ describe('compilePosterReconstruction', () => {
       sourceElementId: 'reconstruction_mens_title',
       kind: 'text',
     });
+  });
+
+  it('keeps gradient outlined headlines flat when connected extrusion evidence is absent', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'grace_encounter',
+          kind: 'text',
+          label: 'GRACE ENCOUNTER headline',
+          box: { x: 0.12, y: 0.5, width: 0.76, height: 0.14 },
+          text: 'GRACE\nENCOUNTER',
+          fontFamily: 'arial_black',
+          fontWeight: '900',
+          textEffect: 'two_layer_3d',
+          textHasVisibleExtrusion: false,
+          textExtrusionDepthRatio: 0,
+          textFillType: 'linear',
+          textFillStart: '#f5a13a',
+          textFillEnd: '#e56d20',
+          stroke: '#101b49',
+          strokeWidthRatio: 0.006,
+          extrusionColor: '#101b49',
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 720,
+        height: 1280,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    const title = compiled.project.elements[0];
+    expect(title).toMatchObject({
+      type: 'text',
+      text: 'GRACE\nENCOUNTER',
+      fillGradient: {
+        type: 'linear',
+        angle: 0,
+        stops: [
+          { offset: 0, color: '#f5a13a' },
+          { offset: 1, color: '#e56d20' },
+        ],
+      },
+      stroke: '#101b49',
+    });
+    expect(compiled.warnings).toContain(
+      '“GRACE ENCOUNTER headline” was kept flat because no measurable connected extrusion side faces were verified.',
+    );
   });
 
   it('uses a clean placeholder instead of a contaminated background-photo crop', async () => {

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 10 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 11 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v10-background-photo-treatment' as const;
+  'poster-reconstruction-v11-verified-text-extrusion' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -108,6 +108,8 @@ export const ReconstructionElementSchema = z
     lineHeight: z.number().min(0.7).max(3),
     visibleLineCount: z.number().int().min(0).max(20).default(0),
     textEffect: z.enum(['flat', 'two_layer_3d']),
+    textHasVisibleExtrusion: z.boolean().default(false),
+    textExtrusionDepthRatio: z.number().min(0).max(1).default(0),
     extrusionColor: NullableHexColorSchema,
     cornerRadiusRatio: z.number().min(0).max(0.5),
     cornerStyle: z.enum(['auto', 'sharp', 'subtle', 'rounded', 'pill']).default('auto'),
@@ -311,6 +313,8 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         lineHeight: { type: 'number', minimum: 0.7, maximum: 3 },
         visibleLineCount: { type: 'integer', minimum: 0, maximum: 20 },
         textEffect: { type: 'string', enum: ['flat', 'two_layer_3d'] },
+        textHasVisibleExtrusion: { type: 'boolean' },
+        textExtrusionDepthRatio: { type: 'number', minimum: 0, maximum: 1 },
         extrusionColor: nullable(hexJsonSchema),
         cornerRadiusRatio: { type: 'number', minimum: 0, maximum: 0.5 },
         cornerStyle: {

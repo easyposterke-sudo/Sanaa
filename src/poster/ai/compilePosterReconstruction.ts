@@ -29,6 +29,22 @@ import {
 
 type PixelBox = { left: number; top: number; width: number; height: number };
 
+export const VERIFIED_TEXT_EXTRUSION_MIN_DEPTH_RATIO = 0.08;
+
+export function hasVerifiedTextExtrusion(
+  item: Pick<
+    ReconstructionElement,
+    'textEffect' | 'textHasVisibleExtrusion' | 'textExtrusionDepthRatio' | 'extrusionColor'
+  >,
+): boolean {
+  return (
+    item.textEffect === 'two_layer_3d' &&
+    item.textHasVisibleExtrusion &&
+    item.textExtrusionDepthRatio >= VERIFIED_TEXT_EXTRUSION_MIN_DEPTH_RATIO &&
+    item.extrusionColor !== null
+  );
+}
+
 export interface CompiledPosterReconstruction {
   project: PosterProject;
   fieldBindings: PosterTemplateFieldBinding[];
@@ -183,11 +199,16 @@ export async function compilePosterReconstruction(input: {
     if (item.kind === 'text') {
       const displayText = (item.text || item.label).trim();
       const fontFamily = resolveReconstructionFontFamily(item, input.fontCatalogFamilies);
-      if (item.textEffect === 'two_layer_3d' && displayText.length <= 80) {
+      const hasVerifiedExtrusion = hasVerifiedTextExtrusion(item);
+      if (hasVerifiedExtrusion && displayText.length <= 80) {
         element = compileThreeDTextElement(item, box, base, fontFamily);
       } else {
         element = compileTextElement(item, box, canvasHeight, base, fontFamily);
-        if (item.textEffect === 'two_layer_3d') {
+        if (item.textEffect === 'two_layer_3d' && !hasVerifiedExtrusion) {
+          warnings.push(
+            `“${item.label}” was kept flat because no measurable connected extrusion side faces were verified.`,
+          );
+        } else if (item.textEffect === 'two_layer_3d') {
           warnings.push(`“${item.label}” was kept flat because the two-layer 3D preset accepts at most 80 characters per block.`);
         }
       }

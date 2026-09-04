@@ -197,6 +197,8 @@ function reconstructionTextElement(fontCatalogId: string | null) {
     lineHeight: 1.1,
     visibleLineCount: 1,
     textEffect: 'flat',
+    textHasVisibleExtrusion: false,
+    textExtrusionDepthRatio: 0,
     extrusionColor: null,
     cornerRadiusRatio: 0,
     cornerStyle: 'auto',
