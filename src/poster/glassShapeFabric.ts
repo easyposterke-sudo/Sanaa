@@ -12,10 +12,12 @@ interface GlassRenderable extends FabricObject {
 
 const originalRenderKey = Symbol('posterGlassOriginalRender');
 const glassSettingsKey = Symbol('posterGlassSettings');
+const originalObjectCachingKey = Symbol('posterGlassOriginalObjectCaching');
 
 type GlassWrappedObject = GlassRenderable & {
   [originalRenderKey]?: (context: CanvasRenderingContext2D) => void;
   [glassSettingsKey]?: { fill: GlassFill; opacity: number };
+  [originalObjectCachingKey]?: boolean;
 };
 
 /** Adds an export-safe backdrop-blur renderer to a Fabric vector instance. */
@@ -28,6 +30,19 @@ export function setFabricObjectGlassFill(
   wrapped[glassSettingsKey] = fill
     ? { fill, opacity: Math.max(0, Math.min(1, opacity)) }
     : undefined;
+
+  // Backdrop glass must render on the main canvas so it can copy the layers
+  // already painted behind the shape. Fabric's object cache is transparent and
+  // isolated, so blurring that cache produces no visible change.
+  if (fill) {
+    if (wrapped[originalObjectCachingKey] === undefined) {
+      wrapped[originalObjectCachingKey] = wrapped.objectCaching;
+    }
+    wrapped.objectCaching = false;
+  } else if (wrapped[originalObjectCachingKey] !== undefined) {
+    wrapped.objectCaching = wrapped[originalObjectCachingKey];
+    delete wrapped[originalObjectCachingKey];
+  }
 
   if (fill && !wrapped[originalRenderKey]) {
     const originalRender = wrapped._render.bind(wrapped);

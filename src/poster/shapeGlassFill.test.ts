@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { Rect } from 'fabric';
+import { setFabricObjectGlassFill } from './glassShapeFabric';
 import { normalizePosterShapeFill } from './shapeFillFabric';
 import { lineStrokeFromFill } from './posterShapeGeometry';
 
@@ -26,5 +28,15 @@ describe('poster vector glass fills', () => {
     expect(lineStrokeFromFill({ type: 'glass', color: '#abcdef', blur: 10 }, '#000000')).toBe(
       '#abcdef',
     );
+  });
+
+  it('disables Fabric object caching while a shape uses backdrop glass', () => {
+    const shape = new Rect({ width: 120, height: 80, objectCaching: true });
+
+    setFabricObjectGlassFill(shape, { type: 'glass', color: '#ffffff', blur: 18 });
+    expect(shape.objectCaching).toBe(false);
+
+    setFabricObjectGlassFill(shape, undefined);
+    expect(shape.objectCaching).toBe(true);
   });
 });
