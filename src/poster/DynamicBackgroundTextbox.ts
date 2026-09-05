@@ -24,6 +24,90 @@ export class DynamicBackgroundTextbox extends Textbox {
     super._render(context);
   }
 
+  /**
+   * Fabric supports per-character baseline offsets but not per-character angles.
+   * Curved poster text stores a small custom angle beside each Fabric character
+   * style, so render those glyphs individually and rotate around their baseline
+   * centres. Text without a curve stays on Fabric's normal fast render path.
+   */
+  override _renderChars(
+    method: 'fillText' | 'strokeText',
+    context: CanvasRenderingContext2D,
+    line: unknown[],
+    left: number,
+    top: number,
+    lineIndex: number,
+  ): void {
+    const rotations = line.map((_character, characterIndex) =>
+      this.posterCharacterRotation(lineIndex, characterIndex),
+    );
+    if (!rotations.some((rotation) => rotation !== 0)) {
+      super._renderChars(method, context, line, left, top, lineIndex);
+      return;
+    }
+
+    const isLeftToRight = this.direction === 'ltr';
+    const directionSign = isLeftToRight ? 1 : -1;
+    const previousDirection = context.direction;
+    context.save();
+    if (previousDirection !== this.direction) {
+      context.canvas.setAttribute('dir', isLeftToRight ? 'ltr' : 'rtl');
+      context.direction = isLeftToRight ? 'ltr' : 'rtl';
+      context.textAlign = isLeftToRight ? 'left' : 'right';
+    }
+
+    top -= (this.getHeightOfLine(lineIndex) / this.lineHeight) * this._fontSizeFraction;
+    for (let characterIndex = 0; characterIndex < line.length; characterIndex += 1) {
+      const characterBox = this.__charBounds[lineIndex]?.[characterIndex];
+      if (!characterBox) continue;
+      left += directionSign * (characterBox.kernedWidth - characterBox.width);
+
+      const rotation = rotations[characterIndex] ?? 0;
+      if (rotation === 0) {
+        super._renderChar(
+          method,
+          context,
+          lineIndex,
+          characterIndex,
+          String(line[characterIndex]),
+          left,
+          top,
+        );
+      } else {
+        const declaration = this._getStyleDeclaration(lineIndex, characterIndex) as {
+          deltaY?: number;
+        };
+        const deltaY = Number.isFinite(declaration.deltaY) ? declaration.deltaY ?? 0 : 0;
+        const pivotX = left + directionSign * characterBox.width / 2;
+        const pivotY = top + deltaY;
+        context.save();
+        context.translate(pivotX, pivotY);
+        context.rotate((rotation * Math.PI) / 180);
+        super._renderChar(
+          method,
+          context,
+          lineIndex,
+          characterIndex,
+          String(line[characterIndex]),
+          -directionSign * characterBox.width / 2,
+          -deltaY,
+        );
+        context.restore();
+      }
+
+      left += directionSign * characterBox.width;
+    }
+    context.restore();
+  }
+
+  private posterCharacterRotation(lineIndex: number, characterIndex: number): number {
+    const declaration = this._getStyleDeclaration(lineIndex, characterIndex) as {
+      posterRotation?: number;
+    };
+    const rotation = declaration.posterRotation;
+    return Number.isFinite(rotation) ? rotation ?? 0 : 0;
+  }
+
   private renderPosterTextBackground(context: CanvasRenderingContext2D): void {
     const background = this.posterTextBackground;
     if (!background.enabled) return;

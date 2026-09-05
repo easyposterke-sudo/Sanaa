@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 12 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 13 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v12-path-region-classification' as const;
+  'poster-reconstruction-v13-curved-text-and-region-coverage' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -107,6 +107,7 @@ export const ReconstructionElementSchema = z
     charSpacing: z.number().min(-250).max(1200),
     lineHeight: z.number().min(0.7).max(3),
     visibleLineCount: z.number().int().min(0).max(20).default(0),
+    textCurve: z.number().min(-100).max(100).default(0),
     textEffect: z.enum(['flat', 'two_layer_3d']),
     textHasVisibleExtrusion: z.boolean().default(false),
     textExtrusionDepthRatio: z.number().min(0).max(1).default(0),
@@ -313,6 +314,7 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         charSpacing: { type: 'number', minimum: -250, maximum: 1200 },
         lineHeight: { type: 'number', minimum: 0.7, maximum: 3 },
         visibleLineCount: { type: 'integer', minimum: 0, maximum: 20 },
+        textCurve: { type: 'number', minimum: -100, maximum: 100 },
         textEffect: { type: 'string', enum: ['flat', 'two_layer_3d'] },
         textHasVisibleExtrusion: { type: 'boolean' },
         textExtrusionDepthRatio: { type: 'number', minimum: 0, maximum: 1 },

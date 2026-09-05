@@ -611,6 +611,7 @@ function compileTextElement(
     charSpacing: item.charSpacing,
     lineHeight: item.lineHeight,
     textAlign: item.textAlign,
+    curve: item.textCurve,
     stroke: item.stroke ?? undefined,
     strokeWidth: item.stroke ? item.strokeWidthRatio * canvasHeight : 0,
   };

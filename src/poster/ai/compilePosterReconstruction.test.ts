@@ -39,6 +39,7 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     charSpacing: 0,
     lineHeight: 1.16,
     visibleLineCount: 0,
+    textCurve: 0,
     textEffect: 'flat',
     textHasVisibleExtrusion: false,
     textExtrusionDepthRatio: 0,
@@ -153,6 +154,34 @@ describe('compilePosterReconstruction', () => {
       },
     ]);
     expect(compiled.category).toBe('conference');
+  });
+
+  it('preserves detected curved text as an editable curve value', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'curved_headline',
+          kind: 'text',
+          label: 'Curved headline',
+          text: 'DEFINE YOUR BRAND',
+          textAlign: 'center',
+          visibleLineCount: 1,
+          textCurve: 64,
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 1000,
+        height: 1500,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'text',
+      text: 'DEFINE YOUR BRAND',
+      curve: 64,
+    });
   });
 
   it('resolves an approved custom font catalogue ID to its loaded editor family', async () => {

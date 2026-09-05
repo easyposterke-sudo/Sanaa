@@ -11,7 +11,12 @@ describe('poster text effects', () => {
     const downward = buildPosterTextEffectStyles('ABCDE', 40, -50, 0);
     expect(upward[0]?.[0]?.deltaY).toBe(0);
     expect(upward[0]?.[2]?.deltaY).toBe(-25);
+    expect(upward[0]?.[0]?.posterRotation).toBeLessThan(0);
+    expect(upward[0]?.[2]?.posterRotation).toBe(0);
+    expect(upward[0]?.[4]?.posterRotation).toBeGreaterThan(0);
     expect(downward[0]?.[2]?.deltaY).toBe(25);
+    expect(downward[0]?.[0]?.posterRotation).toBeGreaterThan(0);
+    expect(downward[0]?.[4]?.posterRotation).toBeLessThan(0);
     expect(posterTextEffectPadding(40, -50)).toBe(25);
   });
 

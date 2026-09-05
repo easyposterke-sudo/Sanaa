@@ -196,6 +196,7 @@ function reconstructionTextElement(fontCatalogId: string | null) {
     charSpacing: 0,
     lineHeight: 1.1,
     visibleLineCount: 1,
+    textCurve: 0,
     textEffect: 'flat',
     textHasVisibleExtrusion: false,
     textExtrusionDepthRatio: 0,

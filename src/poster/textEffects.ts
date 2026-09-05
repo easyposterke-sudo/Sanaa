@@ -6,6 +6,8 @@ export const TEXT_TAPER_MAX = 70;
 export interface PosterTextCharacterStyle {
   fontSize?: number;
   deltaY?: number;
+  /** Degrees of rotation around the character baseline, following the curve tangent. */
+  posterRotation?: number;
 }
 
 export type PosterTextEffectStyles = Record<number, Record<number, PosterTextCharacterStyle>>;
@@ -50,6 +52,17 @@ export function buildPosterTextEffectStyles(
       if (curveRatio !== 0) {
         const arcHeight = 1 - horizontalPosition * horizontalPosition;
         style.deltaY = round(-curveRatio * safeFontSize * 1.25 * arcHeight);
+        // Keep rotation consistent with the slope of the same parabolic arc used
+        // for deltaY. Approximate one character advance as 0.62em; Fabric still
+        // performs the actual glyph measurement when it renders the text.
+        const estimatedLineWidth = Math.max(
+          safeFontSize,
+          lastIndex * safeFontSize * 0.62,
+        );
+        const tangentSlope =
+          (4 * curveRatio * safeFontSize * 1.25 * horizontalPosition) /
+          estimatedLineWidth;
+        style.posterRotation = round((Math.atan(tangentSlope) * 180) / Math.PI);
       }
 
       if (taperRatio !== 0) {
