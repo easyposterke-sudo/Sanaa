@@ -60,4 +60,40 @@ describe('DynamicBackgroundTextbox curved text rendering', () => {
     expect(rotate).not.toHaveBeenCalled();
     expect(context.fillText).toHaveBeenCalledTimes(1);
   });
+
+  it('makes a complete circle at the maximum curve', () => {
+    const wording = 'AAAAAAAAAAAAAAAA';
+    const text = new DynamicBackgroundTextbox(wording, {
+      width: 600,
+      fontSize: 40,
+      fill: '#111111',
+      styles: buildPosterTextEffectStyles(wording, 40, 100, 0),
+    });
+    const translations: Array<[number, number]> = [];
+    const rotations: number[] = [];
+    const context = {
+      canvas: { setAttribute: vi.fn() },
+      direction: 'ltr',
+      textAlign: 'left',
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn((x: number, y: number) => translations.push([x, y])),
+      rotate: vi.fn((angle: number) => rotations.push(angle)),
+      fillText: vi.fn(),
+      fillStyle: '#111111',
+      font: '',
+    } as unknown as CanvasRenderingContext2D;
+
+    text.getLineWidth(0);
+    text._renderChars('fillText', context, Array.from(wording), -300, 0, 0);
+
+    const distance = (a: [number, number], b: [number, number]) =>
+      Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const ordinaryGap = distance(translations[0], translations[1]);
+    const seamGap = distance(translations[0], translations[translations.length - 1]);
+    expect(text.height).toBeGreaterThan(550);
+    expect(seamGap).toBeCloseTo(ordinaryGap, 5);
+    expect(rotations[0]).toBeLessThan(-2.5);
+    expect(rotations[rotations.length - 1]).toBeGreaterThan(2.5);
+  });
 });

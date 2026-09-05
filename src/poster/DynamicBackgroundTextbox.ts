@@ -24,6 +24,14 @@ export class DynamicBackgroundTextbox extends Textbox {
     super._render(context);
   }
 
+  override initDimensions(): void {
+    super.initDimensions();
+    const curve = this.posterCurve();
+    if (curve === 0 || this.textLines.length !== 1) return;
+    const geometry = this.posterCurveGeometry(curve);
+    this.height = Math.max(this.height, geometry.verticalSpan + this.fontSize * 1.2);
+  }
+
   /**
    * Fabric supports per-character baseline offsets but not per-character angles.
    * Curved poster text stores a small custom angle beside each Fabric character
@@ -38,6 +46,12 @@ export class DynamicBackgroundTextbox extends Textbox {
     top: number,
     lineIndex: number,
   ): void {
+    const curve = this.posterCurve();
+    if (curve !== 0 && this.textLines.length === 1) {
+      this.renderCircularCharacters(method, context, line, lineIndex, curve);
+      return;
+    }
+
     const rotations = line.map((_character, characterIndex) =>
       this.posterCharacterRotation(lineIndex, characterIndex),
     );
@@ -98,6 +112,105 @@ export class DynamicBackgroundTextbox extends Textbox {
       left += directionSign * characterBox.width;
     }
     context.restore();
+  }
+
+  private renderCircularCharacters(
+    method: 'fillText' | 'strokeText',
+    context: CanvasRenderingContext2D,
+    line: unknown[],
+    lineIndex: number,
+    curve: number,
+  ): void {
+    const boxes = line.map((_character, characterIndex) =>
+      this.__charBounds[lineIndex]?.[characterIndex],
+    );
+    const totalAdvance = boxes.reduce(
+      (total, box) => total + (box?.kernedWidth ?? 0),
+      0,
+    );
+    if (totalAdvance <= 0) return;
+
+    const geometry = this.posterCurveGeometry(curve);
+    const directionSign = this.direction === 'ltr' ? 1 : -1;
+    const curveSign = curve > 0 ? 1 : -1;
+    const halfSweep = geometry.sweepRadians / 2;
+    const minimumBaseline = curveSign > 0
+      ? -geometry.radius
+      : geometry.radius * Math.cos(halfSweep);
+    const baselineShift =
+      -this.height / 2 + this.fontSize * 0.85 - minimumBaseline;
+    let advance = 0;
+
+    context.save();
+    if (context.direction !== this.direction) {
+      context.canvas.setAttribute('dir', this.direction);
+      context.direction = this.direction;
+      context.textAlign = this.direction === 'ltr' ? 'left' : 'right';
+    }
+
+    for (let characterIndex = 0; characterIndex < line.length; characterIndex += 1) {
+      const characterBox = boxes[characterIndex];
+      if (!characterBox) continue;
+      advance += characterBox.kernedWidth - characterBox.width;
+      const characterCenter = advance + characterBox.width / 2;
+      const logicalProgress = characterCenter / totalAdvance;
+      const progress = directionSign > 0 ? logicalProgress : 1 - logicalProgress;
+      const theta = -halfSweep + progress * geometry.sweepRadians;
+      const x = geometry.radius * Math.sin(theta);
+      const rawY = curveSign * -geometry.radius * Math.cos(theta);
+      const declaration = this._getStyleDeclaration(lineIndex, characterIndex) as {
+        deltaY?: number;
+      };
+      const deltaY = Number.isFinite(declaration.deltaY) ? declaration.deltaY ?? 0 : 0;
+
+      context.save();
+      context.translate(x, rawY + baselineShift);
+      context.rotate(curveSign * theta);
+      super._renderChar(
+        method,
+        context,
+        lineIndex,
+        characterIndex,
+        String(line[characterIndex]),
+        -directionSign * characterBox.width / 2,
+        -deltaY,
+      );
+      context.restore();
+      advance += characterBox.width;
+    }
+    context.restore();
+  }
+
+  private posterCurveGeometry(curve: number): {
+    sweepRadians: number;
+    radius: number;
+    verticalSpan: number;
+  } {
+    const strength = Math.min(1, Math.abs(curve) / 100);
+    const sweepRadians = strength * Math.PI * 2;
+    const halfSweep = sweepRadians / 2;
+    const halfUsableWidth = Math.max(
+      this.fontSize * 0.5,
+      (Math.max(this.width, this.fontSize * 2) - this.fontSize) / 2,
+    );
+    const radius = sweepRadians <= Math.PI
+      ? halfUsableWidth / Math.max(0.001, Math.sin(halfSweep))
+      : halfUsableWidth;
+    return {
+      sweepRadians,
+      radius,
+      verticalSpan: radius * (1 - Math.cos(halfSweep)),
+    };
+  }
+
+  private posterCurve(): number {
+    for (const lineStyle of Object.values(this.styles ?? {})) {
+      for (const characterStyle of Object.values(lineStyle ?? {})) {
+        const curve = (characterStyle as { posterCurve?: number }).posterCurve;
+        if (Number.isFinite(curve) && curve !== 0) return curve ?? 0;
+      }
+    }
+    return 0;
   }
 
   private posterCharacterRotation(lineIndex: number, characterIndex: number): number {

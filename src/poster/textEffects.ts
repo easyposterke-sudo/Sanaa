@@ -9,6 +9,8 @@ export interface PosterTextCharacterStyle {
   deltaY?: number;
   /** Degrees of rotation around the character baseline, following the curve tangent. */
   posterRotation?: number;
+  /** Signed editor curve value retained for the circular Fabric renderer. */
+  posterCurve?: number;
 }
 
 export type PosterTextEffectStyles = Record<number, Record<number, PosterTextCharacterStyle>>;
@@ -53,6 +55,7 @@ export function buildPosterTextEffectStyles(
       if (curveRatio !== 0) {
         const arcHeight = 1 - horizontalPosition * horizontalPosition;
         style.deltaY = round(-curveRatio * safeFontSize * 1.25 * arcHeight);
+        style.posterCurve = round(curveRatio * 100);
         // Keep rotation consistent with the slope of the same parabolic arc used
         // for deltaY. Approximate one character advance as 0.62em; Fabric still
         // performs the actual glyph measurement when it renders the text.
