@@ -2,6 +2,7 @@ export const TEXT_CURVE_MIN = -100;
 export const TEXT_CURVE_MAX = 100;
 export const TEXT_TAPER_MIN = -70;
 export const TEXT_TAPER_MAX = 70;
+const TEXT_CURVE_ROTATION_BOOST = 1.65;
 
 export interface PosterTextCharacterStyle {
   fontSize?: number;
@@ -60,7 +61,8 @@ export function buildPosterTextEffectStyles(
           lastIndex * safeFontSize * 0.62,
         );
         const tangentSlope =
-          (4 * curveRatio * safeFontSize * 1.25 * horizontalPosition) /
+          (4 * curveRatio * safeFontSize * 1.25 * horizontalPosition *
+            TEXT_CURVE_ROTATION_BOOST) /
           estimatedLineWidth;
         style.posterRotation = round((Math.atan(tangentSlope) * 180) / Math.PI);
       }

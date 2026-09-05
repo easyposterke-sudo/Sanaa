@@ -12,6 +12,7 @@ describe('poster text effects', () => {
     expect(upward[0]?.[0]?.deltaY).toBe(0);
     expect(upward[0]?.[2]?.deltaY).toBe(-25);
     expect(upward[0]?.[0]?.posterRotation).toBeLessThan(0);
+    expect(Math.abs(upward[0]?.[0]?.posterRotation ?? 0)).toBeGreaterThan(55);
     expect(upward[0]?.[2]?.posterRotation).toBe(0);
     expect(upward[0]?.[4]?.posterRotation).toBeGreaterThan(0);
     expect(downward[0]?.[2]?.deltaY).toBe(25);
