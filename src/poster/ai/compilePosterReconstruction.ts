@@ -34,6 +34,28 @@ import {
 
 type PixelBox = { left: number; top: number; width: number; height: number };
 
+type TextLineMetrics = {
+  advanceWidth: number;
+  inkLeft: number;
+  inkRight: number;
+  ascent: number;
+  descent: number;
+};
+
+export type DetectedTextLayout = {
+  left: number;
+  top: number;
+  width: number;
+  fontSize: number;
+  scaleX: number;
+};
+
+// Fabric's text box and baseline geometry are based on the em square, not on
+// the visible glyph ink returned by Canvas TextMetrics.
+const FABRIC_FONT_SIZE_MULTIPLIER = 1.13;
+const FABRIC_FONT_SIZE_FRACTION = 0.222;
+const TEXT_METRIC_SAMPLE_SIZE = 100;
+
 export const VERIFIED_TEXT_EXTRUSION_MIN_DEPTH_RATIO = 0.08;
 
 export function hasVerifiedTextExtrusion(
@@ -145,6 +167,7 @@ export async function compilePosterReconstruction(input: {
   }
 
   const ordered = [...plan.elements].sort((a, b) => a.zIndex - b.zIndex);
+  await ensureReconstructionFontsReady(ordered, input.fontCatalogFamilies);
   for (const item of ordered) {
     const box = pixelBox(
       item.box,
@@ -569,28 +592,46 @@ function compileTextElement(
   const lines = displayText.split(/\r?\n/);
   const lineCount = Math.max(1, lines.length);
   const measuredSize = item.fontSizeRatio * canvasHeight;
-  // Fabric applies lineHeight between baselines rather than independently to
-  // every row. Include those extra line gaps when enforcing the detected
-  // source box, otherwise multi-line copy grows beyond its reference bounds.
-  const verticalLineUnits = 1 + Math.max(0, lineCount - 1) * item.lineHeight;
-  const boxLimitedSize = (box.height / verticalLineUnits) * 0.94;
-  const initialFontSize = Math.max(6, Math.min(measuredSize, Math.max(8, boxLimitedSize)));
-  const fontSize = item.visibleLineCount > 0 && item.visibleLineCount === lineCount
-    ? fitDetectedTextFontSize({
+  const strokeWidth = item.stroke ? item.strokeWidthRatio * canvasHeight : 0;
+  const inset = Math.min(strokeWidth / 2, box.width * 0.2, box.height * 0.2);
+  const inkBox = {
+    left: box.left + inset,
+    top: box.top + inset,
+    width: Math.max(1, box.width - inset * 2),
+    height: Math.max(1, box.height - inset * 2),
+  };
+  const usesStraightInkLayout = item.textCurve === 0 && Math.abs(item.angle) < 0.01;
+  const layout = usesStraightInkLayout
+    ? fitDetectedTextToInkBox({
         lines,
         fontFamily,
         fontWeight: item.fontWeight,
         fontStyle: item.fontStyle,
         charSpacing: item.charSpacing,
-        initialFontSize,
-        availableWidth: Math.max(12, box.width),
+        lineHeight: item.lineHeight,
+        textAlign: item.textAlign,
+        targetBox: inkBox,
+        targetVisibleGlyphHeight: measuredSize,
+        useDetectedBoxHeight: item.visibleLineCount > 0 && item.visibleLineCount === lineCount,
       })
-    : initialFontSize;
+    : legacyDetectedTextLayout({
+        lines,
+        fontFamily,
+        fontWeight: item.fontWeight,
+        fontStyle: item.fontStyle,
+        charSpacing: item.charSpacing,
+        lineHeight: item.lineHeight,
+        measuredSize,
+        box,
+      });
   return {
     ...base,
+    left: layout.left,
+    top: layout.top,
+    scaleX: layout.scaleX,
     type: 'text',
     text: displayText,
-    fontSize,
+    fontSize: layout.fontSize,
     fontFamily,
     fill: item.fill ?? '#111111',
     ...(item.textFillType === 'linear' && item.textFillStart && item.textFillEnd
@@ -605,7 +646,7 @@ function compileTextElement(
           },
         }
       : {}),
-    width: Math.max(12, box.width),
+    width: layout.width,
     fontWeight: item.fontWeight,
     fontStyle: item.fontStyle,
     charSpacing: item.charSpacing,
@@ -613,7 +654,111 @@ function compileTextElement(
     textAlign: item.textAlign,
     curve: item.textCurve,
     stroke: item.stroke ?? undefined,
-    strokeWidth: item.stroke ? item.strokeWidthRatio * canvasHeight : 0,
+    strokeWidth,
+  };
+}
+
+/**
+ * Fits the visible glyph ink to the AI-detected box. The detector reports
+ * visible glyph height, whereas Fabric `fontSize` is an em-square size. Using
+ * real ascent/descent and bearing metrics here avoids the systematic 20–30%
+ * undersizing caused by treating those two measurements as interchangeable.
+ */
+export function fitDetectedTextToInkBox(input: {
+  lines: string[];
+  fontFamily: string;
+  fontWeight: string;
+  fontStyle: 'normal' | 'italic';
+  charSpacing: number;
+  lineHeight: number;
+  textAlign: 'left' | 'center' | 'right';
+  targetBox: PixelBox;
+  targetVisibleGlyphHeight: number;
+  useDetectedBoxHeight: boolean;
+  measureLine?: (line: string, fontSize: number) => TextLineMetrics;
+}): DetectedTextLayout {
+  const lines = input.lines.length > 0 ? input.lines : [''];
+  const measureLine = input.measureLine ?? ((line: string, fontSize: number) =>
+    measuredTextLineMetrics({
+      line,
+      fontFamily: input.fontFamily,
+      fontWeight: input.fontWeight,
+      fontStyle: input.fontStyle,
+      charSpacing: input.charSpacing,
+      fontSize,
+    }));
+  const sampleMetrics = lines.map((line) => measureLine(line, TEXT_METRIC_SAMPLE_SIZE));
+  const sampleBounds = verticalInkBounds(sampleMetrics, input.lineHeight, TEXT_METRIC_SAMPLE_SIZE);
+  const sampleInkHeight = Math.max(1, sampleBounds.bottom - sampleBounds.top);
+  const tallestLineInk = Math.max(
+    1,
+    ...sampleMetrics.map((metric) => metric.ascent + metric.descent),
+  );
+  const boxFittedFontSize = input.targetBox.height * TEXT_METRIC_SAMPLE_SIZE / sampleInkHeight;
+  const measuredGlyphFontSize = Math.max(1, input.targetVisibleGlyphHeight)
+    * TEXT_METRIC_SAMPLE_SIZE / tallestLineInk;
+  const fontSize = Math.max(
+    6,
+    input.useDetectedBoxHeight ? boxFittedFontSize : measuredGlyphFontSize,
+  );
+
+  const scale = fontSize / TEXT_METRIC_SAMPLE_SIZE;
+  const metrics = sampleMetrics.map((metric) => scaleTextLineMetrics(metric, scale));
+  const maximumAdvance = Math.max(1, ...metrics.map((metric) => metric.advanceWidth));
+  const wrapGuard = Math.max(2, fontSize * 0.015);
+  const minimumTextboxWidth = maximumAdvance + wrapGuard;
+  const provisionalInkBounds = horizontalInkBounds(metrics, minimumTextboxWidth, input.textAlign);
+  const provisionalInkWidth = Math.max(1, provisionalInkBounds.right - provisionalInkBounds.left);
+  const desiredScaleX = input.targetBox.width / provisionalInkWidth;
+  const distortionLimitedScaleX = clamp(desiredScaleX, 0.5, 1.5);
+  // A Fabric Textbox wraps from its unscaled local width. When expanding text
+  // horizontally, cap the scale so the local box still has room for one line.
+  const wrapSafeScaleX = input.targetBox.width / minimumTextboxWidth;
+  const scaleX = Math.max(0.1, Math.min(distortionLimitedScaleX, wrapSafeScaleX));
+  const width = Math.max(12, input.targetBox.width / scaleX);
+  const horizontalBounds = horizontalInkBounds(metrics, width, input.textAlign);
+  const renderedInkWidth = Math.max(1, horizontalBounds.right - horizontalBounds.left) * scaleX;
+  const horizontalSlack = Math.max(0, input.targetBox.width - renderedInkWidth);
+  const horizontalAnchor = input.textAlign === 'center' ? 0.5 : input.textAlign === 'right' ? 1 : 0;
+  const desiredInkLeft = input.targetBox.left + horizontalSlack * horizontalAnchor;
+  const verticalBounds = verticalInkBounds(metrics, input.lineHeight, fontSize);
+
+  return {
+    left: desiredInkLeft - horizontalBounds.left * scaleX,
+    top: input.targetBox.top - verticalBounds.top,
+    width,
+    fontSize,
+    scaleX,
+  };
+}
+
+function legacyDetectedTextLayout(input: {
+  lines: string[];
+  fontFamily: string;
+  fontWeight: string;
+  fontStyle: 'normal' | 'italic';
+  charSpacing: number;
+  lineHeight: number;
+  measuredSize: number;
+  box: PixelBox;
+}): DetectedTextLayout {
+  const verticalLineUnits = 1 + Math.max(0, input.lines.length - 1) * input.lineHeight;
+  const boxLimitedSize = (input.box.height / verticalLineUnits) * 0.94;
+  const initialFontSize = Math.max(6, Math.min(input.measuredSize, Math.max(8, boxLimitedSize)));
+  return {
+    left: input.box.left,
+    top: input.box.top,
+    width: Math.max(12, input.box.width),
+    fontSize: fitDetectedTextFontSize({
+      lines: input.lines,
+      fontFamily: input.fontFamily,
+      fontWeight: input.fontWeight,
+      fontStyle: input.fontStyle,
+      charSpacing: input.charSpacing,
+      initialFontSize,
+      availableWidth: Math.max(12, input.box.width),
+    }),
+    scaleX: 1,
   };
 }
 
@@ -636,14 +781,49 @@ export function fitDetectedTextFontSize(input: {
   return Math.max(6, initial * (widthLimit / widest));
 }
 
-function measuredTextLineWidth(input: {
+async function ensureReconstructionFontsReady(
+  items: ReconstructionElement[],
+  catalog?: Readonly<Record<string, string>>,
+): Promise<void> {
+  if (
+    typeof document === 'undefined' ||
+    typeof FontFaceSet === 'undefined' ||
+    !(document.fonts instanceof FontFaceSet) ||
+    !('fonts' in document) ||
+    typeof document.fonts?.load !== 'function'
+  ) {
+    return;
+  }
+
+  const requests = new Map<string, { declaration: string; sample: string }>();
+  for (const item of items) {
+    if (item.kind !== 'text') continue;
+    const family = resolveReconstructionFontFamily(item, catalog);
+    const declaration = `${item.fontStyle} ${item.fontWeight} ${TEXT_METRIC_SAMPLE_SIZE}px ${family}`;
+    const key = declaration.toLowerCase();
+    const sample = (item.text || item.label).replace(/\s+/g, ' ').trim() || 'Mg';
+    const previous = requests.get(key);
+    requests.set(key, {
+      declaration,
+      sample: previous && previous.sample.length >= sample.length ? previous.sample : sample,
+    });
+  }
+
+  await Promise.all(
+    [...requests.values()].map(({ declaration, sample }) =>
+      document.fonts.load(declaration, sample).catch(() => []),
+    ),
+  );
+}
+
+function measuredTextLineMetrics(input: {
   line: string;
   fontFamily: string;
   fontWeight: string;
   fontStyle: 'normal' | 'italic';
   charSpacing: number;
   fontSize: number;
-}): number {
+}): TextLineMetrics {
   const glyphs = Array.from(input.line);
   const spacing = Math.max(0, glyphs.length - 1) * input.fontSize * (input.charSpacing / 1000);
   try {
@@ -651,13 +831,48 @@ function measuredTextLineWidth(input: {
       const context = document.createElement('canvas').getContext('2d');
       if (context) {
         context.font = `${input.fontStyle} ${input.fontWeight} ${input.fontSize}px ${input.fontFamily}`;
-        const measured = context.measureText(input.line).width;
-        if (Number.isFinite(measured) && measured > 0) return measured + spacing;
+        context.textAlign = 'left';
+        context.textBaseline = 'alphabetic';
+        const measured = context.measureText(input.line);
+        const ascent = finitePositiveMetric(measured.actualBoundingBoxAscent);
+        const descent = finiteNonNegativeMetric(measured.actualBoundingBoxDescent);
+        // Canvas bearings are signed: for left-aligned text a negative
+        // actualBoundingBoxLeft means the ink starts to the right of x=0.
+        const actualLeft = finiteMetric(measured.actualBoundingBoxLeft);
+        const actualRight = finiteMetric(measured.actualBoundingBoxRight);
+        if (
+          Number.isFinite(measured.width) &&
+          measured.width >= 0 &&
+          ascent !== null &&
+          descent !== null &&
+          ascent + descent > 0 &&
+          actualLeft !== null &&
+          actualRight !== null &&
+          actualLeft + actualRight > 0
+        ) {
+          return {
+            advanceWidth: measured.width + spacing,
+            inkLeft: -actualLeft,
+            inkRight: actualRight + spacing,
+            ascent,
+            descent,
+          };
+        }
       }
     }
   } catch {
-    // Browser/test environments without Canvas 2D use the deterministic estimate below.
+    // Browser/test environments without Canvas 2D use the deterministic metrics below.
   }
+  return estimatedTextLineMetrics(input);
+}
+
+function estimatedTextLineMetrics(input: {
+  line: string;
+  fontFamily: string;
+  charSpacing: number;
+  fontSize: number;
+}): TextLineMetrics {
+  const glyphs = Array.from(input.line);
   const lowerFamily = input.fontFamily.toLowerCase();
   const widthFactor = /(?:bebas|oswald|anton)/.test(lowerFamily)
     ? 0.54
@@ -666,7 +881,101 @@ function measuredTextLineWidth(input: {
       : /(?:arial black|impact|luckiest|lilita|modak)/.test(lowerFamily)
         ? 0.66
         : 0.6;
-  return glyphs.length * input.fontSize * widthFactor + spacing;
+  const spacing = Math.max(0, glyphs.length - 1) * input.fontSize * (input.charSpacing / 1000);
+  if (!/\S/.test(input.line)) {
+    return {
+      advanceWidth: glyphs.length * input.fontSize * widthFactor + spacing,
+      inkLeft: 0,
+      inkRight: 0,
+      ascent: 0,
+      descent: 0,
+    };
+  }
+  const script = /(?:allura|dancing|great vibes|sacramento|satisfy|tangerine|pacifico)/.test(lowerFamily);
+  const hasDescender = /[gjpqyQ,;]/.test(input.line);
+  const ascent = input.fontSize * (script ? 0.82 : 0.74);
+  const descent = input.fontSize * (hasDescender ? (script ? 0.22 : 0.2) : 0.02);
+  const advanceWidth = glyphs.length * input.fontSize * widthFactor + spacing;
+  return {
+    advanceWidth,
+    inkLeft: 0,
+    inkRight: advanceWidth,
+    ascent,
+    descent,
+  };
+}
+
+function scaleTextLineMetrics(metric: TextLineMetrics, scale: number): TextLineMetrics {
+  return {
+    advanceWidth: metric.advanceWidth * scale,
+    inkLeft: metric.inkLeft * scale,
+    inkRight: metric.inkRight * scale,
+    ascent: metric.ascent * scale,
+    descent: metric.descent * scale,
+  };
+}
+
+function horizontalInkBounds(
+  metrics: TextLineMetrics[],
+  textboxWidth: number,
+  textAlign: 'left' | 'center' | 'right',
+): { left: number; right: number } {
+  let left = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  for (const metric of metrics) {
+    const remaining = textboxWidth - metric.advanceWidth;
+    const lineOffset = textAlign === 'center' ? remaining / 2 : textAlign === 'right' ? remaining : 0;
+    left = Math.min(left, lineOffset + metric.inkLeft);
+    right = Math.max(right, lineOffset + metric.inkRight);
+  }
+  return Number.isFinite(left) && Number.isFinite(right) && right > left
+    ? { left, right }
+    : { left: 0, right: Math.max(1, textboxWidth) };
+}
+
+function verticalInkBounds(
+  metrics: TextLineMetrics[],
+  lineHeight: number,
+  fontSize: number,
+): { top: number; bottom: number } {
+  const firstBaseline = fontSize
+    * FABRIC_FONT_SIZE_MULTIPLIER
+    * (1 - FABRIC_FONT_SIZE_FRACTION);
+  const baselineStep = fontSize * FABRIC_FONT_SIZE_MULTIPLIER * lineHeight;
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  metrics.forEach((metric, index) => {
+    if (metric.ascent + metric.descent <= 0) return;
+    const baseline = firstBaseline + baselineStep * index;
+    top = Math.min(top, baseline - metric.ascent);
+    bottom = Math.max(bottom, baseline + metric.descent);
+  });
+  return Number.isFinite(top) && Number.isFinite(bottom) && bottom > top
+    ? { top, bottom }
+    : { top: 0, bottom: Math.max(1, fontSize) };
+}
+
+function finitePositiveMetric(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function finiteMetric(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function finiteNonNegativeMetric(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function measuredTextLineWidth(input: {
+  line: string;
+  fontFamily: string;
+  fontWeight: string;
+  fontStyle: 'normal' | 'italic';
+  charSpacing: number;
+  fontSize: number;
+}): number {
+  return measuredTextLineMetrics(input).advanceWidth;
 }
 
 const TEXT_BADGE_SUFFIX = /\s+(?:badge|button|callout)$/i;

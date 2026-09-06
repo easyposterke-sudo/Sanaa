@@ -10,6 +10,7 @@ import {
   amplifiedDetectedCornerRadius,
   compilePosterReconstruction,
   fitDetectedTextFontSize,
+  fitDetectedTextToInkBox,
   fitPersonReplacementIntoBox,
   resolvedDetectedCornerRadius,
 } from './compilePosterReconstruction';
@@ -139,12 +140,12 @@ describe('compilePosterReconstruction', () => {
     expect(panel.rx).toBeCloseTo(42);
     const title = compiled.project.elements.find((item) => item.type === 'text');
     expect(title).toMatchObject({
-      left: 100,
-      top: 120,
-      width: 800,
       text: 'ANNUAL CONFERENCE',
       textAlign: 'center',
     });
+    if (title?.type !== 'text') throw new Error('Expected title text.');
+    expect((title.width ?? 0) * title.scaleX).toBeCloseTo(800);
+    expect(title.top).toBeLessThan(120);
     expect(compiled.fieldBindings).toEqual([
       {
         key: 'event_title',
@@ -658,7 +659,67 @@ describe('compilePosterReconstruction', () => {
     expect(fitted).toBeGreaterThanOrEqual(6);
   });
 
-  it('uses detected line count when compiling flat text', async () => {
+  it('converts a visible ink box to Fabric em size and baseline position', () => {
+    const layout = fitDetectedTextToInkBox({
+      lines: ['SUN'],
+      fontFamily: 'Test Sans',
+      fontWeight: '900',
+      fontStyle: 'normal',
+      charSpacing: 0,
+      lineHeight: 1.16,
+      textAlign: 'left',
+      targetBox: { left: 100, top: 200, width: 300, height: 100 },
+      targetVisibleGlyphHeight: 100,
+      useDetectedBoxHeight: true,
+      measureLine: (line, fontSize) => ({
+        advanceWidth: line.length * fontSize * 0.5,
+        inkLeft: 0,
+        inkRight: line.length * fontSize * 0.5,
+        ascent: fontSize * 0.72,
+        descent: fontSize * 0.02,
+      }),
+    });
+
+    expect(layout.fontSize).toBeCloseTo(100 / 0.74);
+    expect(layout.fontSize).toBeGreaterThan(100);
+    expect(layout.top).toBeLessThan(200);
+    expect(layout.width * layout.scaleX).toBeCloseTo(300);
+    const baseline = layout.fontSize * 1.13 * (1 - 0.222);
+    expect(layout.top + baseline - layout.fontSize * 0.72).toBeCloseTo(200);
+    expect(layout.top + baseline + layout.fontSize * 0.02).toBeCloseTo(300);
+  });
+
+  it('fits multi-line visible ink using Fabric baseline spacing', () => {
+    const layout = fitDetectedTextToInkBox({
+      lines: ['FIRST', 'SECOND', 'THIRD'],
+      fontFamily: 'Test Sans',
+      fontWeight: '400',
+      fontStyle: 'normal',
+      charSpacing: 0,
+      lineHeight: 1.5,
+      textAlign: 'center',
+      targetBox: { left: 50, top: 80, width: 500, height: 200 },
+      targetVisibleGlyphHeight: 80,
+      useDetectedBoxHeight: true,
+      measureLine: (line, fontSize) => ({
+        advanceWidth: line.length * fontSize * 0.55,
+        inkLeft: 0,
+        inkRight: line.length * fontSize * 0.55,
+        ascent: fontSize * 0.74,
+        descent: fontSize * 0.02,
+      }),
+    });
+
+    const expectedInkUnits = 0.74 + 2 * 1.13 * 1.5 + 0.02;
+    expect(layout.fontSize).toBeCloseTo(200 / expectedInkUnits);
+    expect(layout.width * layout.scaleX).toBeCloseTo(500);
+    const firstBaseline = layout.fontSize * 1.13 * (1 - 0.222);
+    const lastBaseline = firstBaseline + 2 * layout.fontSize * 1.13 * 1.5;
+    expect(layout.top + firstBaseline - layout.fontSize * 0.74).toBeCloseTo(80);
+    expect(layout.top + lastBaseline + layout.fontSize * 0.02).toBeCloseTo(280);
+  });
+
+  it('uses the detected ink height without shrinking the em size to the box height', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
         element({
@@ -683,7 +744,8 @@ describe('compilePosterReconstruction', () => {
     const heading = compiled.project.elements[0];
     expect(heading).toMatchObject({ type: 'text', text: 'ACTIVITIES INCLUDE:' });
     if (heading?.type !== 'text') throw new Error('Expected flat text.');
-    expect(heading.fontSize).toBeLessThan(80);
+    expect(heading.fontSize).toBeGreaterThan(80);
+    expect((heading.width ?? 0) * heading.scaleX).toBeCloseTo(250);
   });
 
   it('includes detected line spacing when limiting multi-line text height', async () => {
@@ -710,7 +772,8 @@ describe('compilePosterReconstruction', () => {
 
     const body = compiled.project.elements[0];
     if (body?.type !== 'text') throw new Error('Expected flat text.');
-    expect(body.fontSize).toBeCloseTo(47);
+    expect(body.fontSize).toBeGreaterThan(40);
+    expect(body.fontSize).toBeLessThan(55);
   });
 
   it('keeps a clipped outlined circle native, circular, and outside the canvas', async () => {
