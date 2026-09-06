@@ -457,6 +457,13 @@ async function compileImageRegion(input: {
   }
 
   if (replacement) {
+    if (item.imageRole === 'logo') {
+      const scale = Math.min(box.width / Math.max(1, replacement.width), box.height / Math.max(1, replacement.height));
+      return {
+        dataUrl: replacement.src, width: replacement.width, height: replacement.height,
+        layout: { left: box.left + (box.width - replacement.width * scale) / 2, top: box.top + (box.height - replacement.height * scale) / 2, scaleX: scale, scaleY: scale },
+      };
+    }
     if (item.imageRole === 'person' && item.imageMask === 'none') {
       if (replacement.credit?.trim()) {
         warnings.push(`Replacement for “${item.label}”: ${replacement.credit.trim()}.`);

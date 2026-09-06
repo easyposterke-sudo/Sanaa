@@ -96,6 +96,22 @@ function plan(elements: ReconstructionElement[]): PosterReconstructionPlan {
 }
 
 describe('compilePosterReconstruction', () => {
+  it('contains a supplied wide logo without cropping its source or distorting it', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([element({key:'logo', kind:'image_region', imageRole:'logo', box:{x:.1,y:.1,width:.1,height:.1}})]),
+      reference: {dataUrl:'data:image/png;base64,unused',width:1000,height:1000},
+      referenceGuideOpacity:0,
+      imageReplacements:{logo:{src:'data:image/png;base64,original-logo',width:400,height:100}},
+    });
+    const logo = compiled.project.elements[0]!;
+    expect(logo.type).toBe('image');
+    if (logo.type !== 'image') throw new Error('Expected image');
+    expect(logo.src).toBe('data:image/png;base64,original-logo');
+    expect(logo.scaleX).toBe(.25);
+    expect(logo.scaleY).toBe(.25);
+    expect(logo.left).toBe(100);
+    expect(logo.top).toBe(137.5);
+  });
   it('creates editable layers at source-relative coordinates and suggests fields', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([

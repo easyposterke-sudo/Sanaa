@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster } from '../../../shared/ai/posterCreationChecks';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
@@ -49,8 +50,20 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       const replacements: Record<string, ReconstructionImageReplacement> = {};
       for (const [role, asset] of Object.entries(assets)) replacements[`asset_${role}`] = { src: asset.dataUrl, width: asset.width, height: asset.height };
       setStatus(`Designing with reference ${referenceId}…`);
-      const response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
+      let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
+      response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
+      const missing = [...missingPosterFacts(response.plan, prompt), ...posterCreationLayoutIssues(response.plan)];
+      if (missing.length) {
+        setStatus('Restoring missing service details…');
+        response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, seed: `${creation.seed}-repair`, prompt: `${prompt}\nMandatory correction: the last draft omitted these supplied facts: ${missing.join('; ')}. Include all of them as visible editable text inside their information cards. Do not add duplicate titles or invitation slogans.` } });
+        response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
+      }
+      const stillMissing = [...missingPosterFacts(response.plan, prompt), ...posterCreationLayoutIssues(response.plan)];
+      if (stillMissing.length) throw new Error(`The draft is missing required details: ${stillMissing.join('; ')}. Your canvas has not been replaced. Please retry.`);
       const compile = async (plan: PosterReconstructionPlan) => {
+        plan = prepareCreatedPoster(plan, prompt, !!assets.logo);
+        const absent = [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan)];
+        if (absent.length) throw new Error(`Missing required details: ${absent.join('; ')}`);
         // Never allow the blank canvas or review screenshot to become an image asset.
         const safePlan = { ...plan, elements: plan.elements.filter(item => item.kind !== 'image_region' || replacements[item.key] || (item.imageRole === 'icon' && item.iconName !== 'none')) };
         return compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements });
