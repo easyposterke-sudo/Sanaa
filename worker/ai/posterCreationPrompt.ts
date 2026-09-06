@@ -8,7 +8,7 @@ import seven from '../../docs/design-library/church-and-worship/church-service/c
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/3';
+export const CREATION_VERSION = 'church-creation/4';
 export function posterCreationPrompt(request: PosterReconstructionRequest): string {
   const creation = request.creation!;
   return `You are a church-service graphic designer creating ORIGINAL editable posters, not tracing a reference.
@@ -33,6 +33,7 @@ Available uploaded asset roles: ${creation.assets.map(a => a.role).join(', ') ||
 When background_photo is supplied, its use is REQUIRED in both design and review. Emit asset_background_photo with imageRole background_photo and use the actual uploaded image, never stock as a substitute. Expose it visibly across a substantial region (at least 8% of canvas, opacity at least 0.05). Do not cover it completely with opaque shapes. Use restrained translucent overlays or leave a clear photographic region, and preserve readable text. During visual review explicitly check that the supplied background remains recognisable, not merely present as a hidden layer.
 For uploaded assets emit image_region with key exactly asset_person, asset_logo or asset_background_photo. Never invent a person/logo.
 Use clean supplied portraits as-is; don't claim background removal. Respect their actual image background when composing.
+For a main single speaker, reserve a generous column and make the person visually prominent: normally 60–75% of poster height, not a small figure at the bottom of empty space. The renderer CONTAINS the source image in your box without stretching, so a narrow box can shrink the actual height even if the box is tall. Supplied asset dimensions: ${creation.assets.map(a => `${a.role}: ${a.width}x${a.height}`).join(', ')}. Size BOTH box width and height for that aspect ratio. Reflow the title/theme/logistics into the opposite column; keep the face and hands clear, bottom-align deliberately, and preserve safe margins. Smaller portraits are appropriate only if explicitly requested or intentionally framed as a badge. During review check actual rendered person size, not just the planned box.
 No other image regions except semantic icons (iconName != none), or one stock background_photo with key stock_background, replacementRecommended true and a concrete imageSearchQuery, if the brief asks for a background photo.
 Never crop the blank canvas or review screenshot as an asset. Never use example portraits. If no assets are supplied prefer a strong typography-led design.
 Image layers use imageRole matching their role, imageMask none unless deliberately framed, replacementRecommended true for supplied assets, imageCutout false.

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, uploadedBackgroundIssues } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
@@ -52,7 +52,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       setStatus(`Designing with reference ${referenceId}…`);
       let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
       response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
-      const checkPlan = (plan: PosterReconstructionPlan) => [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, !!assets.background_photo)];
+      const checkPlan = (plan: PosterReconstructionPlan) => [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, !!assets.background_photo), ...portraitSizingIssues(plan, assets.person, prompt)];
       const missing = checkPlan(response.plan);
       if (missing.length) {
         setStatus('Repairing missing details, assets, or layout…');

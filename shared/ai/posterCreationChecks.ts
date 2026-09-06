@@ -68,6 +68,18 @@ export function uploadedBackgroundIssues(plan: PosterReconstructionPlan, require
 }
 
 /** Creation-only safeguards; reference reconstruction keeps its original layer ordering. */
+export function portraitSizingIssues(plan: PosterReconstructionPlan, source: {width: number; height: number} | undefined, prompt: string, canvas = {width:1080,height:1350}): string[] {
+  if (!source || /\b(small|subtle|thumbnail|badge)\s+(portrait|photo|speaker|headshot)\b/i.test(prompt)) return [];
+  const portraits = plan.elements.filter(item => item.kind === 'image_region' && item.imageRole === 'person');
+  if (portraits.length !== 1) return [];
+  const portrait = portraits[0]!;
+  if (portrait.imageMask !== 'none') return [];
+  const scale = Math.min(portrait.box.width*canvas.width/source.width, portrait.box.height*canvas.height/source.height);
+  const visibleHeight = source.height*scale/canvas.height;
+  if (visibleHeight >= .52) return [];
+  return ['Enlarge the main speaker: the uploaded image fits to less than 52% of poster height. Reserve a generous portrait column (typically 60–75% height), widen it enough for the source aspect ratio, keep the bottom anchor, and reflow the title/logistics into the other column without overlap. Do not stretch the person or crop the head/hands.'];
+}
+
 export function prepareCreatedPoster(plan: PosterReconstructionPlan, prompt: string, hasLogo: boolean): PosterReconstructionPlan {
   let elements = structuredClone(plan.elements);
   const title = (text: string) => /^sunday(?: worship)? service$/.test(normalize(text));

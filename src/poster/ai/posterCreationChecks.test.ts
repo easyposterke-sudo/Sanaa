@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
 import { createFallbackReconstructionPlan, type ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 
 const brief = 'I would like a poster for a sunday Service for a church called Christ Ekklesia fellowship chapel. Lead pastor is Pst David Kituyi. First service starts at 8am and second service starts at 9:30am. the church is located at Chapchap 300m from Kabarak University gate. This is a poster for 23rd August 2026. The theme is God the Loving Father.';
@@ -9,6 +9,14 @@ function item(key: string, text: string, overrides: Partial<ReconstructionElemen
 const complete = [item('church','Christ Ekklesia Fellowship Chapel'), item('pastor','Pst David Kituyi'), item('date','23 AUG 2026'), item('time','First service 8:00 AM\nSecond service 9:30 AM'), item('venue','Chapchap 300m from Kabarak University gate'), item('theme','God the Loving Father')];
 const plan = (elements: ReconstructionElement[]) => ({ ...createFallbackReconstructionPlan(), elements });
 describe('church generation regressions', () => {
+  it('checks fitted person height instead of trusting a tall but narrow portrait box', () => {
+    const person = item('asset_person','',{kind:'image_region',imageRole:'person',imageMask:'none',box:{x:.05,y:.2,width:.25,height:.72}});
+    const source={width:600,height:1000};
+    expect(portraitSizingIssues(plan([person]),source,brief)).toHaveLength(1);
+    expect(portraitSizingIssues(plan([{...person,box:{...person.box,width:.48}}]),source,brief)).toEqual([]);
+    expect(portraitSizingIssues(plan([person]),source,'Use a small portrait')).toEqual([]);
+    expect(portraitSizingIssues(plan([person]),undefined,brief)).toEqual([]);
+  });
   it('requires a supplied background through generation and review, but not when absent', () => {
     const background = item('asset_background_photo','',{kind:'image_region',imageRole:'background_photo',box:{x:0,y:0,width:1,height:1}});
     expect(uploadedBackgroundIssues(plan([]), false)).toEqual([]);

@@ -20,6 +20,8 @@ Both modes use the existing authenticated, bounded, quota-controlled `/api/ai/po
 
 ## Reference reconstruction
 
+For a single unmasked speaker upload, creation checks the fitted image height using source dimensions and the portrait box. Undersized main portraits trigger the existing repair/rejection path in design and review. The target is normally 60–75% of canvas height, with a 52% minimum guard; explicitly requested small portraits and masked badges are exempt. This measures the image bounds, not detected human anatomy, so transparent padding in the source can still affect perceived size. The compiler continues to preserve aspect ratio without stretching.
+
 It converts a flattened PNG, JPEG, or WebP reference into an editable,
 reusable template while keeping all model output behind validated contracts.
 
