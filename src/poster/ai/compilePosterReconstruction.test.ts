@@ -670,7 +670,7 @@ describe('compilePosterReconstruction', () => {
       textAlign: 'left',
       targetBox: { left: 100, top: 200, width: 300, height: 100 },
       targetVisibleGlyphHeight: 100,
-      useDetectedBoxHeight: true,
+      constrainToDetectedBox: true,
       measureLine: (line, fontSize) => ({
         advanceWidth: line.length * fontSize * 0.5,
         inkLeft: 0,
@@ -700,7 +700,7 @@ describe('compilePosterReconstruction', () => {
       textAlign: 'center',
       targetBox: { left: 50, top: 80, width: 500, height: 200 },
       targetVisibleGlyphHeight: 80,
-      useDetectedBoxHeight: true,
+      constrainToDetectedBox: true,
       measureLine: (line, fontSize) => ({
         advanceWidth: line.length * fontSize * 0.55,
         inkLeft: 0,
@@ -719,7 +719,60 @@ describe('compilePosterReconstruction', () => {
     expect(layout.top + lastBaseline + layout.fontSize * 0.02).toBeCloseTo(280);
   });
 
-  it('uses the detected ink height without shrinking the em size to the box height', async () => {
+  it('does not enlarge text to fill a loose detection box', () => {
+    const layout = fitDetectedTextToInkBox({
+      lines: ['PRESENTS'],
+      fontFamily: 'Test Sans',
+      fontWeight: '400',
+      fontStyle: 'normal',
+      charSpacing: 0,
+      lineHeight: 1.16,
+      textAlign: 'center',
+      targetBox: { left: 100, top: 200, width: 600, height: 300 },
+      targetVisibleGlyphHeight: 60,
+      constrainToDetectedBox: true,
+      measureLine: (line, fontSize) => ({
+        advanceWidth: line.length * fontSize * 0.5,
+        inkLeft: 0,
+        inkRight: line.length * fontSize * 0.5,
+        ascent: fontSize * 0.72,
+        descent: fontSize * 0.02,
+      }),
+    });
+
+    expect(layout.fontSize).toBeCloseTo(60 / 0.74);
+    expect(layout.fontSize).toBeLessThan(300 / 0.74);
+    expect(layout.scaleX).toBe(1);
+    expect(layout.width).toBe(600);
+  });
+
+  it('shrinks an over-wide line uniformly without horizontal distortion', () => {
+    const layout = fitDetectedTextToInkBox({
+      lines: ['VERY WIDE HEADING'],
+      fontFamily: 'Test Sans',
+      fontWeight: '700',
+      fontStyle: 'normal',
+      charSpacing: 0,
+      lineHeight: 1.16,
+      textAlign: 'center',
+      targetBox: { left: 20, top: 30, width: 240, height: 100 },
+      targetVisibleGlyphHeight: 74,
+      constrainToDetectedBox: true,
+      measureLine: (line, fontSize) => ({
+        advanceWidth: line.length * fontSize * 0.6,
+        inkLeft: 0,
+        inkRight: line.length * fontSize * 0.6,
+        ascent: fontSize * 0.72,
+        descent: fontSize * 0.02,
+      }),
+    });
+
+    expect(layout.fontSize).toBeLessThan(74 / 0.74);
+    expect(layout.scaleX).toBe(1);
+    expect(layout.width).toBeCloseTo(240);
+  });
+
+  it('reduces an over-wide detected heading uniformly instead of stretching it', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
         element({
@@ -744,7 +797,8 @@ describe('compilePosterReconstruction', () => {
     const heading = compiled.project.elements[0];
     expect(heading).toMatchObject({ type: 'text', text: 'ACTIVITIES INCLUDE:' });
     if (heading?.type !== 'text') throw new Error('Expected flat text.');
-    expect(heading.fontSize).toBeGreaterThan(80);
+    expect(heading.fontSize).toBeLessThan(80);
+    expect(heading.scaleX).toBe(1);
     expect((heading.width ?? 0) * heading.scaleX).toBeCloseTo(250);
   });
 

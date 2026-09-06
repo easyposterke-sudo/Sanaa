@@ -612,7 +612,7 @@ function compileTextElement(
         textAlign: item.textAlign,
         targetBox: inkBox,
         targetVisibleGlyphHeight: measuredSize,
-        useDetectedBoxHeight: item.visibleLineCount > 0 && item.visibleLineCount === lineCount,
+        constrainToDetectedBox: item.visibleLineCount > 0 && item.visibleLineCount === lineCount,
       })
     : legacyDetectedTextLayout({
         lines,
@@ -661,8 +661,10 @@ function compileTextElement(
 /**
  * Fits the visible glyph ink to the AI-detected box. The detector reports
  * visible glyph height, whereas Fabric `fontSize` is an em-square size. Using
- * real ascent/descent and bearing metrics here avoids the systematic 20–30%
- * undersizing caused by treating those two measurements as interchangeable.
+ * real ascent/descent and bearing metrics avoids the systematic undersizing
+ * caused by treating those two measurements as interchangeable. The measured
+ * glyph height remains the sizing target; the detected box is only a maximum
+ * constraint, because a detection box can legitimately include breathing room.
  */
 export function fitDetectedTextToInkBox(input: {
   lines: string[];
@@ -674,7 +676,7 @@ export function fitDetectedTextToInkBox(input: {
   textAlign: 'left' | 'center' | 'right';
   targetBox: PixelBox;
   targetVisibleGlyphHeight: number;
-  useDetectedBoxHeight: boolean;
+  constrainToDetectedBox: boolean;
   measureLine?: (line: string, fontSize: number) => TextLineMetrics;
 }): DetectedTextLayout {
   const lines = input.lines.length > 0 ? input.lines : [''];
@@ -697,38 +699,47 @@ export function fitDetectedTextToInkBox(input: {
   const boxFittedFontSize = input.targetBox.height * TEXT_METRIC_SAMPLE_SIZE / sampleInkHeight;
   const measuredGlyphFontSize = Math.max(1, input.targetVisibleGlyphHeight)
     * TEXT_METRIC_SAMPLE_SIZE / tallestLineInk;
-  const fontSize = Math.max(
-    6,
-    input.useDetectedBoxHeight ? boxFittedFontSize : measuredGlyphFontSize,
-  );
+  const heightLimitedFontSize = input.constrainToDetectedBox
+    ? Math.min(measuredGlyphFontSize, boxFittedFontSize)
+    : measuredGlyphFontSize;
 
+  const heightScale = heightLimitedFontSize / TEXT_METRIC_SAMPLE_SIZE;
+  const heightFittedMetrics = sampleMetrics.map((metric) => scaleTextLineMetrics(metric, heightScale));
+  const maximumAdvance = Math.max(1, ...heightFittedMetrics.map((metric) => metric.advanceWidth));
+  const availableWidth = Math.max(12, input.targetBox.width);
+  const provisionalInkBounds = horizontalInkBounds(
+    heightFittedMetrics,
+    availableWidth,
+    input.textAlign,
+  );
+  const provisionalInkWidth = Math.max(1, provisionalInkBounds.right - provisionalInkBounds.left);
+  // Preserve the font's natural aspect ratio. If the chosen font is wider than
+  // the detected region, reduce fontSize uniformly instead of applying scaleX.
+  const widthFit = Math.min(
+    1,
+    Math.max(1, availableWidth - 2) / maximumAdvance,
+    availableWidth / Math.max(1, maximumAdvance + heightLimitedFontSize * 0.015),
+    availableWidth / provisionalInkWidth,
+  );
+  const fontSize = Math.max(6, heightLimitedFontSize * widthFit);
   const scale = fontSize / TEXT_METRIC_SAMPLE_SIZE;
   const metrics = sampleMetrics.map((metric) => scaleTextLineMetrics(metric, scale));
-  const maximumAdvance = Math.max(1, ...metrics.map((metric) => metric.advanceWidth));
-  const wrapGuard = Math.max(2, fontSize * 0.015);
-  const minimumTextboxWidth = maximumAdvance + wrapGuard;
-  const provisionalInkBounds = horizontalInkBounds(metrics, minimumTextboxWidth, input.textAlign);
-  const provisionalInkWidth = Math.max(1, provisionalInkBounds.right - provisionalInkBounds.left);
-  const desiredScaleX = input.targetBox.width / provisionalInkWidth;
-  const distortionLimitedScaleX = clamp(desiredScaleX, 0.5, 1.5);
-  // A Fabric Textbox wraps from its unscaled local width. When expanding text
-  // horizontally, cap the scale so the local box still has room for one line.
-  const wrapSafeScaleX = input.targetBox.width / minimumTextboxWidth;
-  const scaleX = Math.max(0.1, Math.min(distortionLimitedScaleX, wrapSafeScaleX));
-  const width = Math.max(12, input.targetBox.width / scaleX);
+  const finalMaximumAdvance = Math.max(1, ...metrics.map((metric) => metric.advanceWidth));
+  const finalWrapGuard = Math.max(2, fontSize * 0.015);
+  const width = Math.max(availableWidth, finalMaximumAdvance + finalWrapGuard);
   const horizontalBounds = horizontalInkBounds(metrics, width, input.textAlign);
-  const renderedInkWidth = Math.max(1, horizontalBounds.right - horizontalBounds.left) * scaleX;
+  const renderedInkWidth = Math.max(1, horizontalBounds.right - horizontalBounds.left);
   const horizontalSlack = Math.max(0, input.targetBox.width - renderedInkWidth);
   const horizontalAnchor = input.textAlign === 'center' ? 0.5 : input.textAlign === 'right' ? 1 : 0;
   const desiredInkLeft = input.targetBox.left + horizontalSlack * horizontalAnchor;
   const verticalBounds = verticalInkBounds(metrics, input.lineHeight, fontSize);
 
   return {
-    left: desiredInkLeft - horizontalBounds.left * scaleX,
+    left: desiredInkLeft - horizontalBounds.left,
     top: input.targetBox.top - verticalBounds.top,
     width,
     fontSize,
-    scaleX,
+    scaleX: 1,
   };
 }
 
