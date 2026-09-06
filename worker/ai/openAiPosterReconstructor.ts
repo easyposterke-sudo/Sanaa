@@ -5,6 +5,7 @@ import {
   type PosterReconstructionRequest,
 } from '../../shared/ai/posterReconstruction';
 import { OpenAiPlannerError } from './openAiPosterPlanner';
+import { posterCreationPrompt } from './posterCreationPrompt';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const POSTER_RECONSTRUCTION_TIMEOUT_MS = 110_000;
@@ -57,7 +58,7 @@ export async function reconstructPosterWithOpenAI(input: {
   const userContent: OpenAiInputContent[] = [
     {
       type: 'input_text',
-      text: `Reconstruct this ${input.request.reference.width} x ${input.request.reference.height} poster as an editable EasyPoster draft.`,
+      text: input.request.creation?.prompt ?? `Reconstruct this ${input.request.reference.width} x ${input.request.reference.height} poster as an editable EasyPoster draft.`,
     },
     {
       type: 'input_image',
@@ -65,6 +66,10 @@ export async function reconstructPosterWithOpenAI(input: {
       detail: 'high',
     },
   ];
+  for (const asset of input.request.creation?.assets ?? []) {
+    userContent.push({ type: 'input_text', text: `Supplied asset: ${asset.role}` });
+    userContent.push({ type: 'input_image', image_url: asset.dataUrl, detail: 'high' });
+  }
   if (input.request.fontCatalog?.entries.length) {
     userContent.push({
       type: 'input_text',
@@ -89,7 +94,7 @@ export async function reconstructPosterWithOpenAI(input: {
         input: [
           {
             role: 'system',
-            content: [{ type: 'input_text', text: SYSTEM_PROMPT }],
+            content: [{ type: 'input_text', text: input.request.creation ? posterCreationPrompt(input.request) : SYSTEM_PROMPT }],
           },
           {
             role: 'user',

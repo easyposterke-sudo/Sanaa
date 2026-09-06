@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PosterPromptCreator } from './PosterPromptCreator';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type {
   PosterReconstructionPlan,
@@ -48,6 +49,7 @@ interface TemplateCreatorWizardProps {
 export function TemplateCreatorWizard({ open, onClose, mode = 'template', onApply }: TemplateCreatorWizardProps) {
   useModalScrollLock(open);
   const [reference, setReference] = useState<PreparedPosterImage | null>(null);
+  const [importExisting, setImportExisting] = useState(false);
   const [canvasSize, setCanvasSize] = useState<CanvasSizeSelection | null>(null);
   const [customWidth, setCustomWidth] = useState('1080');
   const [customHeight, setCustomHeight] = useState('1080');
@@ -68,6 +70,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
   const [preparingReplacement, setPreparingReplacement] = useState<string | null>(null);
 
   if (!open) return null;
+  if (mode === 'poster' && !importExisting) return <PosterPromptCreator onClose={onClose} onImport={() => setImportExisting(true)} onApply={draft => onApply(draft, { source: 'openai', model: null })} />;
 
   const creatingPoster = mode === 'poster';
   const canvasSizePresets = creatingPoster
@@ -256,6 +259,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
       <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl dark:border-zinc-700 dark:bg-zinc-900">
         <div className="flex items-start justify-between gap-2 border-b border-zinc-200 px-3 py-3 sm:gap-4 sm:px-5 sm:py-4 dark:border-zinc-700">
           <div className="min-w-0">
+            {creatingPoster && <button type="button" disabled={submitting} onClick={() => setImportExisting(false)} className="mb-2 text-sm text-violet-600 underline">Create from a prompt instead</button>}
             <h2 id="poster-reconstruction-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
               {creatingPoster ? 'Create an editable poster' : 'Create a template from a flat poster'}
             </h2>

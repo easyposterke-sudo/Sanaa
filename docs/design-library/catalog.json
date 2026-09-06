@@ -5,7 +5,10 @@
       "id": "church-and-worship",
       "label": "Church and Worship",
       "subcategories": [
-        { "id": "church-service", "label": "Church Service" }
+        {
+          "id": "church-service",
+          "label": "Church Service"
+        }
       ]
     }
   ],
@@ -19,7 +22,17 @@
       "annotation": "church-and-worship/church-service/church-service-001/reference.md",
       "editableSource": null,
       "status": "annotated-user-selected",
-      "tags": ["sunday-service", "congregation-photograph", "two-services", "livestream-platforms", "specific-date", "warm-gradient", "oversized-typography", "two-column-details", "no-theme"],
+      "tags": [
+        "sunday-service",
+        "congregation-photograph",
+        "two-services",
+        "livestream-platforms",
+        "specific-date",
+        "warm-gradient",
+        "oversized-typography",
+        "two-column-details",
+        "no-theme"
+      ],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     },
     {
@@ -31,7 +44,149 @@
       "annotation": "church-and-worship/church-service/church-service-002/reference.md",
       "editableSource": null,
       "status": "annotated-user-selected",
-      "tags": ["sunday-service", "single-pastor", "central-cutout-portrait", "worship-background", "bottom-fade", "blue-palette", "serif-script-pairing", "outlined-script", "glowing-nameplates", "single-service", "specific-date", "short-venue", "no-logo-in-reference"],
+      "tags": [
+        "sunday-service",
+        "single-pastor",
+        "central-cutout-portrait",
+        "worship-background",
+        "bottom-fade",
+        "blue-palette",
+        "serif-script-pairing",
+        "outlined-script",
+        "glowing-nameplates",
+        "single-service",
+        "specific-date",
+        "short-venue",
+        "no-logo-in-reference"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-003",
+      "title": "Black and gold Sunday service — shared initial with framed logistics",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-003/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-003/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "sunday-service",
+        "warm-crowd-photograph",
+        "black-gold-white",
+        "shared-initial-headline",
+        "display-serif",
+        "recurring-service",
+        "single-service",
+        "framed-logistics",
+        "overlapping-panels",
+        "phone-contact",
+        "social-handle",
+        "no-speaker-portrait",
+        "no-logo-in-reference"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-004",
+      "title": "White and maroon Sunday service — layered speaker with paired schedule circles",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-004/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-004/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "sunday-service",
+        "white-maroon",
+        "pale-worship-background",
+        "central-speaker-cutout",
+        "layered-photographs",
+        "bold-sans-script-pairing",
+        "white-outlined-script",
+        "overlapping-schedule-circles",
+        "specific-date",
+        "single-service",
+        "venue-and-phone",
+        "website",
+        "no-logo-in-reference",
+        "no-speaker-label-in-reference"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-005",
+      "title": "Blue Sunday service — left speaker with white logistics and contact cards",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-005/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-005/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "sunday-service",
+        "blue-worship-background",
+        "left-speaker-cutout",
+        "right-headline",
+        "matching-bold-title-fonts",
+        "optional-theme",
+        "white-rounded-cards",
+        "large-day-number",
+        "three-column-logistics",
+        "contact-strip",
+        "logo-name-group",
+        "optional-doves"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-006",
+      "title": "Pink and orange Sunday service — expressive initial with minimal schedule",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-006/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-006/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "sunday-service",
+        "typography-led",
+        "no-featured-speaker",
+        "white-background",
+        "faint-congregation-photograph",
+        "gradient-initial",
+        "script-sans-pairing",
+        "pink-orange-navy",
+        "theme-programme-band",
+        "two-column-schedule",
+        "centred-venue-contact",
+        "optional-additional-services"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-007",
+      "title": "Orange and olive Sunday service — gradient field with contrasting schedule cards",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-007/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-007/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "sunday-service",
+        "no-featured-speaker",
+        "orange-brown-olive-gradient",
+        "subdued-upper-worship-imagery",
+        "stacked-bold-headline",
+        "optional-theme",
+        "contrasting-schedule-cards",
+        "large-day-number",
+        "optional-contour-lines",
+        "downward-chevrons",
+        "venue-backing",
+        "contact-footer"
+      ],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     }
   ]

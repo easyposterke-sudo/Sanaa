@@ -205,6 +205,19 @@ export const PosterReconstructionRequestSchema = z
       })
       .strict(),
     quality: z.enum(['quality']),
+    creation: z.object({
+      prompt: z.string().trim().min(10).max(4000),
+      seed: z.string().min(1).max(80),
+      referenceId: z.number().int().min(1).max(7),
+      phase: z.enum(['design', 'review']),
+      previousPlan: PosterReconstructionPlanSchema.optional(),
+      assets: z.array(z.object({
+        role: z.enum(['person', 'logo', 'background_photo']),
+        dataUrl: z.string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
+        width: z.number().int().min(1).max(4096),
+        height: z.number().int().min(1).max(4096),
+      }).strict()).max(3),
+    }).strict().refine(value => value.phase !== 'review' || !!value.previousPlan, 'Review requires a draft').optional(),
     fontCatalog: ReconstructionFontCatalogSchema.optional(),
   })
   .strict();

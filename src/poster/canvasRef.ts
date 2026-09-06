@@ -23,11 +23,12 @@ export async function capturePosterThumbnail(
   canvasWidth: number,
   canvasHeight: number,
   canvasBackground: CanvasBackground,
+  maxWidth = THUMB_MAX_W,
 ): Promise<string | null> {
   const fabricCanvas = getFabricCanvasRef();
   if (!fabricCanvas) return null;
 
-  const scale = Math.min(1, THUMB_MAX_W / canvasWidth);
+  const scale = Math.min(1, maxWidth / canvasWidth);
   const w = Math.round(canvasWidth * scale);
   const h = Math.round(canvasHeight * scale);
 

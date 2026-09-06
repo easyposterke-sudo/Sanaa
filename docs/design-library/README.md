@@ -26,4 +26,4 @@ Prefer diverse compositions and content challenges over many near-identical exam
 
 ## Current scope
 
-Two user-selected, annotated references. Runtime retrieval, canvas generation, image search, visual critique, and conversational editing still need implementation. Category IDs here belong to this documentation library and do not change application or database categories.
+Seven user-selected, annotated references. The first prompt prototype now loads these annotations and the layout skill, compiles editable canvas layers, optionally fetches a Pexels background, and attempts one rendered review. Reference selection is currently based on portrait availability or user choice; visual reference-image retrieval, richer image selection, and conversational editing remain future work. See [the workflow](../AI_POSTER_WORKFLOW.md). Category IDs here belong to this documentation library and do not change application or database categories.

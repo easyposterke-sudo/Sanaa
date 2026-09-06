@@ -1,6 +1,23 @@
 # AI template creator workflow
 
-EasyPoster's remaining AI creation product is **Create template from poster**.
+EasyPoster includes a first **Create with AI** prompt prototype for Church and Worship → Church Service, alongside **Create template from poster**.
+
+## Prompt prototype
+
+In the poster editor, open Create with AI. Enter exact wording and a visual brief, optionally upload a speaker photo, logo, or background, and choose a direction or let the app select a fresh family. Output is currently 1080 × 1350.
+
+The Worker retrieves one of the seven actual Markdown annotations from `docs/design-library`, adds the runtime layout skill, and requests an original editable manifest. Example images and identities are not used as generated artwork. This initial retrieval uses portrait availability or an explicit style choice, not semantic ranking. A new seed varies each request; the automatic choice avoids immediately repeating the previous family within the open dialog.
+
+The browser resolves supplied assets and optionally the first Pexels background match, compiles native editable layers, opens the draft, captures the rendered canvas including its background, and requests one correction pass. A failed review retains the first draft. The review is another quota-counted model request. Review quality is not guaranteed; inspect the result before publishing.
+
+Save existing work first: generation opens a new document in the current editor. The result includes a preview and any warnings. Existing image reconstruction remains available through “Recreate an existing poster instead”. Follow-up chat editing is not included in this first prototype.
+
+Local generation requires `OPENAI_API_KEY` in the ignored `.dev.vars`. There is no fake generation fallback when the key is absent. Optional stock search uses the existing `PEXELS_API_KEY`. Upload a transparent portrait for cutout layouts; this flow does not remove backgrounds automatically. No deployment or real model benchmark is implied by the local prototype.
+
+Both modes use the existing authenticated, bounded, quota-controlled `/api/ai/poster-reconstruction` endpoint. An optional validated `creation` object selects original design or rendered review; cache keys include the brief, seed, reference choice, assets, review manifest, and creation version. Only the validated manifest is compiled; no model-generated executable code is accepted.
+
+## Reference reconstruction
+
 It converts a flattened PNG, JPEG, or WebP reference into an editable,
 reusable template while keeping all model output behind validated contracts.
 
