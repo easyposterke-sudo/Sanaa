@@ -347,7 +347,16 @@ function compilePathElement(
   >,
   warnings: string[],
 ): PosterPathElement {
-  const pathUsage = item.pathUsage === 'not_applicable'
+  // A filled path with no drawable stroke cannot be an open stroke: compiling
+  // it literally would create an invisible layer. Repair only this impossible
+  // combination; valid decorative strokes keep their existing behavior.
+  const repairsInvisibleFilledPath =
+    item.pathUsage === 'open_stroke' &&
+    item.fill !== null &&
+    (item.stroke === null || item.strokeWidthRatio <= 0);
+  const pathUsage = repairsInvisibleFilledPath
+    ? 'closed_fill'
+    : item.pathUsage === 'not_applicable'
     ? (item.pathClosed ? 'closed_fill' : 'open_stroke')
     : item.pathUsage;
   const pathClosed = pathUsage === 'closed_fill';
@@ -363,7 +372,11 @@ function compilePathElement(
   if (item.pathPoints.length < minimumPoints) {
     warnings.push(`“${item.label}” did not contain enough path anchors, so a rectangular path was used.`);
   }
-  if (item.pathUsage !== 'not_applicable' && item.pathClosed !== pathClosed) {
+  if (repairsInvisibleFilledPath) {
+    warnings.push(
+      `“${item.label}” supplied a fill but no visible stroke, so it was repaired as a closed filled path.`,
+    );
+  } else if (item.pathUsage !== 'not_applicable' && item.pathClosed !== pathClosed) {
     warnings.push(
       `“${item.label}” had conflicting path geometry; its ${pathUsage === 'closed_fill' ? 'filled region was closed' : 'standalone stroke was kept open'}.`,
     );

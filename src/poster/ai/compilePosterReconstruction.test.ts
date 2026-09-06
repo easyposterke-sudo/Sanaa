@@ -1189,6 +1189,50 @@ describe('compilePosterReconstruction', () => {
     );
   });
 
+  it('repairs an otherwise invisible filled band that was misclassified as an open stroke', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({
+          key: 'yellow_footer_band',
+          kind: 'path',
+          label: 'Yellow curved footer band',
+          box: { x: 0, y: 0.72, width: 1, height: 0.28 },
+          fill: '#f3cf24',
+          stroke: null,
+          strokeWidthRatio: 0,
+          pathUsage: 'open_stroke',
+          pathClosed: false,
+          pathPoints: [
+            { x: 0, y: 0.88, smooth: false },
+            { x: 0.38, y: 0.96, smooth: true },
+            { x: 0.72, y: 0.18, smooth: true },
+            { x: 1, y: 0, smooth: false },
+            { x: 1, y: 1, smooth: false },
+            { x: 0, y: 1, smooth: false },
+          ],
+        }),
+      ]),
+      reference: {
+        dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        width: 904,
+        height: 1280,
+      },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'path',
+      fill: '#f3cf24',
+      fillOpacity: 1,
+      stroke: undefined,
+      strokeWidth: 0,
+      closed: true,
+    });
+    expect(compiled.warnings).toContain(
+      '“Yellow curved footer band” supplied a fill but no visible stroke, so it was repaired as a closed filled path.',
+    );
+  });
+
   it('removes fill and closure from a standalone decorative stroke', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
