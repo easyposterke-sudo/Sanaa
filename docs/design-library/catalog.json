@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "categories": [
+    {
+      "id": "church-and-worship",
+      "label": "Church and Worship",
+      "subcategories": [
+        { "id": "church-service", "label": "Church Service" }
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "church-service-001",
+      "title": "Warm gradient Sunday service — photograph with split information layout",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-001/reference.jpg",
+      "annotation": "church-and-worship/church-service/church-service-001/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": ["sunday-service", "congregation-photograph", "two-services", "livestream-platforms", "specific-date", "warm-gradient", "oversized-typography", "two-column-details", "no-theme"],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    }
+  ]
+}
