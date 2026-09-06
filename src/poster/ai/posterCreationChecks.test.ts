@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues } from '../../../shared/ai/posterCreationChecks';
 import { createFallbackReconstructionPlan, type ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 
 const brief = 'I would like a poster for a sunday Service for a church called Christ Ekklesia fellowship chapel. Lead pastor is Pst David Kituyi. First service starts at 8am and second service starts at 9:30am. the church is located at Chapchap 300m from Kabarak University gate. This is a poster for 23rd August 2026. The theme is God the Loving Father.';
@@ -9,6 +9,18 @@ function item(key: string, text: string, overrides: Partial<ReconstructionElemen
 const complete = [item('church','Christ Ekklesia Fellowship Chapel'), item('pastor','Pst David Kituyi'), item('date','23 AUG 2026'), item('time','First service 8:00 AM\nSecond service 9:30 AM'), item('venue','Chapchap 300m from Kabarak University gate'), item('theme','God the Loving Father')];
 const plan = (elements: ReconstructionElement[]) => ({ ...createFallbackReconstructionPlan(), elements });
 describe('church generation regressions', () => {
+  it('requires a supplied background through generation and review, but not when absent', () => {
+    const background = item('asset_background_photo','',{kind:'image_region',imageRole:'background_photo',box:{x:0,y:0,width:1,height:1}});
+    expect(uploadedBackgroundIssues(plan([]), false)).toEqual([]);
+    expect(uploadedBackgroundIssues(plan([]), true)).toHaveLength(1);
+    expect(uploadedBackgroundIssues(plan([background]), true)).toEqual([]);
+    expect(uploadedBackgroundIssues(plan([{...background,key:'stock_background'}]), true)).toHaveLength(1);
+    expect(uploadedBackgroundIssues(plan([{...background,opacity:0}]), true)).toHaveLength(1);
+    const cover = item('cover','',{kind:'rect',zIndex:2,box:{x:0,y:0,width:1,height:1}});
+    expect(uploadedBackgroundIssues(plan([background,cover]), true)).toHaveLength(1);
+    expect(uploadedBackgroundIssues(plan([background,{...cover,opacity:.5}]), true)).toEqual([]);
+    expect(uploadedBackgroundIssues(plan([background,{...cover,box:{x:0,y:.4,width:1,height:.6}}]), true)).toEqual([]);
+  });
   it('rejects venue text occupying the portrait region', () => {
     const portrait = item('person','',{kind:'image_region',imageRole:'person'});
     expect(posterCreationLayoutIssues(plan([portrait, item('venue','Chapchap')]))).toHaveLength(1);

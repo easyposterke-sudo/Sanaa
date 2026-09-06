@@ -41,6 +41,32 @@ export function posterCreationLayoutIssues(plan: PosterReconstructionPlan): stri
   })).map(item => `Move ${item.key} into clear space outside the portrait, with readable wrapping.`);
 }
 
+/** Check the canonical uploaded asset, not a stock substitute or a placeholder. */
+export function uploadedBackgroundIssues(plan: PosterReconstructionPlan, required: boolean): string[] {
+  if (!required) return [];
+  const background = plan.elements.find(item => item.key === 'asset_background_photo' && item.kind === 'image_region' && item.imageRole === 'background_photo');
+  const message = 'Use the uploaded background as asset_background_photo, visibly exposed in a substantial region; do not omit it or hide it behind opaque panels.';
+  if (!background || background.opacity < .05) return [message];
+  const b = background.box;
+  const left = Math.max(0,b.x), top = Math.max(0,b.y);
+  const width = Math.max(0,Math.min(1,b.x+b.width)-left), height = Math.max(0,Math.min(1,b.y+b.height)-top);
+  if (width*height < .08) return [message];
+  // Sample rectangular overlays after creation's final layer ordering. This is a
+  // geometry safeguard, not proof of perceptual visibility (the visual review handles that).
+  const panels = plan.elements.filter(item => item.zIndex > background.zIndex && item.kind === 'rect' && item.fill && item.opacity > 0);
+  let exposed = 0;
+  for (let row=0; row<20; row++) for (let col=0; col<20; col++) {
+    const x=left+width*(col+.5)/20, y=top+height*(row+.5)/20;
+    let transmission=1;
+    for (const panel of panels) {
+      const p=panel.box;
+      if (Math.abs(panel.angle ?? 0) < .01 && x>=p.x && x<=p.x+p.width && y>=p.y && y<=p.y+p.height) transmission *= 1-panel.opacity;
+    }
+    if (transmission*background.opacity >= .04) exposed++;
+  }
+  return exposed/400*width*height < .04 ? [message] : [];
+}
+
 /** Creation-only safeguards; reference reconstruction keeps its original layer ordering. */
 export function prepareCreatedPoster(plan: PosterReconstructionPlan, prompt: string, hasLogo: boolean): PosterReconstructionPlan {
   let elements = structuredClone(plan.elements);

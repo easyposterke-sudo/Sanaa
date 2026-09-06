@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, uploadedBackgroundIssues } from '../../../shared/ai/posterCreationChecks';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
@@ -52,20 +52,23 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       setStatus(`Designing with reference ${referenceId}…`);
       let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
       response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
-      const missing = [...missingPosterFacts(response.plan, prompt), ...posterCreationLayoutIssues(response.plan)];
+      const checkPlan = (plan: PosterReconstructionPlan) => [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, !!assets.background_photo)];
+      const missing = checkPlan(response.plan);
       if (missing.length) {
-        setStatus('Restoring missing service details…');
-        response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, seed: `${creation.seed}-repair`, prompt: `${prompt}\nMandatory correction: the last draft omitted these supplied facts: ${missing.join('; ')}. Include all of them as visible editable text inside their information cards. Do not add duplicate titles or invitation slogans.` } });
+        setStatus('Repairing missing details, assets, or layout…');
+        response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, seed: `${creation.seed}-repair`, prompt: `${prompt}\nMandatory correction: the last draft failed these content, asset, or layout checks: ${missing.join('; ')}. Restore all supplied facts as editable text and all required image assets as visible image layers. Fix the reported layout issues. Do not add duplicate titles or invitation slogans.` } });
         response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
       }
-      const stillMissing = [...missingPosterFacts(response.plan, prompt), ...posterCreationLayoutIssues(response.plan)];
+      const stillMissing = checkPlan(response.plan);
       if (stillMissing.length) throw new Error(`The draft is missing required details: ${stillMissing.join('; ')}. Your canvas has not been replaced. Please retry.`);
       const compile = async (plan: PosterReconstructionPlan) => {
         plan = prepareCreatedPoster(plan, prompt, !!assets.logo);
-        const absent = [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan)];
+        const absent = checkPlan(plan);
         if (absent.length) throw new Error(`Missing required details: ${absent.join('; ')}`);
         // Never allow the blank canvas or review screenshot to become an image asset.
         const safePlan = { ...plan, elements: plan.elements.filter(item => item.kind !== 'image_region' || replacements[item.key] || (item.imageRole === 'icon' && item.iconName !== 'none')) };
+        const assetIssues = uploadedBackgroundIssues(safePlan, !!assets.background_photo);
+        if (assetIssues.length) throw new Error(assetIssues.join(' '));
         return compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements });
       };
       const stock = response.plan.elements.find(item => item.key === 'stock_background' && item.imageRole === 'background_photo');
@@ -141,4 +144,3 @@ async function waitForDraft(draft: CompiledPosterReconstruction) {
   }
   throw new Error('Canvas rendering did not finish in time. The editable draft is still available.');
 }
-

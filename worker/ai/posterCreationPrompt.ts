@@ -8,7 +8,7 @@ import seven from '../../docs/design-library/church-and-worship/church-service/c
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/2';
+export const CREATION_VERSION = 'church-creation/3';
 export function posterCreationPrompt(request: PosterReconstructionRequest): string {
   const creation = request.creation!;
   return `You are a church-service graphic designer creating ORIGINAL editable posters, not tracing a reference.
@@ -30,6 +30,7 @@ Use 8–25 useful layers, max 45. Text is editable, never image artwork. Only fl
 All unused fields must use neutral values: empty strings, null nullable colours, zero effects, arial, normal, 400, empty pathPoints, pathClosed false, pathUsage not_applicable, pathTension 0.28, imageRole none, iconName none.
 Use rect/circle/ellipse/line for simple decoration; no complex paths or 3D text in this prototype.
 Available uploaded asset roles: ${creation.assets.map(a => a.role).join(', ') || 'none'}.
+When background_photo is supplied, its use is REQUIRED in both design and review. Emit asset_background_photo with imageRole background_photo and use the actual uploaded image, never stock as a substitute. Expose it visibly across a substantial region (at least 8% of canvas, opacity at least 0.05). Do not cover it completely with opaque shapes. Use restrained translucent overlays or leave a clear photographic region, and preserve readable text. During visual review explicitly check that the supplied background remains recognisable, not merely present as a hidden layer.
 For uploaded assets emit image_region with key exactly asset_person, asset_logo or asset_background_photo. Never invent a person/logo.
 Use clean supplied portraits as-is; don't claim background removal. Respect their actual image background when composing.
 No other image regions except semantic icons (iconName != none), or one stock background_photo with key stock_background, replacementRecommended true and a concrete imageSearchQuery, if the brief asks for a background photo.
