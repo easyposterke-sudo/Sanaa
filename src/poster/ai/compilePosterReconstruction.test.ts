@@ -96,34 +96,6 @@ function plan(elements: ReconstructionElement[]): PosterReconstructionPlan {
 }
 
 describe('compilePosterReconstruction', () => {
-  it('preserves explicit asymmetric controls and one-sided endpoint handles', async () => {
-    const compiled = await compilePosterReconstruction({
-      plan: plan([element({
-        kind: 'path', pathUsage: 'open_stroke', pathClosed: false,
-        box: { x: 0.1, y: 0.1, width: 0.5, height: 0.4 },
-        pathPoints: [
-          { x: 0, y: 0, smooth: true, handleIn: null, handleOut: { x: 0.8, y: -0.2 } },
-          { x: 1, y: 1, smooth: false, handleIn: { x: 0.2, y: 0.7 }, handleOut: null },
-        ],
-      })]),
-      reference: { dataUrl: '', width: 1000, height: 1000 },
-      referenceGuideOpacity: 0,
-    });
-    const path = compiled.project.elements[0];
-    if (path.type !== 'path') throw new Error('Expected path');
-    expect(path.pathPoints).toEqual([
-      { x: 0, y: 0, outX: 400, outY: -80 },
-      { x: 500, y: 400, inX: 100, inY: 280 },
-    ]);
-    expect(path.closed).toBe(false);
-  });
-
-  it('accepts legacy anchors and rejects malformed control pairs', () => {
-    expect(() => plan([element({ pathPoints: [{ x: 0, y: 0, smooth: true }] })])).not.toThrow();
-    const raw = element({ pathPoints: [{ x: 0, y: 0, smooth: true }] });
-    expect(() => plan([{ ...raw, pathPoints: [{ x: 0, y: 0, smooth: true, handleIn: { x: 3, y: 0 } }] }])).toThrow();
-  });
-
   it('creates editable layers at source-relative coordinates and suggests fields', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([

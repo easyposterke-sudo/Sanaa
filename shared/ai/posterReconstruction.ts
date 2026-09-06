@@ -73,20 +73,11 @@ export const ReconstructionBoxSchema = z
   })
   .strict();
 
-const ReconstructionPathHandleSchema = z.object({
-  x: z.number().min(-1).max(2),
-  y: z.number().min(-1).max(2),
-}).strict();
-
 export const ReconstructionPathPointSchema = z
   .object({
     x: z.number().min(0).max(1),
     y: z.number().min(0).max(1),
     smooth: z.boolean(),
-    // Absolute coordinates relative to the element box, not anchor offsets.
-    // Omitted/null handles retain the legacy automatic tangent behavior.
-    handleIn: ReconstructionPathHandleSchema.nullable().optional(),
-    handleOut: ReconstructionPathHandleSchema.nullable().optional(),
   })
   .strict();
 
@@ -254,8 +245,6 @@ const pathPointJsonSchema = strictObject({
   x: { type: 'number', minimum: 0, maximum: 1 },
   y: { type: 'number', minimum: 0, maximum: 1 },
   smooth: { type: 'boolean' },
-  handleIn: { anyOf: [strictObject({ x: { type: 'number', minimum: -1, maximum: 2 }, y: { type: 'number', minimum: -1, maximum: 2 } }), { type: 'null' }] },
-  handleOut: { anyOf: [strictObject({ x: { type: 'number', minimum: -1, maximum: 2 }, y: { type: 'number', minimum: -1, maximum: 2 } }), { type: 'null' }] },
 });
 
 const hexJsonSchema = { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' };

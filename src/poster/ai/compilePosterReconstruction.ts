@@ -352,7 +352,7 @@ function compilePathElement(
     : item.pathUsage;
   const pathClosed = pathUsage === 'closed_fill';
   const minimumPoints = pathClosed ? 3 : 2;
-  const sourcePoints: ReconstructionElement['pathPoints'] = item.pathPoints.length >= minimumPoints
+  const sourcePoints = item.pathPoints.length >= minimumPoints
     ? item.pathPoints
     : [
         { x: 0, y: 0, smooth: false },
@@ -383,24 +383,6 @@ function compilePathElement(
     smooth: point.smooth,
   }));
   const pathPoints: PosterPathPoint[] = anchors.map((anchor, index) => {
-    const source = sourcePoints[index];
-    if (source.handleIn || source.handleOut) {
-      // Explicit controls describe the curve independently on each side.
-      // A missing side stays at the anchor; do not synthesize a tangent there.
-      // Preserve controls outside the box: clamping them changes the curve.
-      return {
-        x: anchor.x,
-        y: anchor.y,
-        ...(source.handleIn ? {
-          inX: source.handleIn.x * box.width,
-          inY: source.handleIn.y * box.height,
-        } : {}),
-        ...(source.handleOut ? {
-          outX: source.handleOut.x * box.width,
-          outY: source.handleOut.y * box.height,
-        } : {}),
-      };
-    }
     if (!anchor.smooth) return { x: anchor.x, y: anchor.y };
     const previous = anchors[index - 1] ?? (pathClosed ? anchors.at(-1) : undefined);
     const next = anchors[index + 1] ?? (pathClosed ? anchors[0] : undefined);
