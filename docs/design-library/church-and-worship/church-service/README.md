@@ -7,6 +7,7 @@ References for Sunday services and other regular or dated church services. Style
 ## References
 
 1. [Church Service 001 — Warm gradient Sunday service](church-service-001/reference.md): congregation photograph, large split title, two service times, specific date, and livestream platforms.
+2. [Church Service 002 — Blue Sunday service](church-service-002/reference.md): central pastor portrait, faded worship background, serif/script headline pairing, side logistics, and glowing speaker nameplates.
 
 ## Collection guidance
 

@@ -26,4 +26,4 @@ Prefer diverse compositions and content challenges over many near-identical exam
 
 ## Current scope
 
-One user-selected, annotated reference. Runtime retrieval, canvas generation, image search, visual critique, and conversational editing still need implementation. Category IDs here belong to this documentation library and do not change application or database categories.
+Two user-selected, annotated references. Runtime retrieval, canvas generation, image search, visual critique, and conversational editing still need implementation. Category IDs here belong to this documentation library and do not change application or database categories.

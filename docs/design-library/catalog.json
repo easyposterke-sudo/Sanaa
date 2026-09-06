@@ -21,6 +21,18 @@
       "status": "annotated-user-selected",
       "tags": ["sunday-service", "congregation-photograph", "two-services", "livestream-platforms", "specific-date", "warm-gradient", "oversized-typography", "two-column-details", "no-theme"],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-002",
+      "title": "Blue Sunday service — central pastor with serif and script headline",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-002/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-002/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": ["sunday-service", "single-pastor", "central-cutout-portrait", "worship-background", "bottom-fade", "blue-palette", "serif-script-pairing", "outlined-script", "glowing-nameplates", "single-service", "specific-date", "short-venue", "no-logo-in-reference"],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     }
   ]
 }
