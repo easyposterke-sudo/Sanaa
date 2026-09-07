@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues } from '../../../shared/ai/posterCreationChecks';
 import { createFallbackReconstructionPlan, type ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 
 const brief = 'I would like a poster for a sunday Service for a church called Christ Ekklesia fellowship chapel. Lead pastor is Pst David Kituyi. First service starts at 8am and second service starts at 9:30am. the church is located at Chapchap 300m from Kabarak University gate. This is a poster for 23rd August 2026. The theme is God the Loving Father.';
@@ -9,6 +9,13 @@ function item(key: string, text: string, overrides: Partial<ReconstructionElemen
 const complete = [item('church','Christ Ekklesia Fellowship Chapel'), item('pastor','Pst David Kituyi'), item('date','23 AUG 2026'), item('time','First service 8:00 AM\nSecond service 9:30 AM'), item('venue','Chapchap 300m from Kabarak University gate'), item('theme','God the Loving Father')];
 const plan = (elements: ReconstructionElement[]) => ({ ...createFallbackReconstructionPlan(), elements });
 describe('church generation regressions', () => {
+  it('allows a complete draft and review with a small portrait while retaining a sizing warning', () => {
+    const person = item('asset_person','',{kind:'image_region',imageRole:'person',imageMask:'none',box:{x:.7,y:.7,width:.15,height:.2}});
+    const draft = plan([...complete, person]);
+    expect(blockingPosterCreationIssues(draft, brief, false)).toEqual([]);
+    expect(portraitSizingIssues(draft,{width:600,height:1000},brief)[0]).toContain('may look small');
+    expect(blockingPosterCreationIssues(plan([person]), brief, false).length).toBeGreaterThan(0);
+  });
   it('checks fitted person height instead of trusting a tall but narrow portrait box', () => {
     const person = item('asset_person','',{kind:'image_region',imageRole:'person',imageMask:'none',box:{x:.05,y:.2,width:.25,height:.72}});
     const source={width:600,height:1000};

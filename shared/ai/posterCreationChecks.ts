@@ -77,7 +77,12 @@ export function portraitSizingIssues(plan: PosterReconstructionPlan, source: {wi
   const scale = Math.min(portrait.box.width*canvas.width/source.width, portrait.box.height*canvas.height/source.height);
   const visibleHeight = source.height*scale/canvas.height;
   if (visibleHeight >= .52) return [];
-  return ['Enlarge the main speaker: the uploaded image fits to less than 52% of poster height. Reserve a generous portrait column (typically 60–75% height), widen it enough for the source aspect ratio, keep the bottom anchor, and reflow the title/logistics into the other column without overlap. Do not stretch the person or crop the head/hands.'];
+  return ['The speaker may look small in this layout. You can enlarge the portrait in the editor if desired; its proportions have been preserved.'];
+}
+
+export function blockingPosterCreationIssues(plan: PosterReconstructionPlan, prompt: string, hasBackground: boolean): string[] {
+  // Portrait prominence is an aesthetic preference, never a completeness gate.
+  return [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, hasBackground)];
 }
 
 export function prepareCreatedPoster(plan: PosterReconstructionPlan, prompt: string, hasLogo: boolean): PosterReconstructionPlan {

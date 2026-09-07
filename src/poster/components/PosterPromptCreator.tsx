@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
+import { blockingPosterCreationIssues, prepareCreatedPoster, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
@@ -52,7 +52,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       setStatus(`Designing with reference ${referenceId}…`);
       let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
       response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
-      const checkPlan = (plan: PosterReconstructionPlan) => [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, !!assets.background_photo), ...portraitSizingIssues(plan, assets.person, prompt)];
+      const checkPlan = (plan: PosterReconstructionPlan) => blockingPosterCreationIssues(plan, prompt, !!assets.background_photo);
       const missing = checkPlan(response.plan);
       if (missing.length) {
         setStatus('Repairing missing details, assets, or layout…');
@@ -60,7 +60,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
       }
       const stillMissing = checkPlan(response.plan);
-      if (stillMissing.length) throw new Error(`The draft is missing required details: ${stillMissing.join('; ')}. Your canvas has not been replaced. Please retry.`);
+      if (stillMissing.length) throw new Error(`The draft needs these corrections: ${stillMissing.join('; ')}. Your canvas has not been replaced. Please retry.`);
       const compile = async (plan: PosterReconstructionPlan) => {
         plan = prepareCreatedPoster(plan, prompt, !!assets.logo);
         const absent = checkPlan(plan);
@@ -69,7 +69,9 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         const safePlan = { ...plan, elements: plan.elements.filter(item => item.kind !== 'image_region' || replacements[item.key] || (item.imageRole === 'icon' && item.iconName !== 'none')) };
         const assetIssues = uploadedBackgroundIssues(safePlan, !!assets.background_photo);
         if (assetIssues.length) throw new Error(assetIssues.join(' '));
-        return compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements });
+        const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements });
+        compiled.warnings.push(...portraitSizingIssues(safePlan, assets.person, prompt));
+        return compiled;
       };
       const stock = response.plan.elements.find(item => item.key === 'stock_background' && item.imageRole === 'background_photo');
       if (stock && !assets.background_photo) {
