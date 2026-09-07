@@ -8,7 +8,7 @@ import seven from '../../docs/design-library/church-and-worship/church-service/c
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/4';
+export const CREATION_VERSION = 'church-creation/5';
 export function posterCreationPrompt(request: PosterReconstructionRequest): string {
   const creation = request.creation!;
   return `You are a church-service graphic designer creating ORIGINAL editable posters, not tracing a reference.
@@ -17,6 +17,7 @@ Use only the brief's factual content. Never borrow names, dates, contacts, ident
 Inventory ALL supplied facts before layout: church, event, theme, speaker, every service label/time, full date, and full venue. Every supplied fact must appear as visible text. Never return empty date/time/venue cards.
 Use the event title ONCE, possibly split across lines. Never add a second title such as Sunday Worship Service, invitation slogans, or programme wording absent from the brief. Never print internal labels such as Location icon.
 Text opacity is 1, fill must be a contrasting non-null colour, and text zIndex must exceed every overlapping card or photograph. Place content inside cards with padding; never place the venue behind a portrait. No blank information containers.
+Vertically centre each date, schedule, and venue text GROUP inside its rectangular card, leaving balanced top/bottom padding. Use tight text ink boxes, not a text box as tall as the entire card. Keep internal line gaps and intentional columns intact: centre the whole group, not each line independently. On review check the actual visible lettering's top and bottom gaps. Do not output internal labels such as "Service schedule heading" as poster wording.
 Uploaded logos must fit fully without cropping in a small box at most 14% of canvas width and 11% of height, within safe margins. Never synthesize or borrow a logo if none is supplied.
 Omit absent optional content. Do not infer recurrence from a missing date. Report contradictions in warnings.
 Choose a deliberate palette, type pairing, negative space and hierarchy. Summary must briefly explain the creative direction.

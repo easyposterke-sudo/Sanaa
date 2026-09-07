@@ -69,7 +69,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         const safePlan = { ...plan, elements: plan.elements.filter(item => item.kind !== 'image_region' || replacements[item.key] || (item.imageRole === 'icon' && item.iconName !== 'none')) };
         const assetIssues = uploadedBackgroundIssues(safePlan, !!assets.background_photo);
         if (assetIssues.length) throw new Error(assetIssues.join(' '));
-        const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements });
+        const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements, balanceInformationCards: true });
         compiled.warnings.push(...portraitSizingIssues(safePlan, assets.person, prompt));
         return compiled;
       };

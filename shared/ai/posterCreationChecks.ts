@@ -85,6 +85,34 @@ export function blockingPosterCreationIssues(plan: PosterReconstructionPlan, pro
   return [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, hasBackground)];
 }
 
+/** Balance bounded information cards, not large page panels. Move a group as a unit. */
+export function centerCreatedCardContents(elements: PosterReconstructionPlan['elements']): void {
+  const cards = elements.filter(item => item.kind === 'rect' && item.fill && item.opacity > 0 && Math.abs(item.angle ?? 0) < .01 && item.box.height <= .3 && item.box.width*item.box.height <= .3);
+  const groups = new Map<typeof cards[number], typeof elements>();
+  for (const item of elements) {
+    if ((item.kind !== 'text' && item.imageRole !== 'icon') || Math.abs(item.angle ?? 0) >= .01 || (item.textCurve ?? 0) !== 0) continue;
+    const b=item.box;
+    const card = cards.filter(card => {
+      const c=card.box;
+      return b.x>=c.x-.002 && b.y>=c.y-.002 && b.x+b.width<=c.x+c.width+.002 && b.y+b.height<=c.y+c.height+.002;
+    }).sort((a,b)=>a.box.width*a.box.height-b.box.width*b.box.height)[0];
+    if (!card) continue;
+    const group=groups.get(card) ?? []; group.push(item); groups.set(card,group);
+  }
+  for (const [card, group] of groups) {
+    if (!group.some(item => item.kind === 'text')) continue;
+    // Skip mixed photo/card compositions and cards subdivided into smaller cards.
+    const c=card.box;
+    if (elements.some(item => item !== card && !group.includes(item) && ((item.kind === 'image_region' && item.imageRole !== 'icon' && item.imageRole !== 'background_photo') || cards.includes(item)) && item.box.x < c.x+c.width && item.box.x+item.box.width > c.x && item.box.y < c.y+c.height && item.box.y+item.box.height > c.y)) continue;
+    const top=Math.min(...group.map(item=>item.box.y));
+    const bottom=Math.max(...group.map(item=>item.box.y+item.box.height));
+    const height=bottom-top;
+    if (height > c.height*.9) continue;
+    const shift=c.y+(c.height-height)/2-top;
+    for (const item of group) item.box.y += shift;
+  }
+}
+
 export function prepareCreatedPoster(plan: PosterReconstructionPlan, prompt: string, hasLogo: boolean): PosterReconstructionPlan {
   let elements = structuredClone(plan.elements);
   const title = (text: string) => /^sunday(?: worship)? service$/.test(normalize(text));
@@ -109,6 +137,7 @@ export function prepareCreatedPoster(plan: PosterReconstructionPlan, prompt: str
       item.imageMask = 'none'; item.imageCutout = false;
     }
   }
+  centerCreatedCardContents(elements);
   // Backgrounds/cards first, photos above them, all wording/icons last.
   const tier = (item: typeof elements[number]) => item.kind === 'text' || item.imageRole === 'icon' ? 3 : item.kind === 'image_region' ? item.imageRole === 'background_photo' ? 0 : 2 : 1;
   elements.sort((a,b) => tier(a)-tier(b) || a.zIndex-b.zIndex);

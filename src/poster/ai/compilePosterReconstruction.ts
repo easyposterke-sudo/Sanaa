@@ -3,6 +3,7 @@ import {
   type PosterReconstructionPlan,
   type ReconstructionElement,
 } from '../../../shared/ai/posterReconstruction';
+import { centerCreatedCardContents } from '../../../shared/ai/posterCreationChecks';
 import type { PosterTemplateCategory, PosterTemplateFieldBinding } from '../templateTypes';
 import type {
   CanvasBackground,
@@ -133,6 +134,7 @@ export async function compilePosterReconstruction(input: {
   referenceGuideOpacity?: number;
   imageReplacements?: Readonly<Record<string, ReconstructionImageReplacement>>;
   fontCatalogFamilies?: Readonly<Record<string, string>>;
+  balanceInformationCards?: boolean;
 }): Promise<CompiledPosterReconstruction> {
   const plan = PosterReconstructionPlanSchema.parse(input.plan);
   const canvasWidth = normalizeCanvasDimension(input.canvasSize?.width, input.reference.width);
@@ -142,6 +144,7 @@ export async function compilePosterReconstruction(input: {
   const warnings = [...plan.warnings];
   const usedIds = new Set<string>();
   const usedFieldKeys = new Set<string>();
+  const sourceIds = new Map<string, string>();
   let nextZ = 1;
 
   const guideOpacity = clamp(input.referenceGuideOpacity ?? 0.22, 0, 1);
@@ -176,6 +179,7 @@ export async function compilePosterReconstruction(input: {
       isNativeShapeKind(item.kind),
     );
     const id = uniqueId(`reconstruction_${sanitizeKey(item.key)}`, usedIds);
+    sourceIds.set(item.key, id);
     const base = {
       id,
       layerName: `AI draft: ${item.label}`,
@@ -317,6 +321,23 @@ export async function compilePosterReconstruction(input: {
     warnings.push('No editable layers were detected. Trace the locked reference guide manually.');
   }
 
+  if (input.balanceInformationCards) {
+    const measured = structuredClone(plan.elements);
+    for (const item of measured) {
+      const compiled = elements.find(element => element.id === sourceIds.get(item.key));
+      if (item.kind !== 'text' || compiled?.type !== 'text' || Math.abs(compiled.angle) > .01 || item.textCurve !== 0) continue;
+      const metrics = compiled.text.split(/\r?\n/).map(line => measuredTextLineMetrics({ line, fontFamily: compiled.fontFamily, fontWeight: String(compiled.fontWeight), fontStyle: compiled.fontStyle ?? 'normal', charSpacing: compiled.charSpacing ?? 0, fontSize: compiled.fontSize }));
+      const bounds = verticalInkBounds(metrics, compiled.lineHeight ?? 1.16, compiled.fontSize);
+      item.box.y = (compiled.top + bounds.top) / canvasHeight;
+      item.box.height = (bounds.bottom - bounds.top) / canvasHeight;
+    }
+    const before = new Map(measured.map(item => [item.key, item.box.y]));
+    centerCreatedCardContents(measured);
+    for (const item of measured) {
+      const compiled = elements.find(element => element.id === sourceIds.get(item.key));
+      if (compiled) compiled.top += (item.box.y - before.get(item.key)!) * canvasHeight;
+    }
+  }
   return {
     project: {
       canvasWidth,

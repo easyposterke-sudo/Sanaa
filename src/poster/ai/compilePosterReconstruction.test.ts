@@ -96,6 +96,17 @@ function plan(elements: ReconstructionElement[]): PosterReconstructionPlan {
 }
 
 describe('compilePosterReconstruction', () => {
+  it('centres measured text in creation cards without changing reference reconstruction', async () => {
+    const input = {plan:plan([
+      element({key:'card',kind:'rect',box:{x:.1,y:.1,width:.5,height:.2}}),
+      element({key:'date',kind:'text',text:'23 August 2026',box:{x:.13,y:.11,width:.4,height:.03},fontSizeRatio:.025,zIndex:2}),
+    ]),reference:{dataUrl:'unused',width:1000,height:1000},referenceGuideOpacity:0};
+    const original=await compilePosterReconstruction(input);
+    const balanced=await compilePosterReconstruction({...input,balanceInformationCards:true});
+    expect(balanced.project.elements[1]!.top).toBeGreaterThan(original.project.elements[1]!.top+40);
+    expect(balanced.project.elements[1]!.left).toBe(original.project.elements[1]!.left);
+    expect(balanced.project.elements[0]).toEqual(original.project.elements[0]);
+  });
   it('contains a supplied wide logo without cropping its source or distorting it', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([element({key:'logo', kind:'image_region', imageRole:'logo', box:{x:.1,y:.1,width:.1,height:.1}})]),

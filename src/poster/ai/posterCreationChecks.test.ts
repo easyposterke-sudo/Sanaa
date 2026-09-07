@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues, centerCreatedCardContents } from '../../../shared/ai/posterCreationChecks';
 import { createFallbackReconstructionPlan, type ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 
 const brief = 'I would like a poster for a sunday Service for a church called Christ Ekklesia fellowship chapel. Lead pastor is Pst David Kituyi. First service starts at 8am and second service starts at 9:30am. the church is located at Chapchap 300m from Kabarak University gate. This is a poster for 23rd August 2026. The theme is God the Loving Father.';
@@ -9,6 +9,20 @@ function item(key: string, text: string, overrides: Partial<ReconstructionElemen
 const complete = [item('church','Christ Ekklesia Fellowship Chapel'), item('pastor','Pst David Kituyi'), item('date','23 AUG 2026'), item('time','First service 8:00 AM\nSecond service 9:30 AM'), item('venue','Chapchap 300m from Kabarak University gate'), item('theme','God the Loving Father')];
 const plan = (elements: ReconstructionElement[]) => ({ ...createFallbackReconstructionPlan(), elements });
 describe('church generation regressions', () => {
+  it('centres a two-row group without changing its spacing or horizontal anchors', () => {
+    const elements=[item('card','',{kind:'rect',box:{x:.1,y:.4,width:.7,height:.2}}),item('first','8AM',{box:{x:.15,y:.42,width:.5,height:.03}}),item('second','9:30AM',{box:{x:.15,y:.47,width:.5,height:.03}})];
+    centerCreatedCardContents(elements);
+    expect(elements[1]!.box.y).toBeCloseTo(.46);
+    expect(elements[2]!.box.y).toBeCloseTo(.51);
+    expect(elements[1]!.box.x).toBe(.15);
+    centerCreatedCardContents(elements);
+    expect(elements[1]!.box.y).toBeCloseTo(.46);
+  });
+  it('does not centre a whole page panel or overflowing text', () => {
+    const elements=[item('page','',{kind:'rect',box:{x:0,y:0,width:1,height:1}}),item('title','Sunday Service')];
+    centerCreatedCardContents(elements);
+    expect(elements[1]!.box.y).toBe(.1);
+  });
   it('allows a complete draft and review with a small portrait while retaining a sizing warning', () => {
     const person = item('asset_person','',{kind:'image_region',imageRole:'person',imageMask:'none',box:{x:.7,y:.7,width:.15,height:.2}});
     const draft = plan([...complete, person]);
