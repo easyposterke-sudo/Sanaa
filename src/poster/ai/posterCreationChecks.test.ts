@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues, centerCreatedCardContents } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues, centerCreatedCardContents } from '../../../shared/ai/posterCreationChecks';
 import { createFallbackReconstructionPlan, type ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 
 const brief = 'I would like a poster for a sunday Service for a church called Christ Ekklesia fellowship chapel. Lead pastor is Pst David Kituyi. First service starts at 8am and second service starts at 9:30am. the church is located at Chapchap 300m from Kabarak University gate. This is a poster for 23rd August 2026. The theme is God the Loving Father.';
@@ -49,6 +49,26 @@ describe('church generation regressions', () => {
     expect(uploadedBackgroundIssues(plan([background,cover]), true)).toHaveLength(1);
     expect(uploadedBackgroundIssues(plan([background,{...cover,opacity:.5}]), true)).toEqual([]);
     expect(uploadedBackgroundIssues(plan([background,{...cover,box:{x:0,y:.4,width:1,height:.6}}]), true)).toEqual([]);
+  });
+  it('reconciles model-mutated portrait keys with the exact uploaded asset key', () => {
+    const mutated = item('asset_person_speaker_1_1','',{kind:'image_region',imageRole:'person',opacity:.8});
+    const result = reconcileUploadedCreationAssets(plan([mutated]), [{
+      role: 'person', key: 'asset_person_speaker_1', dataUrl: 'data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAA==', width: 500, height: 800,
+    }]);
+    expect(result.elements).toHaveLength(1);
+    expect(result.elements[0]).toMatchObject({ key: 'asset_person_speaker_1', imageRole: 'person', opacity: .8 });
+  });
+  it('restores omitted uploaded images and exposes a background hidden by a page panel', () => {
+    const cover = item('page_cover','',{kind:'rect',zIndex:3,opacity:1,box:{x:0,y:0,width:1,height:1}});
+    const assets = [
+      { role: 'background_photo' as const, dataUrl: 'data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAA==', width: 1080, height: 1350 },
+      { role: 'person' as const, key: 'asset_person_speaker_1', dataUrl: 'data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAA==', width: 500, height: 800 },
+    ];
+    const result = reconcileUploadedCreationAssets(plan([cover]), assets);
+    expect(result.elements.some(element => element.key === 'asset_background_photo' && element.imageRole === 'background_photo')).toBe(true);
+    expect(result.elements.some(element => element.key === 'asset_person_speaker_1' && element.imageRole === 'person')).toBe(true);
+    expect(uploadedBackgroundIssues(result, true)).toEqual([]);
+    expect(result.elements.find(element => element.key === 'page_cover')!.opacity).toBe(.65);
   });
   it('rejects venue text occupying the portrait region', () => {
     const portrait = item('person','',{kind:'image_region',imageRole:'person'});

@@ -1,4 +1,4 @@
-import type { PosterReconstructionPlan } from './posterReconstruction';
+import type { PosterReconstructionPlan, PosterReconstructionRequest, ReconstructionElement } from './posterReconstruction';
 
 /** Conservative checks for explicit prose fields; unknown brief formats remain model-reviewed. */
 export function requiredPosterFacts(prompt: string): string[] {
@@ -65,6 +65,182 @@ export function uploadedBackgroundIssues(plan: PosterReconstructionPlan, require
     if (transmission*background.opacity >= .04) exposed++;
   }
   return exposed/400*width*height < .04 ? [message] : [];
+}
+
+type UploadedCreationAsset = NonNullable<PosterReconstructionRequest['creation']>['assets'][number];
+
+/**
+ * Preserve uploaded files even when the model slightly changes an asset key or
+ * omits an image region. The model still chooses the composition; trusted code
+ * owns the binding between an uploaded file and its canonical manifest key.
+ */
+export function reconcileUploadedCreationAssets(
+  plan: PosterReconstructionPlan,
+  assets: readonly UploadedCreationAsset[],
+): PosterReconstructionPlan {
+  const requested = assets.map((asset) => ({
+    key: asset.key ?? `asset_${asset.role}`,
+    role: asset.role,
+  }));
+  if (!requested.length) return plan;
+
+  let elements = structuredClone(plan.elements);
+  const canonicalKeys = new Set(requested.map((asset) => asset.key));
+  const claimed = new Set<ReconstructionElement>();
+  const personAssets = requested.filter((asset) => asset.role === 'person');
+
+  for (const asset of requested) {
+    let region = elements.find((item) =>
+      item.kind === 'image_region' && item.key === asset.key && !claimed.has(item));
+    if (!region) {
+      const suffix = asset.key.replace(/^asset_person_?/, '');
+      region = elements
+        .filter((item) =>
+          item.kind === 'image_region' &&
+          item.imageRole === asset.role &&
+          !claimed.has(item) &&
+          !canonicalKeys.has(item.key))
+        .sort((left, right) => assetAliasScore(left.key, asset.key, suffix) - assetAliasScore(right.key, asset.key, suffix))[0];
+    }
+    if (!region) {
+      const personIndex = asset.role === 'person'
+        ? personAssets.findIndex((person) => person.key === asset.key)
+        : 0;
+      region = uploadedImageRegion(asset.key, asset.role, personIndex, personAssets.length);
+      elements.push(region);
+    }
+
+    claimed.add(region);
+    region.key = asset.key;
+    region.imageRole = asset.role;
+    region.opacity = asset.role === 'background_photo' ? 1 : Math.max(region.opacity, 0.1);
+    region.replacementRecommended = true;
+    region.replacementReason = 'Use the exact user-uploaded asset.';
+    region.imageSearchQuery = '';
+    region.imageCutout = false;
+    if (asset.role !== 'background_photo') region.imageMask = 'none';
+    if (asset.role === 'background_photo') {
+      const visibleWidth = Math.max(0, Math.min(1, region.box.x + region.box.width) - Math.max(0, region.box.x));
+      const visibleHeight = Math.max(0, Math.min(1, region.box.y + region.box.height) - Math.max(0, region.box.y));
+      if (visibleWidth * visibleHeight < 0.08) region.box = { x: 0, y: 0, width: 1, height: 1 };
+    }
+  }
+
+  const keptCanonical = new Set<string>();
+  elements = elements.filter((item) => {
+    if (item.kind !== 'image_region' || !canonicalKeys.has(item.key)) return true;
+    if (!claimed.has(item) || keptCanonical.has(item.key)) return false;
+    keptCanonical.add(item.key);
+    return true;
+  });
+
+  const reconciled = { ...plan, elements };
+  if (requested.some((asset) => asset.role === 'background_photo')) {
+    const fullCoverPanels = elements
+      .filter((item) => {
+        if (item.kind !== 'rect' || !item.fill || item.opacity <= 0.65) return false;
+        const left = Math.max(0, item.box.x);
+        const top = Math.max(0, item.box.y);
+        const width = Math.max(0, Math.min(1, item.box.x + item.box.width) - left);
+        const height = Math.max(0, Math.min(1, item.box.y + item.box.height) - top);
+        return width * height >= 0.8;
+      })
+      .sort((left, right) => right.zIndex - left.zIndex);
+    for (const panel of fullCoverPanels) {
+      if (!uploadedBackgroundIssues(reconciled, true).length) break;
+      panel.opacity = 0.65;
+    }
+  }
+  return reconciled;
+}
+
+function assetAliasScore(candidate: string, canonical: string, suffix: string): number {
+  if (candidate.startsWith(`${canonical}_`)) return 0;
+  if (suffix && candidate.includes(suffix)) return 1;
+  if (candidate === canonical.replace(/_speaker_[a-z0-9_]+$/, '')) return 2;
+  return 3;
+}
+
+function uploadedImageRegion(
+  key: string,
+  role: UploadedCreationAsset['role'],
+  personIndex: number,
+  personCount: number,
+): ReconstructionElement {
+  const box = role === 'background_photo'
+    ? { x: 0, y: 0, width: 1, height: 1 }
+    : role === 'logo'
+      ? { x: 0.43, y: 0.04, width: 0.14, height: 0.1 }
+      : fallbackPortraitBox(personIndex, personCount);
+  return {
+    key,
+    kind: 'image_region',
+    label: role === 'person' ? 'Uploaded speaker portrait' : role === 'logo' ? 'Uploaded logo' : 'Uploaded background',
+    box,
+    angle: 0,
+    opacity: 1,
+    zIndex: role === 'background_photo' ? 1 : 2,
+    fill: null,
+    textFillType: 'solid',
+    textFillStart: null,
+    textFillEnd: null,
+    textFillAngle: 0,
+    stroke: null,
+    strokeWidthRatio: 0,
+    text: '',
+    fontFamily: 'arial',
+    fontSizeRatio: 0.01,
+    fontWeight: '400',
+    fontStyle: 'normal',
+    textAlign: 'left',
+    charSpacing: 0,
+    lineHeight: 1,
+    visibleLineCount: 0,
+    textCurve: 0,
+    textEffect: 'flat',
+    textHasVisibleExtrusion: false,
+    textExtrusionDepthRatio: 0,
+    extrusionColor: null,
+    cornerRadiusRatio: 0,
+    cornerStyle: 'auto',
+    pathPoints: [],
+    pathUsage: 'not_applicable',
+    pathClosed: false,
+    pathTension: 0.28,
+    imageRole: role,
+    imageMask: 'none',
+    imageCutout: false,
+    imageEdge: 'none',
+    imageFadeDirection: 'radial',
+    imageFadeAmount: 0.35,
+    imageFadeMinOpacity: 0,
+    imageBrightness: 0,
+    imageContrast: 0,
+    imageSaturation: 0,
+    imageBlur: 0,
+    imageTintColor: null,
+    imageTintAmount: 0,
+    imageHasOverlays: false,
+    replacementRecommended: true,
+    replacementReason: 'Use the exact user-uploaded asset.',
+    imageSearchQuery: '',
+    imageDominantColor: null,
+    iconName: 'none',
+    suggestedFieldKey: null,
+    suggestedFieldLabel: '',
+    confidence: 1,
+  };
+}
+
+function fallbackPortraitBox(index: number, count: number): ReconstructionElement['box'] {
+  if (count <= 1) return { x: 0.27, y: 0.3, width: 0.46, height: 0.66 };
+  const columns = Math.min(3, count);
+  const row = Math.floor(Math.max(0, index) / columns);
+  const column = Math.max(0, index) % columns;
+  const width = columns === 2 ? 0.44 : 0.32;
+  const gap = columns === 2 ? 0.02 : 0.01;
+  const x = (1 - (columns * width + (columns - 1) * gap)) / 2 + column * (width + gap);
+  return { x, y: 0.34 + row * 0.28, width, height: count > 3 ? 0.4 : 0.58 };
 }
 
 /** Creation-only safeguards; reference reconstruction keeps its original layer ordering. */

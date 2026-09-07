@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { blockingPosterCreationIssues, prepareCreatedPoster, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
+import { blockingPosterCreationIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
@@ -68,9 +68,13 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       const replacements: Record<string, ReconstructionImageReplacement> = {};
       for (const [role, asset] of Object.entries(assets)) replacements[`asset_${role}`] = { src: asset.dataUrl, width: asset.width, height: asset.height };
       for (const speaker of portraits) replacements[`asset_person_${speaker.id}`] = { src: speaker.image!.dataUrl, width: speaker.image!.width, height: speaker.image!.height };
+      const preparePlan = (plan: PosterReconstructionPlan) => reconcileUploadedCreationAssets(
+        prepareCreatedPoster(reconcileUploadedCreationAssets(plan, creation.assets), prompt, !!assets.logo),
+        creation.assets,
+      );
       setStatus(`Designing with reference ${referenceId}…`);
       let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
-      response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
+      response.plan = preparePlan(response.plan);
       const checkPlan = (plan: PosterReconstructionPlan) => [
         ...blockingPosterCreationIssues(plan, prompt, !!assets.background_photo),
         ...(creation.speakers ?? []).flatMap(speaker => [speaker.name, speaker.role]).filter(value => value && !plan.elements.filter(item => item.kind === 'text' && item.opacity > 0 && item.fill).map(item => item.text).join(' ').toLowerCase().replace(/\s+/g, ' ').includes(value.toLowerCase().replace(/\s+/g, ' '))).map(value => `Include speaker detail as visible text: ${value}`),
@@ -80,12 +84,12 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       if (missing.length) {
         setStatus('Repairing missing details, assets, or layout…');
         response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, seed: `${creation.seed}-repair`, prompt: `${prompt}\nMandatory correction: the last draft failed these content, asset, or layout checks: ${missing.join('; ')}. Restore all supplied facts as editable text and all required image assets as visible image layers. Fix the reported layout issues. Do not add duplicate titles or invitation slogans.` } });
-        response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
+        response.plan = preparePlan(response.plan);
       }
       const stillMissing = checkPlan(response.plan);
       if (stillMissing.length) throw new Error(`The draft needs these corrections: ${stillMissing.join('; ')}. Your canvas has not been replaced. Please retry.`);
       const compile = async (plan: PosterReconstructionPlan) => {
-        plan = prepareCreatedPoster(plan, prompt, !!assets.logo);
+        plan = preparePlan(plan);
         const absent = checkPlan(plan);
         if (absent.length) throw new Error(`Missing required details: ${absent.join('; ')}`);
         // Never allow the blank canvas or review screenshot to become an image asset.
