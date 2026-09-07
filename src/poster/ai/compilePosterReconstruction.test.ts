@@ -242,6 +242,13 @@ describe('compilePosterReconstruction', () => {
     });
   });
 
+  it('preserves editable gradients on information shapes', async () => {
+    const plan = createFallbackReconstructionPlan();
+    plan.elements = [element({ key: 'gradient_card', kind: 'rect', textFillType: 'linear', textFillStart: '#ff0000', textFillEnd: '#ffff00', textFillAngle: 45 })];
+    const result = await compilePosterReconstruction({ plan, reference: { dataUrl: 'data:image/png;base64,AAAA', width: 1080, height: 1350 } });
+    expect(result.project.elements.find(item => item.type === 'rect')).toMatchObject({ fillGradient: { type: 'linear', angle: 45, stops: [{ offset: 0, color: '#ff0000' }, { offset: 1, color: '#ffff00' }] } });
+  });
+
   it('rebuilds detected headline gradients as editable gradient-filled text', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([

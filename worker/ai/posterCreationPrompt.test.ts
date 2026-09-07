@@ -8,6 +8,13 @@ const request: PosterReconstructionRequest = {
   creation: { prompt: 'Sunday Service for Hope Church, every Sunday at 9 AM.', seed: 'test', referenceId: 6, phase: 'design', assets: [] },
 };
 describe('prompt-based poster creation', () => {
+  it('preserves distinct headline directions and exposes shape gradient controls', () => {
+    const script = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 2 } });
+    const sharedInitial = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 3 } });
+    expect(script).toContain('separate allura or great_vibes SERVICE');
+    expect(sharedInitial).toContain('UNDAY above ERVICE');
+    expect(script).toContain('These fields also apply to rect/circle/ellipse/triangle/star');
+  });
   it('loads the selected real annotation and the runtime layout skill', () => {
     const prompt = posterCreationPrompt(request);
     expect(prompt).toContain('church-service-006');

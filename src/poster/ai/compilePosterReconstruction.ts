@@ -1182,6 +1182,11 @@ function compileShapeElement(
   const common = {
     ...base,
     fill: item.fill ?? 'transparent',
+    ...(item.textFillType === 'linear' && item.textFillStart && item.textFillEnd ? {
+      fillGradient: { type: 'linear' as const, angle: item.textFillAngle, stops: [
+        { offset: 0, color: item.textFillStart }, { offset: 1, color: item.textFillEnd },
+      ] },
+    } : {}),
     stroke: item.stroke ?? undefined,
     strokeWidth: item.stroke ? item.strokeWidthRatio * canvasHeight : 0,
   };
