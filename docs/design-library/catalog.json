@@ -215,6 +215,27 @@
         "optional-footer"
       ],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-009",
+      "title": "Green and black editorial church service — oversized theme with red word accents",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-009/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-009/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "theme-led",
+        "editorial-typography",
+        "single-speaker",
+        "green-black",
+        "red-word-circles",
+        "gold-outline-schedule",
+        "optional-livestream",
+        "optional-torn-paper"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     }
   ]
 }

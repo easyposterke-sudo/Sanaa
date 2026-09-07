@@ -19,8 +19,14 @@ describe('prompt-based poster creation', () => {
     expect(PosterReconstructionRequestSchema.safeParse(request).success).toBe(true);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, phase: 'review' } }).success).toBe(false);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 8 } }).success).toBe(true);
-    expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 9 } }).success).toBe(false);
+    expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 10 } }).success).toBe(false);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, assets: [{ role: 'person', dataUrl: 'https://example.com/unsafe', width: 100, height: 100 }] } }).success).toBe(false);
+  });
+  it('loads the editorial theme family', () => {
+    const selected = { ...request, creation: { ...request.creation!, referenceId: 9 } };
+    expect(PosterReconstructionRequestSchema.safeParse(selected).success).toBe(true);
+    expect(posterCreationPrompt(selected)).toContain('church-service-009');
+    expect(posterCreationPrompt(selected)).toContain('red word circles');
   });
   it('loads the weekday three-person design family', () => {
     const prompt = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 8 } });

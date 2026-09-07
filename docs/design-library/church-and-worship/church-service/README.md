@@ -20,6 +20,8 @@ References for Sunday services and other regular or dated church services. Style
 
 8. [Church Service 008 — Red and blue three-person church service](church-service-008/reference.md): aligned oversized headline, larger central host, two side guests with face-safe overlap, and separate date/time and theme cards.
 
+9. [Church Service 009 — Green and black editorial theme](church-service-009/reference.md): oversized serif theme, red word circles, matching gold date/time frames, prominent speaker and optional livestream/texture.
+
 ## Collection guidance
 
 Add more typography-led designs without photographs, varied multiple-person compositions, atmospheric photography, restrained designs, and expressive layered designs. Across those examples, cover recurring services, long church names, optional themes, different service counts, long venues, and services held on weekdays other than Sunday.
