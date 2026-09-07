@@ -11,15 +11,15 @@ import ten from '../../docs/design-library/church-and-worship/church-service/chu
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/10';
+export const CREATION_VERSION = 'church-creation/11';
 // Short executable art direction complements the long reference annotation.
 const headlineDirections = [
   'Split SUNDAY into SUN / DAY in a playful heavy face such as chewy or lilita_one; SERVICE is a separate contrasting line fitted to the same block width. Use a warm gradient in the logistics backing.',
-  'Use playfair_display or crimson_pro for SUNDAY, with a separate allura or great_vibes SERVICE overlapping its lower edge. Give the script a contrasting outline via stroke and strokeWidthRatio.',
+  'Use playfair_display or crimson_pro for SUNDAY, with a separate allura or great_vibes Service overlapping its lower edge. Give the script a contrasting outline via stroke and strokeWidthRatio.',
   'For Sunday Service use three editable text elements: one large serif S spanning two rows, UNDAY above ERVICE to its right. Together they read Sunday Service exactly once. Use playfair_display or georgia. For other titles adapt without inventing letters.',
-  'Pair anton or oswald SUNDAY with a separate dancing_script or allura SERVICE, light outline and restrained overlap. Keep the script expressive, not another condensed uppercase line.',
+  'Pair anton or oswald SUNDAY with a separate dancing_script or allura Service, light outline and restrained overlap. Keep the script expressive, not another condensed uppercase line.',
   'Use montserrat or raleway bold for the two-line event title, a wide geometric block with aligned edges. Do not default to Anton. White cards and the asymmetric portrait distinguish this family.',
-  'For Sunday Service use an oversized great_vibes S, bold montserrat UNDAY and a separate great_vibes SERVICE beneath. Apply a pink-to-orange text gradient to S and UNDAY, with a contrasting dark script SERVICE. Preserve readable word order.',
+  'For Sunday Service use an oversized great_vibes S, bold montserrat UNDAY and a separate great_vibes Service beneath. Apply a pink-to-orange text gradient to S and UNDAY, with a contrasting dark script Service. Preserve readable word order.',
   'Use a broad bold inter or poppins event headline and contrasting warm-gradient date card. The page uses a warm-to-dark background gradient; do not make every card solid.',
   'Use tall bebas_neue or oswald tightly stacked aligned headline lines; portrait ensemble is the focus below. Use a warm gradient theme card against the cool background.',
   'Make the supplied theme the editorial headline in playfair_display or crimson_pro, with separate small connecting words in red circles when they suit the actual phrase. Keep the event title smaller. Without a theme use an editorial serif event title, not plain condensed sans.',
@@ -43,6 +43,7 @@ ${formatPosterLayoutSkillForPrompt({ phase: creation.phase === 'review' ? 'criti
 Design reference ${creation.referenceId}:\n${[one,two,three,four,five,six,seven,eight,nine,ten][creation.referenceId - 1]}
 REQUIRED DESIGN CHARACTER: ${headlineDirections[creation.referenceId - 1]}
 Retain this family-specific typography in both design and review, unless the user explicitly requests a conflicting treatment or the wording makes it unsuitable. Do not flatten every family into identical plain SUNDAY / SERVICE text. Split a headline into editable word/letter elements when needed for mixed fonts, shared initials or script overlays; the whole assembly spells the event title once. Select real fontFamily tokens, never describe a font only in labels. Use at most two main headline faces, and measure their boxes separately. Preserve intentional decorative text overlaps, while keeping every word readable.
+SCRIPT CASING: Flowing script/calligraphic fonts (allura, great_vibes, dancing_script, sacramento, satisfy, tangerine, pacifico) use mixed case: Service, Sunday, With, rather than SERVICE, SUNDAY, WITH. Capitalise the initial and use lowercase for the remaining letters to preserve connected strokes. Keep proper names, acronyms and exact brand spelling intact. A standalone decorative initial S remains uppercase. Bold sans-serif headings may stay uppercase. Apply this in design and review unless the user explicitly requests all caps.
 GRADIENT CONTROLS: textFillType='linear', textFillStart and textFillEnd as hex colours, textFillAngle=0 for a horizontal gradient. These fields also apply to rect/circle/ellipse/triangle/star shape fills despite their textFill prefix. Set fill to a non-null fallback colour. Canvas gradients use backgroundType='linear', backgroundTop/backgroundBottom and gradientAngle. Use gradients where the selected family calls for them, not only on the page background. Script outlines use stroke plus strokeWidthRatio (typically 0.001–0.004). Flat means no 3D extrusion; it DOES allow scripts, serif fonts, outlines, gradient fills and layered headline arrangements.
 During review verify the selected headline character and gradient treatments actually survived, as well as content and readability. Repair a generic fallback while retaining the overall composition.
 Geometry: boxes are normalized to the whole canvas. Keep text within 0.04..0.96 with padding.

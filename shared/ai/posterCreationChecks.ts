@@ -304,6 +304,11 @@ export function prepareCreatedPoster(plan: PosterReconstructionPlan, prompt: str
   for (const item of elements) {
     if (item.kind === 'text') {
       if (title(item.text) && !/worship/i.test(prompt)) item.text = item.text.replace(/worship\s*/i, '');
+      // Only ordinary standalone headline words: never rewrite names or acronyms.
+      const scriptFonts = ['allura', 'great_vibes', 'dancing_script', 'sacramento', 'satisfy', 'tangerine', 'pacifico'];
+      if (scriptFonts.includes(item.fontFamily) && !item.fontCatalogId && !/all[ -]?caps|uppercase|capital letters/i.test(prompt)) {
+        item.text = item.text.replace(/^(\s*)(SERVICE|SUNDAY|WITH)(\s*)$/, (_match, before: string, word: string, after: string) => before + word[0] + word.slice(1).toLowerCase() + after);
+      }
       item.opacity = 1;
     }
     if (item.imageRole === 'logo') {

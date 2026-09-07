@@ -9,6 +9,14 @@ function item(key: string, text: string, overrides: Partial<ReconstructionElemen
 const complete = [item('church','Christ Ekklesia Fellowship Chapel'), item('pastor','Pst David Kituyi'), item('date','23 AUG 2026'), item('time','First service 8:00 AM\nSecond service 9:30 AM'), item('venue','Chapchap 300m from Kabarak University gate'), item('theme','God the Loving Father')];
 const plan = (elements: ReconstructionElement[]) => ({ ...createFallbackReconstructionPlan(), elements });
 describe('church generation regressions', () => {
+  it('uses mixed case for standalone script headings without changing block headings or names', () => {
+    const source = plan([item('service','SERVICE',{fontFamily:'great_vibes'}), item('day','SUNDAY',{fontFamily:'anton'}), item('name','NASA',{fontFamily:'allura'})]);
+    const result = prepareCreatedPoster(source, '', false);
+    expect(result.elements.map(element => element.text)).toEqual(['Service', 'SUNDAY', 'NASA']);
+    expect(source.elements[0].text).toBe('SERVICE');
+    expect(prepareCreatedPoster(source, 'Use all caps', false).elements[0].text).toBe('SERVICE');
+  });
+
   it('centres a two-row group without changing its spacing or horizontal anchors', () => {
     const elements=[item('card','',{kind:'rect',box:{x:.1,y:.4,width:.7,height:.2}}),item('first','8AM',{box:{x:.15,y:.42,width:.5,height:.03}}),item('second','9:30AM',{box:{x:.15,y:.47,width:.5,height:.03}})];
     centerCreatedCardContents(elements);

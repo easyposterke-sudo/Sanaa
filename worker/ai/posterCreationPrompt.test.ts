@@ -11,7 +11,7 @@ describe('prompt-based poster creation', () => {
   it('preserves distinct headline directions and exposes shape gradient controls', () => {
     const script = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 2 } });
     const sharedInitial = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 3 } });
-    expect(script).toContain('separate allura or great_vibes SERVICE');
+    expect(script).toContain('separate allura or great_vibes Service');
     expect(sharedInitial).toContain('UNDAY above ERVICE');
     expect(script).toContain('These fields also apply to rect/circle/ellipse/triangle/star');
   });
