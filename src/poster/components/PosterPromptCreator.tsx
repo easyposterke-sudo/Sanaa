@@ -7,14 +7,16 @@ import { searchStockPhotos, downloadStockPhoto } from '../services/stockPhotosAp
 import { capturePosterThumbnail, getFabricCanvasRef } from '../canvasRef';
 import type { PosterReconstructionPlan, PosterReconstructionRequest } from '../../../shared/ai/posterReconstruction';
 
-type AssetRole = 'person' | 'logo' | 'background_photo';
-const styles = ['Warm split layout', 'Blue central speaker', 'Black and gold', 'White and maroon', 'Blue information cards', 'Pink typographic', 'Orange and olive'];
+type AssetRole = 'logo' | 'background_photo';
+type Speaker = { id: string; name: string; role: string; image?: PreparedPosterImage };
+const styles = ['Warm split layout', 'Blue central speaker', 'Black and gold', 'White and maroon', 'Blue information cards', 'Pink typographic', 'Orange and olive', 'Red and blue speaker group'];
 type Props = { onApply: (draft: CompiledPosterReconstruction) => void; onClose: () => void; onImport: () => void };
 
 export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('auto');
   const [assets, setAssets] = useState<Partial<Record<AssetRole, PreparedPosterImage>>>({});
+  const [speakers, setSpeakers] = useState<Speaker[]>([{ id: 'speaker_1', name: '', role: '' }]);
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [status, setStatus] = useState('');
@@ -31,13 +33,25 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
     finally { setPreparing(false); }
   }
 
+  async function uploadSpeaker(id: string, file?: File) {
+    if (!file) return;
+    setPreparing(true); setError('');
+    try {
+      const image = await prepareTemplateReference(file);
+      setSpeakers(current => current.map(speaker => speaker.id === id ? { ...speaker, image } : speaker));
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Image could not be loaded.'); }
+    finally { setPreparing(false); }
+  }
+
   async function generate() {
     setBusy(true); setError(''); setResult(null); setPreview(null);
     let draft: CompiledPosterReconstruction | null = null;
     const warnings: string[] = [];
     try {
-      const families = assets.person ? [2, 4, 5] : [1, 3, 6, 7];
-      const choices = families.filter(id => id !== lastStyle);
+      const portraits = speakers.filter(speaker => speaker.image);
+      const families = portraits.length > 1 ? [8] : portraits.length ? [2, 4, 5, 8] : [1, 3, 6, 7];
+      const fresh = families.filter(id => id !== lastStyle);
+      const choices = fresh.length ? fresh : families;
       const referenceId = style === 'auto' ? choices[Math.floor(Math.random() * choices.length)]! : Number(style);
       setLastStyle(referenceId);
       const blank = document.createElement('canvas'); blank.width = 1080; blank.height = 1350;
@@ -45,14 +59,23 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       const reference = { dataUrl: blank.toDataURL('image/png'), width: 1080, height: 1350 };
       const creation: NonNullable<PosterReconstructionRequest['creation']> = {
         prompt, seed: crypto.randomUUID(), referenceId, phase: 'design',
-        assets: (Object.entries(assets) as [AssetRole, PreparedPosterImage][]).map(([role, image]) => ({ role, dataUrl: image.dataUrl, width: image.width, height: image.height })),
+        speakers: speakers.filter(speaker => speaker.image || speaker.name.trim() || speaker.role.trim()).map(({ id, name, role }) => ({ id, name: name.trim(), role: role.trim() })),
+        assets: [
+          ...(Object.entries(assets) as [AssetRole, PreparedPosterImage][]).map(([role, image]) => ({ role, dataUrl: image.dataUrl, width: image.width, height: image.height })),
+          ...portraits.map(speaker => ({ role: 'person' as const, key: `asset_person_${speaker.id}`, dataUrl: speaker.image!.dataUrl, width: speaker.image!.width, height: speaker.image!.height })),
+        ],
       };
       const replacements: Record<string, ReconstructionImageReplacement> = {};
       for (const [role, asset] of Object.entries(assets)) replacements[`asset_${role}`] = { src: asset.dataUrl, width: asset.width, height: asset.height };
+      for (const speaker of portraits) replacements[`asset_person_${speaker.id}`] = { src: speaker.image!.dataUrl, width: speaker.image!.width, height: speaker.image!.height };
       setStatus(`Designing with reference ${referenceId}…`);
       let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
       response.plan = prepareCreatedPoster(response.plan, prompt, !!assets.logo);
-      const checkPlan = (plan: PosterReconstructionPlan) => blockingPosterCreationIssues(plan, prompt, !!assets.background_photo);
+      const checkPlan = (plan: PosterReconstructionPlan) => [
+        ...blockingPosterCreationIssues(plan, prompt, !!assets.background_photo),
+        ...(creation.speakers ?? []).flatMap(speaker => [speaker.name, speaker.role]).filter(value => value && !plan.elements.filter(item => item.kind === 'text' && item.opacity > 0 && item.fill).map(item => item.text).join(' ').toLowerCase().replace(/\s+/g, ' ').includes(value.toLowerCase().replace(/\s+/g, ' '))).map(value => `Include speaker detail as visible text: ${value}`),
+        ...portraits.filter(speaker => !plan.elements.some(item => item.key === `asset_person_${speaker.id}` && item.kind === 'image_region' && item.imageRole === 'person' && item.opacity > 0)).map(speaker => `Include the uploaded portrait for ${speaker.name || speaker.id} using key asset_person_${speaker.id}`),
+      ];
       const missing = checkPlan(response.plan);
       if (missing.length) {
         setStatus('Repairing missing details, assets, or layout…');
@@ -70,7 +93,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         const assetIssues = uploadedBackgroundIssues(safePlan, !!assets.background_photo);
         if (assetIssues.length) throw new Error(assetIssues.join(' '));
         const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements, balanceInformationCards: true });
-        compiled.warnings.push(...portraitSizingIssues(safePlan, assets.person, prompt));
+        compiled.warnings.push(...portraitSizingIssues(safePlan, portraits.length === 1 ? portraits[0].image : undefined, prompt));
         return compiled;
       };
       const stock = response.plan.elements.find(item => item.key === 'stock_background' && item.imageRole === 'background_photo');
@@ -113,11 +136,23 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
     <div className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 text-zinc-900 shadow-xl dark:bg-zinc-900 dark:text-white">
       <div className="flex items-center justify-between gap-4"><h2 id="prompt-poster-title" className="text-xl font-semibold">Create with AI</h2><button disabled={busy || preparing} onClick={onClose}>Close</button></div>
       <p className="mt-2 text-sm text-zinc-500">Church and Worship · Church Service · 1080 × 1350</p>
-      <label className="mt-5 block font-medium" htmlFor="poster-brief">Describe your Sunday service poster</label>
-      <textarea id="poster-brief" value={prompt} disabled={busy} maxLength={4000} onChange={event => setPrompt(event.target.value)} rows={5} placeholder="Church name, theme, date or Every Sunday, time, venue, contacts, and the mood you want. Only supplied details will be included." className="mt-2 w-full rounded-lg border border-zinc-300 bg-transparent p-3" />
+      <label className="mt-5 block font-medium" htmlFor="poster-brief">Describe your church service poster</label>
+      <textarea id="poster-brief" value={prompt} disabled={busy} maxLength={4000} onChange={event => setPrompt(event.target.value)} rows={5} placeholder="Church name, event title, theme, date or recurring weekday, time, venue, contacts, and the mood you want. Only supplied details will be included." className="mt-2 w-full rounded-lg border border-zinc-300 bg-transparent p-3" />
       <label className="mt-3 block" htmlFor="poster-style">Design direction</label>
       <select id="poster-style" disabled={busy} value={style} onChange={event => setStyle(event.target.value)} className="mt-1 w-full rounded-lg border bg-white p-2 text-zinc-900"><option value="auto">Choose a fresh direction</option>{styles.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}</select>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">{(['person', 'logo', 'background_photo'] as const).map(role => <label key={role} className="rounded-lg border p-2 text-sm">{role === 'person' ? 'Speaker photo (optional)' : role === 'logo' ? 'Logo (optional)' : 'Background (optional)'}<input aria-label={role} type="file" accept="image/png,image/jpeg,image/webp" disabled={busy || preparing} className="mt-2 w-full text-xs" onChange={event => void upload(role, event.target.files?.[0])} />{assets[role] && <button type="button" disabled={busy} className="mt-2 underline" onClick={() => setAssets(current => { const next = { ...current }; delete next[role]; return next; })}>Remove</button>}</label>)}</div>
+      <section className="mt-4 space-y-3" aria-label="Speakers">
+        <h3 className="font-medium">Speakers (optional)</h3>
+        {speakers.map((speaker, index) => <div key={speaker.id} className="space-y-2 rounded-lg border p-3">
+          <p className="font-medium">Speaker {index + 1}</p>
+          <label className="block">Name<input aria-label={`Speaker ${index + 1} name`} maxLength={120} disabled={busy} value={speaker.name} onChange={event => setSpeakers(current => current.map(item => item.id === speaker.id ? { ...item, name: event.target.value } : item))} className="ml-2 rounded border bg-transparent p-2" /></label>
+          <label className="block">Role<input aria-label={`Speaker ${index + 1} role`} maxLength={80} placeholder="Host, Guest, Ministering..." disabled={busy} value={speaker.role} onChange={event => setSpeakers(current => current.map(item => item.id === speaker.id ? { ...item, role: event.target.value } : item))} className="ml-2 rounded border bg-transparent p-2" /></label>
+          <label className="block">Photo<input aria-label={`Speaker ${index + 1} photo`} type="file" accept="image/png,image/jpeg,image/webp" disabled={busy || preparing} onChange={event => void uploadSpeaker(speaker.id, event.target.files?.[0])} /></label>
+          {speaker.image && <><img src={speaker.image.dataUrl} alt={`Speaker ${index + 1} upload`} className="h-20 w-20 object-contain" /><button type="button" disabled={busy || preparing} onClick={() => setSpeakers(current => current.map(item => item.id === speaker.id ? { ...item, image: undefined } : item))}>Remove photo</button></>}
+          {speakers.length > 1 && <button type="button" disabled={busy || preparing} onClick={() => setSpeakers(current => current.filter(item => item.id !== speaker.id))} className="ml-3 underline">Remove speaker {index + 1}</button>}
+        </div>)}
+        <button type="button" disabled={busy || preparing} onClick={() => setSpeakers(current => [...current, { id: `speaker_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`, name: '', role: '' }])} className="rounded-lg border px-3 py-2">Add speaker</button>
+      </section>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">{(['logo', 'background_photo'] as const).map(role => <label key={role} className="rounded-lg border p-2 text-sm">{role === 'logo' ? 'Logo (optional)' : 'Background (optional)'}<input aria-label={role} type="file" accept="image/png,image/jpeg,image/webp" disabled={busy || preparing} className="mt-2 w-full text-xs" onChange={event => void upload(role, event.target.files?.[0])} />{assets[role] && <button type="button" disabled={busy} className="mt-2 underline" onClick={() => setAssets(current => { const next = { ...current }; delete next[role]; return next; })}>Remove</button>}</label>)}</div>
       <p className="mt-3 text-xs text-zinc-500">Use a transparent speaker cutout for portrait layouts. Background photo requests use Pexels when configured. This prototype opens a new draft in the current canvas; save your current work first.</p>
       <p role="status" aria-live="polite" className="mt-4 text-sm">{preparing ? 'Preparing image…' : status}</p>
       {error && <p role="alert" className="mt-3 text-red-600">{error}</p>}

@@ -5,10 +5,11 @@ import four from '../../docs/design-library/church-and-worship/church-service/ch
 import five from '../../docs/design-library/church-and-worship/church-service/church-service-005/reference.md?raw';
 import six from '../../docs/design-library/church-and-worship/church-service/church-service-006/reference.md?raw';
 import seven from '../../docs/design-library/church-and-worship/church-service/church-service-007/reference.md?raw';
+import eight from '../../docs/design-library/church-and-worship/church-service/church-service-008/reference.md?raw';
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/5';
+export const CREATION_VERSION = 'church-creation/7';
 export function posterCreationPrompt(request: PosterReconstructionRequest): string {
   const creation = request.creation!;
   return `You are a church-service graphic designer creating ORIGINAL editable posters, not tracing a reference.
@@ -24,15 +25,17 @@ Choose a deliberate palette, type pairing, negative space and hierarchy. Summary
 Use the supplied reference annotation as adaptable design guidance, not mandatory coordinates.
 Variation seed: ${creation.seed}. Produce a fresh coherent variation of the chosen family.
 ${formatPosterLayoutSkillForPrompt({ phase: creation.phase === 'review' ? 'critique' : 'planning', posterType: 'church_ministry' })}
-Design reference ${creation.referenceId}:\n${[one,two,three,four,five,six,seven][creation.referenceId - 1]}
+Design reference ${creation.referenceId}:\n${[one,two,three,four,five,six,seven,eight][creation.referenceId - 1]}
 Geometry: boxes are normalized to the whole canvas. Keep text within 0.04..0.96 with padding.
 fontSizeRatio is visible glyph height divided by poster height. Use accurate boxes for intended line breaks.
 Use 8–25 useful layers, max 45. Text is editable, never image artwork. Only flat text for this prototype.
 All unused fields must use neutral values: empty strings, null nullable colours, zero effects, arial, normal, 400, empty pathPoints, pathClosed false, pathUsage not_applicable, pathTension 0.28, imageRole none, iconName none.
 Use rect/circle/ellipse/line for simple decoration; no complex paths or 3D text in this prototype.
-Available uploaded asset roles: ${creation.assets.map(a => a.role).join(', ') || 'none'}.
+Speaker roster (user-supplied data): ${JSON.stringify(creation.speakers ?? [])}. Include every supplied name and role as editable text, beside the matching portrait. A speaker without a photo still gets their supplied name/role; do not invent a portrait. Never guess a role. Adapt to the actual number of speakers, not a fixed three: use rows or a balanced group for larger rosters, keeping faces and names readable. Only give host prominence when explicitly designated. Single-speaker height guidance does not apply to groups.
+Speaker roster (user-supplied data): ${JSON.stringify(creation.speakers ?? [])}. Include every supplied name and role as editable text beside the matching portrait. If no photo is supplied, use text only. Never guess a role. Adapt to the actual speaker count, not a fixed three: use rows or a balanced group for larger rosters. Only give host prominence when explicitly designated. Single-speaker height guidance does not apply to groups.
+Available uploaded asset roles: ${creation.assets.map(a => `${a.key ?? `asset_${a.role}`} (${a.role})`).join(', ') || 'none'}.
 When background_photo is supplied, its use is REQUIRED in both design and review. Emit asset_background_photo with imageRole background_photo and use the actual uploaded image, never stock as a substitute. Expose it visibly across a substantial region (at least 8% of canvas, opacity at least 0.05). Do not cover it completely with opaque shapes. Use restrained translucent overlays or leave a clear photographic region, and preserve readable text. During visual review explicitly check that the supplied background remains recognisable, not merely present as a hidden layer.
-For uploaded assets emit image_region with key exactly asset_person, asset_logo or asset_background_photo. Never invent a person/logo.
+For uploaded assets emit image_region with the exact supplied key, falling back to asset_person, asset_logo or asset_background_photo only when no key is supplied. Speaker photo keys end in the matching roster id. Use each supplied portrait once, never substitute or duplicate a different speaker. Never invent a person/logo.
 Use clean supplied portraits as-is; don't claim background removal. Respect their actual image background when composing.
 For a main single speaker, reserve a generous column and make the person visually prominent: normally 60–75% of poster height, not a small figure at the bottom of empty space. The renderer CONTAINS the source image in your box without stretching, so a narrow box can shrink the actual height even if the box is tall. Supplied asset dimensions: ${creation.assets.map(a => `${a.role}: ${a.width}x${a.height}`).join(', ')}. Size BOTH box width and height for that aspect ratio. Reflow the title/theme/logistics into the opposite column; keep the face and hands clear, bottom-align deliberately, and preserve safe margins. Smaller portraits are appropriate only if explicitly requested or intentionally framed as a badge. During review check actual rendered person size, not just the planned box.
 No other image regions except semantic icons (iconName != none), or one stock background_photo with key stock_background, replacementRecommended true and a concrete imageSearchQuery, if the brief asks for a background photo.

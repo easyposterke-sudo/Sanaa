@@ -67,7 +67,7 @@ export async function reconstructPosterWithOpenAI(input: {
     },
   ];
   for (const asset of input.request.creation?.assets ?? []) {
-    userContent.push({ type: 'input_text', text: `Supplied asset: ${asset.role}` });
+    userContent.push({ type: 'input_text', text: `Supplied asset: ${asset.key ?? `asset_${asset.role}`} (${asset.role})` });
     userContent.push({ type: 'input_image', image_url: asset.dataUrl, detail: 'high' });
   }
   if (input.request.fontCatalog?.entries.length) {

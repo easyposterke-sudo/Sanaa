@@ -18,8 +18,15 @@ describe('prompt-based poster creation', () => {
   it('requires a prior manifest for review and bounds reference selection', () => {
     expect(PosterReconstructionRequestSchema.safeParse(request).success).toBe(true);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, phase: 'review' } }).success).toBe(false);
-    expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 8 } }).success).toBe(false);
+    expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 8 } }).success).toBe(true);
+    expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 9 } }).success).toBe(false);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, assets: [{ role: 'person', dataUrl: 'https://example.com/unsafe', width: 100, height: 100 }] } }).success).toBe(false);
+  });
+  it('loads the weekday three-person design family', () => {
+    const prompt = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 8 } });
+    expect(prompt).toContain('church-service-008');
+    expect(prompt).toContain('face-safe portrait overlap');
+    expect(prompt).not.toContain('church-service-007');
   });
   it('instructs review to preserve the composition and inspect the rendered image', () => {
     const prompt = posterCreationPrompt({ ...request, creation: { ...request.creation!, phase: 'review', previousPlan: createFallbackReconstructionPlan() } });

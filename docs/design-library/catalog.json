@@ -188,6 +188,33 @@
         "contact-footer"
       ],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-008",
+      "title": "Red and blue church service — three-person host and guest composition",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-008/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-008/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "weekday-church-service",
+        "three-person-composition",
+        "central-host",
+        "two-side-guests",
+        "overlapping-cutout-portraits",
+        "face-safe-layering",
+        "aligned-stacked-headline",
+        "condensed-sans-serif",
+        "red-blue-atmospheric-background",
+        "date-time-card",
+        "theme-facilitator-card",
+        "optional-logo",
+        "optional-presents",
+        "optional-footer"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     }
   ]
 }

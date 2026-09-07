@@ -208,15 +208,17 @@ export const PosterReconstructionRequestSchema = z
     creation: z.object({
       prompt: z.string().trim().min(10).max(4000),
       seed: z.string().min(1).max(80),
-      referenceId: z.number().int().min(1).max(7),
+      referenceId: z.number().int().min(1).max(8),
       phase: z.enum(['design', 'review']),
       previousPlan: PosterReconstructionPlanSchema.optional(),
+      speakers: z.array(z.object({ id: z.string().regex(/^speaker_[a-z0-9_]{1,27}$/), name: z.string().max(120), role: z.string().max(80) }).strict()).optional(),
       assets: z.array(z.object({
+        key: z.string().max(48).regex(/^asset_(person(?:_[a-z0-9_]+)?|logo|background_photo)$/).optional(),
         role: z.enum(['person', 'logo', 'background_photo']),
         dataUrl: z.string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
         width: z.number().int().min(1).max(4096),
         height: z.number().int().min(1).max(4096),
-      }).strict()).max(3),
+      }).strict()),
     }).strict().refine(value => value.phase !== 'review' || !!value.previousPlan, 'Review requires a draft').optional(),
     fontCatalog: ReconstructionFontCatalogSchema.optional(),
   })

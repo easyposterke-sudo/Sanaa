@@ -18,8 +18,10 @@ References for Sunday services and other regular or dated church services. Style
 
 7. [Church Service 007 — Orange and olive Sunday service](church-service-007/reference.md): vertical gradient, subdued worship imagery, contrasting schedule cards, optional contour lines and chevrons, and contact footer.
 
+8. [Church Service 008 — Red and blue three-person church service](church-service-008/reference.md): aligned oversized headline, larger central host, two side guests with face-safe overlap, and separate date/time and theme cards.
+
 ## Collection guidance
 
-Add typography-led designs without photographs, single-portrait and multiple-person compositions, atmospheric photography, restrained designs, and expressive layered designs. Across those examples, cover recurring services, long church names, optional themes, different service counts, and long venues.
+Add more typography-led designs without photographs, varied multiple-person compositions, atmospheric photography, restrained designs, and expressive layered designs. Across those examples, cover recurring services, long church names, optional themes, different service counts, long venues, and services held on weekdays other than Sunday.
 
 Use the shared [annotation template](../../REFERENCE_TEMPLATE.md). Preserve exact user-supplied facts in future generated posters; never inherit this reference's date, name, or website by default. A specific date and a recurring-service label require different wording, but do not necessarily require separate layout families.
