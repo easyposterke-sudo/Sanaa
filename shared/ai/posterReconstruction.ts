@@ -208,7 +208,7 @@ export const PosterReconstructionRequestSchema = z
     creation: z.object({
       prompt: z.string().trim().min(10).max(4000),
       seed: z.string().min(1).max(80),
-      referenceId: z.number().int().min(1).max(9),
+      referenceId: z.number().int().min(1).max(10),
       phase: z.enum(['design', 'review']),
       previousPlan: PosterReconstructionPlanSchema.optional(),
       speakers: z.array(z.object({ id: z.string().regex(/^speaker_[a-z0-9_]{1,27}$/), name: z.string().max(120), role: z.string().max(80) }).strict()).optional(),

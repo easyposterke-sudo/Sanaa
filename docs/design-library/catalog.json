@@ -236,6 +236,26 @@
         "optional-torn-paper"
       ],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-010",
+      "title": "Purple and gold church service — central portrait with layered occasion headline",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-010/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-010/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "central-speaker",
+        "clothing-matched-palette",
+        "purple-gold",
+        "theme-scripture",
+        "outlined-script",
+        "gradient-logistics-strip",
+        "optional-edition"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     }
   ]
 }

@@ -7,10 +7,11 @@ import six from '../../docs/design-library/church-and-worship/church-service/chu
 import seven from '../../docs/design-library/church-and-worship/church-service/church-service-007/reference.md?raw';
 import eight from '../../docs/design-library/church-and-worship/church-service/church-service-008/reference.md?raw';
 import nine from '../../docs/design-library/church-and-worship/church-service/church-service-009/reference.md?raw';
+import ten from '../../docs/design-library/church-and-worship/church-service/church-service-010/reference.md?raw';
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/8';
+export const CREATION_VERSION = 'church-creation/9';
 export function posterCreationPrompt(request: PosterReconstructionRequest): string {
   const creation = request.creation!;
   return `You are a church-service graphic designer creating ORIGINAL editable posters, not tracing a reference.
@@ -26,7 +27,7 @@ Choose a deliberate palette, type pairing, negative space and hierarchy. Summary
 Use the supplied reference annotation as adaptable design guidance, not mandatory coordinates.
 Variation seed: ${creation.seed}. Produce a fresh coherent variation of the chosen family.
 ${formatPosterLayoutSkillForPrompt({ phase: creation.phase === 'review' ? 'critique' : 'planning', posterType: 'church_ministry' })}
-Design reference ${creation.referenceId}:\n${[one,two,three,four,five,six,seven,eight,nine][creation.referenceId - 1]}
+Design reference ${creation.referenceId}:\n${[one,two,three,four,five,six,seven,eight,nine,ten][creation.referenceId - 1]}
 Geometry: boxes are normalized to the whole canvas. Keep text within 0.04..0.96 with padding.
 fontSizeRatio is visible glyph height divided by poster height. Use accurate boxes for intended line breaks.
 Use 8–25 useful layers, max 45. Text is editable, never image artwork. Only flat text for this prototype.

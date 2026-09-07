@@ -9,7 +9,7 @@ import type { PosterReconstructionPlan, PosterReconstructionRequest } from '../.
 
 type AssetRole = 'logo' | 'background_photo';
 type Speaker = { id: string; name: string; role: string; image?: PreparedPosterImage };
-const styles = ['Warm split layout', 'Blue central speaker', 'Black and gold', 'White and maroon', 'Blue information cards', 'Pink typographic', 'Orange and olive', 'Red and blue speaker group', 'Green editorial theme'];
+const styles = ['Warm split layout', 'Blue central speaker', 'Black and gold', 'White and maroon', 'Blue information cards', 'Pink typographic', 'Orange and olive', 'Red and blue speaker group', 'Green editorial theme', 'Purple layered occasion'];
 type Props = { onApply: (draft: CompiledPosterReconstruction) => void; onClose: () => void; onImport: () => void };
 
 export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
@@ -49,7 +49,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
     const warnings: string[] = [];
     try {
       const portraits = speakers.filter(speaker => speaker.image);
-      const families = portraits.length > 1 ? [8] : portraits.length ? [2, 4, 5, 8, 9] : [1, 3, 6, 7];
+      const families = portraits.length > 1 ? [8] : portraits.length ? [2, 4, 5, 8, 9, 10] : [1, 3, 6, 7];
       const fresh = families.filter(id => id !== lastStyle);
       const choices = fresh.length ? fresh : families;
       const referenceId = style === 'auto' ? choices[Math.floor(Math.random() * choices.length)]! : Number(style);

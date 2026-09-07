@@ -22,6 +22,8 @@ References for Sunday services and other regular or dated church services. Style
 
 9. [Church Service 009 — Green and black editorial theme](church-service-009/reference.md): oversized serif theme, red word circles, matching gold date/time frames, prominent speaker and optional livestream/texture.
 
+10. [Church Service 010 — Purple and gold layered occasion](church-service-010/reference.md): clothing-matched background, central portrait, side theme/scripture, outlined script and gradient logistics strip.
+
 ## Collection guidance
 
 Add more typography-led designs without photographs, varied multiple-person compositions, atmospheric photography, restrained designs, and expressive layered designs. Across those examples, cover recurring services, long church names, optional themes, different service counts, long venues, and services held on weekdays other than Sunday.
