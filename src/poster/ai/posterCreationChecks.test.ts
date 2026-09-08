@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues, centerCreatedCardContents } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues, centerCreatedCardContents, posterCompositionIssues } from '../../../shared/ai/posterCreationChecks';
 import { createFallbackReconstructionPlan, type ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 
 const brief = 'I would like a poster for a sunday Service for a church called Christ Ekklesia fellowship chapel. Lead pastor is Pst David Kituyi. First service starts at 8am and second service starts at 9:30am. the church is located at Chapchap 300m from Kabarak University gate. This is a poster for 23rd August 2026. The theme is God the Loving Father.';
@@ -31,12 +31,26 @@ describe('church generation regressions', () => {
     centerCreatedCardContents(elements);
     expect(elements[1]!.box.y).toBe(.1);
   });
-  it('allows a complete draft and review with a small portrait while retaining a sizing warning', () => {
+  it('returns actionable prominence feedback separately from content checks', () => {
     const person = item('asset_person','',{kind:'image_region',imageRole:'person',imageMask:'none',box:{x:.7,y:.7,width:.15,height:.2}});
     const draft = plan([...complete, person]);
     expect(blockingPosterCreationIssues(draft, brief, false)).toEqual([]);
-    expect(portraitSizingIssues(draft,{width:600,height:1000},brief)[0]).toContain('may look small');
+    expect(portraitSizingIssues(draft,{width:600,height:1000},brief)[0]).toContain('Enlarge asset_person');
     expect(blockingPosterCreationIssues(plan([person]), brief, false).length).toBeGreaterThan(0);
+  });
+  it('preserves background blending through repeated preparation', () => {
+    const assets = [{role:'background_photo' as const,width:1080,height:1350,dataUrl:'data:image/png;base64,AAAA'}];
+    const source = plan([item('asset_background_photo','',{kind:'image_region',imageRole:'background_photo',opacity:.48,box:{x:0,y:0,width:1,height:.51}})]);
+    const once = reconcileUploadedCreationAssets(source,assets);
+    expect(reconcileUploadedCreationAssets(once,assets).elements[0].opacity).toBe(.48);
+    expect(source.elements[0].opacity).toBe(.48);
+  });
+  it('requests clustered date/time panels but respects deliberate separation', () => {
+    const source = plan([item('date','23rd August 2026',{box:{x:.7,y:.1,width:.25,height:.1}}),item('schedule','8AM and 9:30AM',{box:{x:.1,y:.7,width:.4,height:.1}})]);
+    expect(posterCompositionIssues(source,'')).toHaveLength(1);
+    expect(posterCompositionIssues(source,'Use separate date and time panels')).toEqual([]);
+    source.elements[0].box = {x:.1,y:.82,width:.4,height:.08};
+    expect(posterCompositionIssues(source,'')).toEqual([]);
   });
   it('checks fitted person height instead of trusting a tall but narrow portrait box', () => {
     const person = item('asset_person','',{kind:'image_region',imageRole:'person',imageMask:'none',box:{x:.05,y:.2,width:.25,height:.72}});

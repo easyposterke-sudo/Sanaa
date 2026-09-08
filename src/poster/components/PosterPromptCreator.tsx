@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { blockingPosterCreationIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues } from '../../../shared/ai/posterCreationChecks';
+import { blockingPosterCreationIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues, posterCompositionIssues } from '../../../shared/ai/posterCreationChecks';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
@@ -77,6 +77,8 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       response.plan = preparePlan(response.plan);
       const checkPlan = (plan: PosterReconstructionPlan) => [
         ...blockingPosterCreationIssues(plan, prompt, !!assets.background_photo),
+        ...portraitSizingIssues(plan, portraits.length === 1 ? portraits[0].image : undefined, prompt, reference),
+        ...posterCompositionIssues(plan, prompt),
         ...(creation.speakers ?? []).flatMap(speaker => [speaker.name, speaker.role]).filter(value => value && !plan.elements.filter(item => item.kind === 'text' && item.opacity > 0 && item.fill).map(item => item.text).join(' ').toLowerCase().replace(/\s+/g, ' ').includes(value.toLowerCase().replace(/\s+/g, ' '))).map(value => `Include speaker detail as visible text: ${value}`),
         ...portraits.filter(speaker => !plan.elements.some(item => item.key === `asset_person_${speaker.id}` && item.kind === 'image_region' && item.imageRole === 'person' && item.opacity > 0)).map(speaker => `Include the uploaded portrait for ${speaker.name || speaker.id} using key asset_person_${speaker.id}`),
       ];
@@ -97,7 +99,6 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         const assetIssues = uploadedBackgroundIssues(safePlan, !!assets.background_photo);
         if (assetIssues.length) throw new Error(assetIssues.join(' '));
         const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements, balanceInformationCards: true });
-        compiled.warnings.push(...portraitSizingIssues(safePlan, portraits.length === 1 ? portraits[0].image : undefined, prompt));
         return compiled;
       };
       const stock = response.plan.elements.find(item => item.key === 'stock_background' && item.imageRole === 'background_photo');
@@ -120,13 +121,27 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       if (snapshot) {
         try {
           setStatus('Reviewing the canvas and making one correction pass…');
-          const reviewed = await requestPosterReconstruction({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: { ...creation, phase: 'review', previousPlan: response.plan } });
-          const corrected = await compile(reviewed.plan);
+          let corrected: CompiledPosterReconstruction | null = null;
+          let feedback = '';
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const reviewed = await requestPosterReconstruction({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: { ...creation, phase: 'review', previousPlan: response.plan, prompt: `${prompt}${feedback}` } });
+            const candidate = preparePlan(reviewed.plan);
+            const issues = checkPlan(candidate);
+            if (issues.length) {
+              feedback = `\nThe proposed correction was rejected: ${issues.join('; ')}. Correct these issues while preserving every supplied fact and asset from the original draft shown. Do not ask the user to repair the layout.`;
+              if (attempt === 1) throw new Error(`Review corrections failed validation: ${issues.join('; ')}`);
+              setStatus('Repairing the reviewed composition…');
+              continue;
+            }
+            corrected = await compile(candidate);
+            break;
+          }
+          if (!corrected) throw new Error('Review did not produce a valid correction.');
           if (!corrected.project.elements.some(item => item.type === 'text')) throw new Error('Review returned no text; original draft retained.');
           draft = corrected; onApply(draft);
           await waitForDraft(draft);
           setPreview(await capturePosterThumbnail(1080, 1350, draft.project.canvasBackground ?? { type: 'solid', color: '#ffffff' }, 1080));
-        } catch (caught) { warnings.push(`Review unavailable; the generated draft remains editable. ${caught instanceof Error ? caught.message : ''}`); }
+        } catch (caught) { warnings.push(`Visual review could not be completed; the last validated draft is retained. ${caught instanceof Error ? caught.message : ''}`); }
       } else warnings.push('Canvas capture was unavailable; visual review was skipped.');
       setResult({ ...draft, warnings: [...draft.warnings, ...warnings] });
       setStatus('Your editable draft is ready.');

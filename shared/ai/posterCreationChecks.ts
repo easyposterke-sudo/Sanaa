@@ -113,12 +113,12 @@ export function reconcileUploadedCreationAssets(
     claimed.add(region);
     region.key = asset.key;
     region.imageRole = asset.role;
-    region.opacity = asset.role === 'background_photo' ? 1 : Math.max(region.opacity, 0.1);
+    region.opacity = Math.max(region.opacity, asset.role === 'background_photo' ? 0.05 : 0.1);
     region.replacementRecommended = true;
     region.replacementReason = 'Use the exact user-uploaded asset.';
     region.imageSearchQuery = '';
     region.imageCutout = false;
-    if (asset.role !== 'background_photo') region.imageMask = 'none';
+    if (asset.role === 'logo') region.imageMask = 'none';
     if (asset.role === 'background_photo') {
       const visibleWidth = Math.max(0, Math.min(1, region.box.x + region.box.width) - Math.max(0, region.box.x));
       const visibleHeight = Math.max(0, Math.min(1, region.box.y + region.box.height) - Math.max(0, region.box.y));
@@ -253,11 +253,30 @@ export function portraitSizingIssues(plan: PosterReconstructionPlan, source: {wi
   const scale = Math.min(portrait.box.width*canvas.width/source.width, portrait.box.height*canvas.height/source.height);
   const visibleHeight = source.height*scale/canvas.height;
   if (visibleHeight >= .52) return [];
-  return ['The speaker may look small in this layout. You can enlarge the portrait in the editor if desired; its proportions have been preserved.'];
+  return [`Enlarge ${portrait.key}: its fitted height is ${Math.round(visibleHeight * 100)}% of the canvas. Target 60–75% by increasing BOTH box dimensions at the supplied aspect ratio and reflowing adjacent content. Preserve the face, natural proportions and readable logistics; do not ask the user to resize it.`];
+}
+
+/** Conservative geometry feedback for the model; never move unrelated layers blindly. */
+export function posterCompositionIssues(plan: PosterReconstructionPlan, prompt: string): string[] {
+  const issues: string[] = [];
+  const texts = plan.elements.filter(item => item.kind === 'text' && item.opacity > 0);
+  const dates = texts.filter(item => /\b\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(item.text));
+  const times = texts.filter(item => /\b\d{1,2}(?::\d{2})?\s*[ap]\.?m\b/i.test(item.text));
+  if (!/\b(separate|distant|opposite)\b.{0,35}\b(date|time)\b/i.test(prompt)) {
+    for (const date of dates) {
+      if (times.length && times.every(time => {
+        const a = date.box, b = time.box;
+        const dx = Math.max(0, a.x - b.x - b.width, b.x - a.x - a.width);
+        const dy = Math.max(0, a.y - b.y - b.height, b.y - a.y - a.height);
+        return Math.hypot(dx, dy) > .18;
+      })) issues.push(`Bring ${date.key} and the service times into one readable logistics cluster. Move their backing panels with them; an independent date panel can sit beside the schedule.`);
+    }
+  }
+  return issues;
 }
 
 export function blockingPosterCreationIssues(plan: PosterReconstructionPlan, prompt: string, hasBackground: boolean): string[] {
-  // Portrait prominence is an aesthetic preference, never a completeness gate.
+  // Asset-aware prominence and composition checks are added by the creation caller.
   return [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, hasBackground)];
 }
 
