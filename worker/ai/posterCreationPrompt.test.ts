@@ -80,6 +80,17 @@ describe('prompt-based poster creation', () => {
     expect(prompt).toContain('actual rendered draft');
     expect(prompt).toContain('Do not start a new concept');
   });
+  it('keeps named people attached to portraits and forbids branding panels', () => {
+    const prompt = posterCreationPrompt({ ...request, creation: {
+      ...request.creation!,
+      speakers: [{ id: 'speaker_1', name: 'Pastor David', role: 'Host' }],
+      assets: [{ role: 'person', key: 'asset_person_speaker_1', dataUrl: 'data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAA==', width: 600, height: 1000 }],
+    } });
+    expect(prompt).toContain('lower torso around hand level');
+    expect(prompt).toContain('2.5–4.5% of poster height');
+    expect(prompt).toContain('UNBACKED BRANDING');
+    expect(prompt).toContain('do not make a large dark rounded header panel');
+  });
 });
 
 it('varies theme treatments without making rotation the default', () => {

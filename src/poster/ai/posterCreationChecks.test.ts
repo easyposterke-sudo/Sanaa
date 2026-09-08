@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues, centerCreatedCardContents, posterCompositionIssues } from '../../../shared/ai/posterCreationChecks';
+import { brandIdentityBackgroundIssues, missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, requiredPosterFacts, uploadedBackgroundIssues, portraitSizingIssues, blockingPosterCreationIssues, centerCreatedCardContents, posterCompositionIssues, speakerIdentityLayoutIssues } from '../../../shared/ai/posterCreationChecks';
 import { createFallbackReconstructionPlan, type ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 
 const brief = 'I would like a poster for a sunday Service for a church called Christ Ekklesia fellowship chapel. Lead pastor is Pst David Kituyi. First service starts at 8am and second service starts at 9:30am. the church is located at Chapchap 300m from Kabarak University gate. This is a poster for 23rd August 2026. The theme is God the Loving Father.';
@@ -59,6 +59,31 @@ describe('church generation regressions', () => {
     expect(portraitSizingIssues(plan([{...person,box:{...person.box,width:.48}}]),source,brief)).toEqual([]);
     expect(portraitSizingIssues(plan([person]),source,'Use a small portrait')).toEqual([]);
     expect(portraitSizingIssues(plan([person]),undefined,brief)).toEqual([]);
+  });
+  it('keeps a named speaker close to the matching portrait at a secondary scale', () => {
+    const portrait = item('asset_person_speaker_1','',{kind:'image_region',imageRole:'person',box:{x:.5,y:.25,width:.42,height:.68}});
+    const speakers = [{id:'speaker_1',name:'Pastor David',role:'Host'}];
+    const detached = item('speaker_name_speaker_1','Pastor David',{box:{x:.05,y:.68,width:.3,height:.07},fontSizeRatio:.07});
+    expect(speakerIdentityLayoutIssues(plan([portrait,detached]),speakers)).toEqual(expect.arrayContaining([
+      expect.stringContaining('close to asset_person_speaker_1'),
+      expect.stringContaining('secondary speaker-name scale'),
+    ]));
+    const attached = {...detached,box:{x:.48,y:.7,width:.3,height:.05},fontSizeRatio:.038};
+    expect(speakerIdentityLayoutIssues(plan([portrait,attached]),speakers)).toEqual([]);
+    const face = {...attached,box:{x:.55,y:.28,width:.25,height:.05}};
+    expect(speakerIdentityLayoutIssues(plan([portrait,face]),speakers)[0]).toContain('lower torso');
+  });
+  it('removes local panels behind church identity text and a supplied logo', () => {
+    const header = item('brand_header','',{kind:'rect',box:{x:.04,y:.04,width:.92,height:.2},zIndex:1,fill:'#23102f'});
+    const church = item('church_name','Christ Ekklesia Fellowship Chapel',{box:{x:.2,y:.1,width:.65,height:.06},zIndex:3});
+    const logo = item('asset_logo','',{kind:'image_region',imageRole:'logo',box:{x:.08,y:.08,width:.1,height:.08},zIndex:2});
+    const source = plan([header,church,logo]);
+    expect(brandIdentityBackgroundIssues(source,brief,true)[0]).toContain('Remove brand_header');
+    const prepared = prepareCreatedPoster(source,brief,true);
+    expect(prepared.elements.some(element => element.key === 'brand_header')).toBe(false);
+    expect(prepared.elements.map(element => element.key)).toEqual(expect.arrayContaining(['church_name','asset_logo']));
+    const fullPage = {...header,key:'page_art',box:{x:0,y:0,width:1,height:1}};
+    expect(brandIdentityBackgroundIssues(plan([fullPage,church,logo]),brief,true)).toEqual([]);
   });
   it('requires a supplied background through generation and review, but not when absent', () => {
     const background = item('asset_background_photo','',{kind:'image_region',imageRole:'background_photo',box:{x:0,y:0,width:1,height:1}});

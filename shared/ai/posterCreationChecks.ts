@@ -275,6 +275,80 @@ export function posterCompositionIssues(plan: PosterReconstructionPlan, prompt: 
   return issues;
 }
 
+type SpeakerIdentity = { id: string; name: string; role: string };
+
+function boxGap(a: ReconstructionElement['box'], b: ReconstructionElement['box']): number {
+  const dx = Math.max(0, a.x - b.x - b.width, b.x - a.x - a.width);
+  const dy = Math.max(0, a.y - b.y - b.height, b.y - a.y - a.height);
+  return Math.hypot(dx, dy);
+}
+
+function overlapRatio(item: ReconstructionElement, backing: ReconstructionElement): number {
+  const a = item.box, b = backing.box;
+  const overlap = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x))
+    * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return overlap / Math.max(0.000001, a.width * a.height);
+}
+
+/** Keep each structured speaker name visually attached to its matching uploaded portrait. */
+export function speakerIdentityLayoutIssues(plan: PosterReconstructionPlan, speakers: readonly SpeakerIdentity[]): string[] {
+  const issues: string[] = [];
+  for (const speaker of speakers) {
+    if (!speaker.name.trim()) continue;
+    const portrait = plan.elements.find(item => item.kind === 'image_region' && item.imageRole === 'person' && item.key === `asset_person_${speaker.id}`);
+    if (!portrait) continue;
+    const wanted = normalize(speaker.name);
+    const name = plan.elements.find(item => item.kind === 'text' && item.opacity > 0 && item.fill && normalize(item.text).includes(wanted));
+    if (!name) continue; // Missing-name validation owns this case.
+    const gap = boxGap(name.box, portrait.box);
+    if (gap > .06) {
+      issues.push(`Move ${name.key} close to ${portrait.key}: overlay it on the lower torso around hand level or place it immediately beside the lower body with at most a 2–6% canvas gap. Keep the face clear and use restrained secondary type.`);
+    }
+    const verticalOverlap = Math.max(0, Math.min(name.box.y + name.box.height, portrait.box.y + portrait.box.height) - Math.max(name.box.y, portrait.box.y));
+    const horizontalOverlap = Math.max(0, Math.min(name.box.x + name.box.width, portrait.box.x + portrait.box.width) - Math.max(name.box.x, portrait.box.x));
+    const overlapsPortrait = verticalOverlap * horizontalOverlap > name.box.width * name.box.height * .08;
+    const nameCentre = name.box.y + name.box.height / 2;
+    if (overlapsPortrait && nameCentre < portrait.box.y + portrait.box.height * .4) {
+      issues.push(`Move ${name.key} down on ${portrait.key} to the lower torso/hand-level area; do not cover the face.`);
+    }
+    if (name.fontSizeRatio > .055) {
+      issues.push(`Reduce ${name.key} to a secondary speaker-name scale, normally 2.5–4.5% of poster height, while keeping it readable beside ${portrait.key}.`);
+    }
+  }
+  return issues;
+}
+
+function identityTextElements(plan: PosterReconstructionPlan, prompt: string): ReconstructionElement[] {
+  const explicitNames = [
+    ...prompt.matchAll(/(?:church|organization|organisation|ministry)\s+(?:called|named)\s+([^.!?]+)/gi),
+    ...prompt.matchAll(/(?:church|organization|organisation|ministry)\s*:\s*([^.!?]+)/gi),
+  ].map(match => normalize(match[1] ?? '')).filter(Boolean);
+  return plan.elements.filter(item => {
+    if (item.kind !== 'text' || item.opacity <= 0 || !item.fill) return false;
+    const semantic = `${item.key} ${item.label} ${item.suggestedFieldKey ?? ''} ${item.suggestedFieldLabel}`;
+    if (/\b(?:church|organi[sz]ation|ministry|brand)[ _-]*name\b/i.test(semantic)) return true;
+    const text = normalize(item.text);
+    return explicitNames.some(name => text.includes(name) || name.includes(text));
+  });
+}
+
+function brandBackingPanels(plan: PosterReconstructionPlan, prompt: string, hasLogo: boolean): ReconstructionElement[] {
+  const identities = identityTextElements(plan, prompt);
+  if (hasLogo) identities.push(...plan.elements.filter(item => item.kind === 'image_region' && item.imageRole === 'logo'));
+  const panels = plan.elements.filter(item =>
+    ['rect', 'circle', 'ellipse', 'triangle', 'star', 'path'].includes(item.kind)
+    && item.fill && item.opacity > .05
+    && item.box.width * item.box.height <= .45
+    && (item.kind !== 'path' || item.pathClosed));
+  return panels.filter(panel => identities.some(identity => panel.zIndex < identity.zIndex && overlapRatio(identity, panel) >= .65));
+}
+
+/** Organization names and logos may sit on the page artwork, but never on a local identity card/banner. */
+export function brandIdentityBackgroundIssues(plan: PosterReconstructionPlan, prompt: string, hasLogo: boolean): string[] {
+  return brandBackingPanels(plan, prompt, hasLogo).map(panel =>
+    `Remove ${panel.key}: church/organization names and logos must sit directly on the poster composition without a card, banner, header strip, rounded rectangle or other local backing shape. Restore contrast by repositioning or recolouring the identity instead.`);
+}
+
 export function blockingPosterCreationIssues(plan: PosterReconstructionPlan, prompt: string, hasBackground: boolean): string[] {
   // Asset-aware prominence and composition checks are added by the creation caller.
   return [...missingPosterFacts(plan, prompt), ...posterCreationLayoutIssues(plan), ...uploadedBackgroundIssues(plan, hasBackground)];
@@ -320,6 +394,10 @@ export function prepareCreatedPoster(plan: PosterReconstructionPlan, prompt: str
     if (title(item.text) && (splitTitle || item.key !== keep?.key)) return false;
     return !['come worship with us', 'location icon'].includes(normalize(item.text)) || normalize(prompt).includes(normalize(item.text));
   });
+  // This is an explicit product rule, so strip machine-detectable identity
+  // panels before the first render instead of relying only on model compliance.
+  const identityPanels = new Set(brandBackingPanels({ ...plan, elements }, prompt, hasLogo));
+  elements = elements.filter(item => !identityPanels.has(item));
   for (const item of elements) {
     if (item.kind === 'text') {
       if (title(item.text) && !/worship/i.test(prompt)) item.text = item.text.replace(/worship\s*/i, '');

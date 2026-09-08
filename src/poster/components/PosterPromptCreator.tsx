@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues, posterCompositionIssues } from '../../../shared/ai/posterCreationChecks';
+import { brandIdentityBackgroundIssues, missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues, posterCompositionIssues, speakerIdentityLayoutIssues } from '../../../shared/ai/posterCreationChecks';
 import { createPosterGenerationBudget } from '../ai/posterGenerationBudget';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
@@ -83,10 +83,14 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         ...posterCreationLayoutIssues(plan),
         ...portraitSizingIssues(plan, portraits.length === 1 ? portraits[0].image : undefined, prompt, reference),
         ...posterCompositionIssues(plan, prompt),
+        ...speakerIdentityLayoutIssues(plan, creation.speakers ?? []),
+        ...brandIdentityBackgroundIssues(plan, prompt, !!assets.logo),
       ];
       const checkPlan = (plan: PosterReconstructionPlan) => [
         ...missingPosterFacts(plan, prompt),
         ...uploadedBackgroundIssues(plan, !!assets.background_photo),
+        ...speakerIdentityLayoutIssues(plan, creation.speakers ?? []),
+        ...brandIdentityBackgroundIssues(plan, prompt, !!assets.logo),
         ...(creation.speakers ?? []).flatMap(speaker => [speaker.name, speaker.role]).filter(value => value && !plan.elements.filter(item => item.kind === 'text' && item.opacity > 0 && item.fill).map(item => item.text).join(' ').toLowerCase().replace(/\s+/g, ' ').includes(value.toLowerCase().replace(/\s+/g, ' '))).map(value => `Include speaker detail as visible text: ${value}`),
         ...portraits.filter(speaker => !plan.elements.some(item => item.key === `asset_person_${speaker.id}` && item.kind === 'image_region' && item.imageRole === 'person' && item.opacity > 0)).map(speaker => `Include the uploaded portrait for ${speaker.name || speaker.id} using key asset_person_${speaker.id}`),
       ];
@@ -113,7 +117,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       if (!draft.project.elements.some(item => item.type === 'text')) throw new Error('AI returned no editable text. Please try again.');
       const initialIssues = checkPlan(response.plan);
       if (initialIssues.length) draft.warnings.push('This first draft has missing details; automatic review will try to restore them.');
-      setStatus('Draft ready. Checking the composition…');
+      setStatus('Draft ready. Checking the compositionâ€¦');
       onApply(draft);
       let reviewCompleted = false;
       try {
@@ -122,7 +126,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         setPreview(snapshot);
         if (!snapshot) throw new Error('Canvas preview was unavailable.');
         if (budget.remaining() < 5000) throw new Error('The automatic processing time limit is nearly reached.');
-        setStatus('Polishing your poster (final pass)…');
+        setStatus('Polishing your poster (final pass)â€¦');
         const reviewed = await requestAI({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: {
           ...creation, phase: 'review', responseMode: 'patch', previousPlan: response.plan,
           repairFeedback: [...initialIssues, ...layoutIssues(response.plan)],
