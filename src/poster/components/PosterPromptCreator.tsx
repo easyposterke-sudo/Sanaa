@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues, posterCompositionIssues } from '../../../shared/ai/posterCreationChecks';
+import { createPosterGenerationBudget } from '../ai/posterGenerationBudget';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
-import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
+import { prepareCreationAsset, type PreparedPosterImage } from '../ai/preparePosterImage';
 import { searchStockPhotos, downloadStockPhoto } from '../services/stockPhotosApi';
 import { capturePosterThumbnail, getFabricCanvasRef } from '../canvasRef';
 import type { PosterReconstructionPlan, PosterReconstructionRequest } from '../../../shared/ai/posterReconstruction';
@@ -28,7 +29,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
   async function upload(role: AssetRole, file?: File) {
     if (!file) return;
     setPreparing(true); setError('');
-    try { const image = await prepareTemplateReference(file); setAssets(current => ({ ...current, [role]: image })); }
+    try { const image = await prepareCreationAsset(file); setAssets(current => ({ ...current, [role]: image })); }
     catch (caught) { setError(caught instanceof Error ? caught.message : 'Image could not be loaded.'); }
     finally { setPreparing(false); }
   }
@@ -37,7 +38,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
     if (!file) return;
     setPreparing(true); setError('');
     try {
-      const image = await prepareTemplateReference(file);
+      const image = await prepareCreationAsset(file);
       setSpeakers(current => current.map(speaker => speaker.id === id ? { ...speaker, image } : speaker));
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Image could not be loaded.'); }
     finally { setPreparing(false); }
@@ -45,6 +46,9 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
 
   async function generate() {
     setBusy(true); setError(''); setResult(null); setPreview(null);
+    const budget = createPosterGenerationBudget();
+    const requestAI = (request: PosterReconstructionRequest) => budget.request((timeoutMs, signal) =>
+      requestPosterReconstruction({ ...request, creation: request.creation ? { ...request.creation, timeoutMs: Math.max(1, Math.floor(timeoutMs - 1000)) } : undefined }, { timeoutMs, signal }));
     let draft: CompiledPosterReconstruction | null = null;
     const warnings: string[] = [];
     try {
@@ -61,8 +65,8 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         prompt, seed: crypto.randomUUID(), referenceId, phase: 'design',
         speakers: speakers.filter(speaker => speaker.image || speaker.name.trim() || speaker.role.trim()).map(({ id, name, role }) => ({ id, name: name.trim(), role: role.trim() })),
         assets: [
-          ...(Object.entries(assets) as [AssetRole, PreparedPosterImage][]).map(([role, image]) => ({ role, dataUrl: image.dataUrl, width: image.width, height: image.height })),
-          ...portraits.map(speaker => ({ role: 'person' as const, key: `asset_person_${speaker.id}`, dataUrl: speaker.image!.dataUrl, width: speaker.image!.width, height: speaker.image!.height })),
+          ...(Object.entries(assets) as [AssetRole, PreparedPosterImage][]).map(([role, image]) => ({ role, dataUrl: image.analysisDataUrl ?? image.dataUrl, width: image.width, height: image.height })),
+          ...portraits.map(speaker => ({ role: 'person' as const, key: `asset_person_${speaker.id}`, dataUrl: speaker.image!.analysisDataUrl ?? speaker.image!.dataUrl, width: speaker.image!.width, height: speaker.image!.height })),
         ],
       };
       const replacements: Record<string, ReconstructionImageReplacement> = {};
@@ -73,7 +77,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         creation.assets,
       );
       setStatus(`Designing with reference ${referenceId}…`);
-      let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
+      const response = await requestAI({ reference, quality: 'quality', creation });
       response.plan = preparePlan(response.plan);
       const layoutIssues = (plan: PosterReconstructionPlan) => [
         ...posterCreationLayoutIssues(plan),
@@ -86,23 +90,12 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         ...(creation.speakers ?? []).flatMap(speaker => [speaker.name, speaker.role]).filter(value => value && !plan.elements.filter(item => item.kind === 'text' && item.opacity > 0 && item.fill).map(item => item.text).join(' ').toLowerCase().replace(/\s+/g, ' ').includes(value.toLowerCase().replace(/\s+/g, ' '))).map(value => `Include speaker detail as visible text: ${value}`),
         ...portraits.filter(speaker => !plan.elements.some(item => item.key === `asset_person_${speaker.id}` && item.kind === 'image_region' && item.imageRole === 'person' && item.opacity > 0)).map(speaker => `Include the uploaded portrait for ${speaker.name || speaker.id} using key asset_person_${speaker.id}`),
       ];
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const missing = checkPlan(response.plan);
-        if (!missing.length) break;
-        setStatus(`Restoring required details (${attempt + 1}/3)…`);
-        response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, previousPlan: response.plan, repairFeedback: missing } });
-        response.plan = preparePlan(response.plan);
-      }
-      const stillMissing = checkPlan(response.plan);
-      if (stillMissing.length) throw new Error('Some required details are still missing after three automatic corrections. Your details and photos are still here, and your existing canvas is unchanged. Try another design direction.');
       const compile = async (plan: PosterReconstructionPlan) => {
         plan = preparePlan(plan);
-        const absent = checkPlan(plan);
-        if (absent.length) throw new Error(`Missing required details: ${absent.join('; ')}`);
+
         // Never allow the blank canvas or review screenshot to become an image asset.
         const safePlan = { ...plan, elements: plan.elements.filter(item => item.kind !== 'image_region' || replacements[item.key] || (item.imageRole === 'icon' && item.iconName !== 'none')) };
-        const assetIssues = uploadedBackgroundIssues(safePlan, !!assets.background_photo);
-        if (assetIssues.length) throw new Error(assetIssues.join(' '));
+
         const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements, balanceInformationCards: true });
         return compiled;
       };
@@ -110,51 +103,53 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       if (stock && !assets.background_photo) {
         setStatus('Finding a background photograph…');
         try {
-          const photos = await searchStockPhotos({ query: stock.imageSearchQuery || 'church worship', orientation: 'portrait' });
+          const photos = await budget.run(() => searchStockPhotos({ query: stock.imageSearchQuery || 'church worship', orientation: 'portrait' }));
           if (!photos[0]) throw new Error('No matching background photograph was found.');
-          const photo = await downloadStockPhoto(photos[0]);
+          const photo = await budget.run(() => downloadStockPhoto(photos[0]));
           replacements.stock_background = { src: photo.dataUrl, width: photo.width, height: photo.height, credit: `${photos[0].photographer} / Pexels — ${photos[0].pexelsUrl}` };
         } catch (caught) { warnings.push(`${caught instanceof Error ? caught.message : 'Photo search failed.'} The draft uses its designed background colours.`); }
       }
-      draft = await compile(response.plan);
+      draft = await budget.run(() => compile(response.plan));
       if (!draft.project.elements.some(item => item.type === 'text')) throw new Error('AI returned no editable text. Please try again.');
-      setStatus('Opening and inspecting the rendered draft…');
+      const initialIssues = checkPlan(response.plan);
+      if (initialIssues.length) draft.warnings.push('This first draft has missing details; automatic review will try to restore them.');
+      setStatus('Draft ready. Checking the composition�');
       onApply(draft);
-      await waitForDraft(draft);
-      const snapshot = await capturePosterThumbnail(1080, 1350, draft.project.canvasBackground ?? { type: 'solid', color: '#ffffff' }, 1080);
-      setPreview(snapshot);
-      if (snapshot) {
-        try {
-          setStatus('Reviewing the canvas and making one correction pass…');
-          let corrected: CompiledPosterReconstruction | null = null;
-          let feedback: string[] = layoutIssues(response.plan);
-          for (let attempt = 0; attempt < 2; attempt++) {
-            const reviewed = await requestPosterReconstruction({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: { ...creation, phase: 'review', previousPlan: response.plan, repairFeedback: feedback } });
-            const candidate = preparePlan(reviewed.plan);
-            const issues = [...checkPlan(candidate), ...layoutIssues(candidate)];
-            if (issues.length) {
-              feedback = issues;
-              if (attempt === 1) throw new Error('The reviewed version did not pass the layout and content checks.');
-              setStatus('Repairing the reviewed composition…');
-              continue;
-            }
-            corrected = await compile(candidate);
-            break;
-          }
-          if (!corrected) throw new Error('Review did not produce a valid correction.');
-          if (!corrected.project.elements.some(item => item.type === 'text')) throw new Error('Review returned no text; original draft retained.');
-          draft = corrected; onApply(draft);
-          await waitForDraft(draft);
-          setPreview(await capturePosterThumbnail(1080, 1350, draft.project.canvasBackground ?? { type: 'solid', color: '#ffffff' }, 1080));
-        } catch (caught) { warnings.push(`Visual review could not be completed; the last validated draft is retained. ${caught instanceof Error ? caught.message : ''}`); }
-      } else warnings.push('Canvas capture was unavailable; visual review was skipped.');
+      let reviewCompleted = false;
+      try {
+        await budget.run(() => waitForDraft(draft!));
+        const snapshot = await budget.run(() => capturePosterThumbnail(1080, 1350, draft!.project.canvasBackground ?? { type: 'solid', color: '#ffffff' }, 960));
+        setPreview(snapshot);
+        if (!snapshot) throw new Error('Canvas preview was unavailable.');
+        if (budget.remaining() < 5000) throw new Error('The automatic processing time limit is nearly reached.');
+        setStatus('Polishing your poster (final pass)�');
+        const reviewed = await requestAI({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: {
+          ...creation, phase: 'review', responseMode: 'patch', previousPlan: response.plan,
+          repairFeedback: [...initialIssues, ...layoutIssues(response.plan)],
+          // Review already sees the rendered photos. Keep identities/dimensions, omit duplicate bytes.
+          assets: creation.assets.map(({ dataUrl: _dataUrl, ...metadata }) => metadata),
+        } });
+        const candidate = preparePlan(reviewed.plan);
+        if (checkPlan(candidate).length) throw new Error('The correction did not preserve all required details.');
+        // Prefer a valid improvement; a heuristic must not reject an otherwise usable poster.
+        if (!initialIssues.length && layoutIssues(candidate).length > layoutIssues(response.plan).length) throw new Error('The correction introduced additional layout issues.');
+        const corrected = await budget.run(() => compile(candidate));
+        if (!corrected.project.elements.some(item => item.type === 'text')) throw new Error('Review returned no editable text.');
+        draft = corrected;
+        onApply(draft);
+        reviewCompleted = true;
+        await budget.run(() => waitForDraft(draft!));
+        setPreview(await budget.run(() => capturePosterThumbnail(1080, 1350, draft!.project.canvasBackground ?? { type: 'solid', color: '#ffffff' }, 960)));
+      } catch {
+        warnings.push(reviewCompleted ? 'The updated poster is on the canvas; its preview could not be refreshed.' : 'Automatic review could not finish. Your first draft has been kept on the canvas.');
+      }
       setResult({ ...draft, warnings: [...draft.warnings, ...warnings] });
-      setStatus('Your editable draft is ready.');
+      setStatus(reviewCompleted ? 'Your editable poster is ready.' : 'Your draft is on the canvas. Automatic processing has stopped.');
     } catch (caught) {
       setStatus('');
       setError(caught instanceof Error ? caught.message : 'Generation failed.');
       if (draft) setResult(draft);
-    } finally { setBusy(false); }
+    } finally { budget.dispose(); setBusy(false); }
   }
 
   return <div role="dialog" aria-modal="true" aria-labelledby="prompt-poster-title" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/65 p-4">

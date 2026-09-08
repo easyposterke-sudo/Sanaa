@@ -6,6 +6,7 @@ import {
 } from '../../shared/ai/posterReconstruction';
 import { OpenAiPlannerError } from './openAiPosterPlanner';
 import { posterCreationPrompt } from './posterCreationPrompt';
+import { applyPosterCreationPatch, POSTER_CREATION_PATCH_JSON_SCHEMA } from '../../shared/ai/posterCreationPatch';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const POSTER_RECONSTRUCTION_TIMEOUT_MS = 110_000;
@@ -49,10 +50,11 @@ export async function reconstructPosterWithOpenAI(input: {
   request: PosterReconstructionRequest;
   timeoutMs?: number;
 }): Promise<OpenAiPosterReconstructionResult> {
+  const startedAt = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
-    input.timeoutMs ?? POSTER_RECONSTRUCTION_TIMEOUT_MS,
+    input.timeoutMs ?? input.request.creation?.timeoutMs ?? POSTER_RECONSTRUCTION_TIMEOUT_MS,
   );
   let response: Response;
   const userContent: OpenAiInputContent[] = [
@@ -60,15 +62,14 @@ export async function reconstructPosterWithOpenAI(input: {
       type: 'input_text',
       text: input.request.creation?.prompt ?? `Reconstruct this ${input.request.reference.width} x ${input.request.reference.height} poster as an editable EasyPoster draft.`,
     },
-    {
-      type: 'input_image',
-      image_url: input.request.reference.dataUrl,
-      detail: 'high',
-    },
   ];
+  // A blank creation canvas conveys no visual information.
+  if (!input.request.creation || input.request.creation.phase === 'review') {
+    userContent.push({ type: 'input_image', image_url: input.request.reference.dataUrl, detail: 'high' });
+  }
   for (const asset of input.request.creation?.assets ?? []) {
     userContent.push({ type: 'input_text', text: `Supplied asset: ${asset.key ?? `asset_${asset.role}`} (${asset.role})` });
-    userContent.push({ type: 'input_image', image_url: asset.dataUrl, detail: 'high' });
+    if (asset.dataUrl) userContent.push({ type: 'input_image', image_url: asset.dataUrl, detail: 'low' });
   }
   if (input.request.fontCatalog?.entries.length) {
     userContent.push({
@@ -79,6 +80,7 @@ export async function reconstructPosterWithOpenAI(input: {
       userContent.push({ type: 'input_image', image_url: imageUrl, detail: 'high' });
     }
   }
+  let data: OpenAiResponsesPayload | undefined;
   try {
     response = await fetch(OPENAI_RESPONSES_URL, {
       method: 'POST',
@@ -106,12 +108,14 @@ export async function reconstructPosterWithOpenAI(input: {
             type: 'json_schema',
             name: 'easyposter_reconstruction',
             strict: true,
-            schema: POSTER_RECONSTRUCTION_JSON_SCHEMA,
+            schema: input.request.creation?.responseMode === 'patch' ? POSTER_CREATION_PATCH_JSON_SCHEMA : POSTER_RECONSTRUCTION_JSON_SCHEMA,
           },
         },
       }),
       signal: controller.signal,
     });
+    // Keep the deadline active through the response body, not only response headers.
+    if (response.ok) data = (await response.json()) as OpenAiResponsesPayload;
   } catch (error) {
     if (controller.signal.aborted) {
       throw new OpenAiPlannerError('The template reconstruction timed out.', 504, 'AI_TIMEOUT');
@@ -123,6 +127,14 @@ export async function reconstructPosterWithOpenAI(input: {
     );
   } finally {
     clearTimeout(timer);
+    if (input.request.creation) console.info(JSON.stringify({
+      message: 'Poster AI request timing',
+      phase: input.request.creation.phase,
+      responseMode: input.request.creation.responseMode ?? 'plan',
+      elapsedMs: Date.now() - startedAt,
+      imageCount: userContent.filter(item => item.type === 'input_image').length,
+      timedOut: controller.signal.aborted,
+    }));
   }
 
   const openAiRequestId = response.headers.get('x-request-id');
@@ -142,7 +154,7 @@ export async function reconstructPosterWithOpenAI(input: {
     );
   }
 
-  const data = (await response.json()) as OpenAiResponsesPayload;
+  if (!data) throw new OpenAiPlannerError('The AI returned no reconstruction.', 502, 'AI_EMPTY_RESPONSE');
   if (data.status === 'incomplete') {
     const incompleteReason = readIncompleteReason(data);
     const details: OpenAiPosterReconstructionFailureDetails = {
@@ -191,6 +203,10 @@ export async function reconstructPosterWithOpenAI(input: {
     parsed = JSON.parse(outputText);
   } catch {
     throw new OpenAiPlannerError('The AI returned malformed reconstruction data.', 502, 'AI_INVALID_RESPONSE');
+  }
+  if (input.request.creation?.responseMode === 'patch') {
+    try { parsed = applyPosterCreationPatch(input.request.creation.previousPlan!, parsed); }
+    catch { throw new OpenAiPlannerError('The AI returned an unsupported correction.', 502, 'AI_INVALID_PLAN'); }
   }
   const result = PosterReconstructionPlanSchema.safeParse(parsed);
   if (!result.success) {
@@ -284,7 +300,7 @@ type OpenAiResponsesPayload = {
 
 type OpenAiInputContent =
   | { type: 'input_text'; text: string }
-  | { type: 'input_image'; image_url: string; detail: 'high' };
+  | { type: 'input_image'; image_url: string; detail: 'high' | 'low' };
 
 function customFontCatalogInstruction(
   entries: NonNullable<PosterReconstructionRequest['fontCatalog']>['entries'],

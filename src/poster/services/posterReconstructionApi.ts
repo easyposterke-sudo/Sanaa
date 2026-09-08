@@ -18,13 +18,42 @@ export class PosterReconstructionError extends Error {
 
 export async function requestPosterReconstruction(
   request: PosterReconstructionRequest,
+  options: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<PosterReconstructionResponse> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) abort();
+  else options.signal?.addEventListener('abort', abort, { once: true });
+  const timeoutMs = options.timeoutMs ?? 135_000;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readPosterReconstruction(request, timeoutMs, controller.signal),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new PosterReconstructionError('Poster processing reached its time limit.', 'AI_TIMEOUT'));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    options.signal?.removeEventListener('abort', abort);
+  }
+}
+
+async function readPosterReconstruction(
+  request: PosterReconstructionRequest,
+  timeoutMs: number,
+  signal: AbortSignal,
 ): Promise<PosterReconstructionResponse> {
   const payload = PosterReconstructionRequestSchema.parse(request);
   const response = await apiFetch('/api/ai/poster-reconstruction', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-    timeoutMs: 135_000,
+    timeoutMs,
+    signal,
   });
   const data = (await response.json().catch(() => null)) as
     | {

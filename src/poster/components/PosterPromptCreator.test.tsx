@@ -3,68 +3,55 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { PosterPromptCreator } from './PosterPromptCreator';
 import { createFallbackReconstructionPlan } from '../../../shared/ai/posterReconstruction';
 import { compilePosterReconstruction } from '../ai/compilePosterReconstruction';
+import { prepareCreationAsset } from '../ai/preparePosterImage';
 import { capturePosterThumbnail, getFabricCanvasRef } from '../canvasRef';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 
 vi.mock('../services/posterReconstructionApi', () => ({ requestPosterReconstruction: vi.fn() }));
 vi.mock('../ai/compilePosterReconstruction', () => ({ compilePosterReconstruction: vi.fn() }));
+vi.mock('../ai/preparePosterImage', () => ({ prepareCreationAsset: vi.fn() }));
 vi.mock('../canvasRef', () => ({ capturePosterThumbnail: vi.fn(), getFabricCanvasRef: vi.fn() }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 describe('prompt creator form', () => {
-  it('renders a complete draft with layout issues, then retries review when it drops Host', async () => {
+  it.each(['valid', 'missing-role', 'timeout'] as const)('uses at most two calls and keeps the first draft for %s review', async outcome => {
     const plan = createFallbackReconstructionPlan();
     const text = plan.elements.find(element => element.kind === 'text')!;
     plan.elements = [{ ...text, key: 'role', kind: 'text', imageRole: 'none', box: {x:.1,y:.1,width:.3,height:.1}, text: 'Host', opacity: 1, fill: '#ffffff' }];
     const invalid = { ...plan, elements: [{ ...plan.elements[0], text: 'Guest' }] };
-    const compiled = { project: { canvasWidth: 1080, canvasHeight: 1350, elements: [{ id: 'role', type: 'text', text: 'Host', fontSize: 30, fontFamily: 'Arial', fill: '#ffffff', left: 100, top: 100, scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 1 }] }, warnings: [], description: 'Ready', fieldBindings: [], suggestedTemplateName: 'Test', category: 'church_ministry' };
+    const compiled = { project: { canvasWidth: 1080, canvasHeight: 1350, elements: [{ id: 'role', type: 'text', text: 'Host', fontSize: 30, fontFamily: 'Arial', fill: '#ffffff', left: 100, top: 100, scaleX: 1, scaleY: 1, angle: 0, opacity: 1, zIndex: 1 }] }, warnings: [], description: 'Ready', fieldBindings: [], suggestedTemplateName: 'Test', category: 'church' };
     vi.mocked(compilePosterReconstruction).mockResolvedValue(compiled as Awaited<ReturnType<typeof compilePosterReconstruction>>);
     vi.mocked(capturePosterThumbnail).mockResolvedValue('data:image/png;base64,AAAA');
     vi.mocked(getFabricCanvasRef).mockReturnValue({ getObjects: () => [{ data: { posterId: 'role' }, text: 'Host' }], renderAll: vi.fn() } as unknown as ReturnType<typeof getFabricCanvasRef>);
     Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: Promise.resolve() } });
     const response = { plan } as Awaited<ReturnType<typeof requestPosterReconstruction>>;
-    const initialPlan = { ...plan, elements: [...plan.elements,
-      { ...plan.elements[0], key: 'date', text: '23rd August 2026', box: {x:.7,y:.1,width:.25,height:.1} },
-      { ...plan.elements[0], key: 'time', text: '8AM', box: {x:.1,y:.7,width:.4,height:.1} },
-    ] };
-    vi.mocked(requestPosterReconstruction).mockResolvedValueOnce({ ...response, plan: initialPlan }).mockResolvedValueOnce({ ...response, plan: invalid }).mockResolvedValueOnce(response);
+    vi.mocked(requestPosterReconstruction).mockResolvedValueOnce(response);
+    if (outcome === 'timeout') vi.mocked(requestPosterReconstruction).mockRejectedValueOnce(new Error('timeout'));
+    else vi.mocked(requestPosterReconstruction).mockResolvedValueOnce({ ...response, plan: outcome === 'valid' ? plan : invalid });
     const onApply = vi.fn();
     render(<PosterPromptCreator onApply={onApply} onClose={vi.fn()} onImport={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText('Speaker 1 role'), { target: { value: 'Host' } });
-    fireEvent.change(screen.getByLabelText('Describe your church service poster'), { target: { value: 'A church service poster' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Generate editable poster' }));
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your editable draft is ready.'), { timeout: 10000 });
-    expect(requestPosterReconstruction).toHaveBeenCalledTimes(3);
-    expect(vi.mocked(requestPosterReconstruction).mock.calls[1][0].creation?.phase).toBe('review');
-    expect(vi.mocked(requestPosterReconstruction).mock.calls[1][0].creation?.repairFeedback?.join(' ')).toContain('one readable logistics cluster');
-    expect(vi.mocked(requestPosterReconstruction).mock.calls[2][0].creation?.repairFeedback).toContain('Include speaker detail as visible text: Host');
-    expect(onApply).toHaveBeenCalledTimes(2);
-    expect(compilePosterReconstruction).toHaveBeenCalledTimes(2);
-  }, 15000);
-
-
-  it('passes each failed manifest into bounded repairs without extending a full brief', async () => {
-    const plan = createFallbackReconstructionPlan();
-    plan.elements = [];
-    const response = { plan } as Awaited<ReturnType<typeof requestPosterReconstruction>>;
-    vi.mocked(requestPosterReconstruction).mockResolvedValue(response);
-    const onApply = vi.fn();
-    render(<PosterPromptCreator onApply={onApply} onClose={vi.fn()} onImport={vi.fn()} />);
+    if (outcome === 'valid') {
+      vi.mocked(prepareCreationAsset).mockResolvedValue({dataUrl:'data:image/webp;base64,RlVMTElNQUdF',analysisDataUrl:'data:image/webp;base64,U01BTExQUkVWSUVX',width:1536,height:1024,sourceWidth:3000,sourceHeight:2000,fileName:'background.webp'});
+      fireEvent.change(screen.getByLabelText('background_photo'), {target:{files:[new File(['photo'],'background.webp',{type:'image/webp'})]}});
+      await waitFor(() => expect(screen.getByRole('status')).not.toHaveTextContent('Preparing image'));
+    }
     fireEvent.change(screen.getByLabelText('Speaker 1 role'), { target: { value: 'Host' } });
     const brief = 'A church poster ' + 'a'.repeat(3984);
     fireEvent.change(screen.getByLabelText('Describe your church service poster'), { target: { value: brief } });
     fireEvent.click(screen.getByRole('button', { name: 'Generate editable poster' }));
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('three automatic corrections'));
-    expect(requestPosterReconstruction).toHaveBeenCalledTimes(4);
-    for (const [request] of vi.mocked(requestPosterReconstruction).mock.calls.slice(1)) {
-      expect(request.creation?.previousPlan).toEqual(plan);
-      expect(request.creation?.prompt).toBe(brief);
-      expect(request.creation?.repairFeedback).toContain('Include speaker detail as visible text: Host');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(outcome === 'valid' ? 'Your editable poster is ready.' : 'Automatic processing has stopped.'), { timeout: 10000 });
+    expect(requestPosterReconstruction).toHaveBeenCalledTimes(2);
+    const review = vi.mocked(requestPosterReconstruction).mock.calls[1][0].creation;
+    expect(review).toMatchObject({ phase: 'review', responseMode: 'patch', prompt: brief });
+    expect(review?.timeoutMs).toBeLessThanOrEqual(90000);
+    if (outcome === 'valid') {
+      expect(vi.mocked(requestPosterReconstruction).mock.calls[0][0].creation?.assets[0].dataUrl).toBe('data:image/webp;base64,U01BTExQUkVWSUVX');
+      expect(review?.assets[0].dataUrl).toBeUndefined();
+      expect(vi.mocked(compilePosterReconstruction).mock.calls[0][0].imageReplacements?.asset_background_photo.src).toBe('data:image/webp;base64,RlVMTElNQUdF');
     }
-    expect(screen.getByRole('alert')).not.toHaveTextContent('Include speaker detail');
-    expect(screen.getByRole('status')).toBeEmptyDOMElement();
-    expect(onApply).not.toHaveBeenCalled();
-  });
+    expect(onApply).toHaveBeenCalledTimes(outcome === 'valid' ? 2 : 1);
+    if (outcome !== 'valid') expect(screen.getByText(/first draft has been kept/)).toBeInTheDocument();
+  }, 15000);
 
   it('adds arbitrary speaker slots and preserves names and roles when removing another speaker', async () => {
     vi.mocked(requestPosterReconstruction).mockRejectedValue(new Error('test stop'));
@@ -102,7 +89,7 @@ describe('prompt creator form', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('OPENAI_API_KEY'));
     expect(requestPosterReconstruction).toHaveBeenCalledWith(expect.objectContaining({
       creation: expect.objectContaining({ referenceId: 6, phase: 'design', assets: [], prompt: expect.stringContaining('Hope Church') }),
-    }));
+    }), expect.objectContaining({ timeoutMs: expect.any(Number), signal: expect.any(AbortSignal) }));
     expect(onApply).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Generate editable poster' })).toBeEnabled();
   });

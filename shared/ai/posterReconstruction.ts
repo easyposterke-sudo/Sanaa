@@ -212,15 +212,21 @@ export const PosterReconstructionRequestSchema = z
       phase: z.enum(['design', 'review']),
       previousPlan: PosterReconstructionPlanSchema.optional(),
       repairFeedback: z.array(z.string().max(2000)).max(100).optional(),
+      responseMode: z.enum(['plan', 'patch']).optional(),
+      timeoutMs: z.number().int().min(1).max(110000).optional(),
       speakers: z.array(z.object({ id: z.string().regex(/^speaker_[a-z0-9_]{1,27}$/), name: z.string().max(120), role: z.string().max(80) }).strict()).optional(),
       assets: z.array(z.object({
         key: z.string().max(48).regex(/^asset_(person(?:_[a-z0-9_]+)?|logo|background_photo)$/).optional(),
         role: z.enum(['person', 'logo', 'background_photo']),
-        dataUrl: z.string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
+        dataUrl: z.string().regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/).optional(),
         width: z.number().int().min(1).max(4096),
         height: z.number().int().min(1).max(4096),
       }).strict()),
-    }).strict().refine(value => value.phase !== 'review' || !!value.previousPlan, 'Review requires a draft').optional(),
+    }).strict()
+      .refine(value => value.phase !== 'review' || !!value.previousPlan, 'Review requires a draft')
+      .refine(value => value.responseMode !== 'patch' || !!value.previousPlan, 'Patch requires a draft')
+      .refine(value => value.phase === 'review' || value.assets.every(asset => !!asset.dataUrl), 'Design requires asset images')
+      .optional(),
     fontCatalog: ReconstructionFontCatalogSchema.optional(),
   })
   .strict();

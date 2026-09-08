@@ -1,4 +1,6 @@
 export interface PreparedPosterImage {
+  /** Small analysis copy; never used as the editable image replacement. */
+  analysisDataUrl?: string;
   dataUrl: string;
   width: number;
   height: number;
@@ -6,6 +8,12 @@ export interface PreparedPosterImage {
   sourceWidth: number;
   sourceHeight: number;
   fileName: string;
+}
+
+export async function prepareCreationAsset(file: File): Promise<PreparedPosterImage> {
+  const image = await prepareTemplateReference(file);
+  const preview = await resizePosterImage(file, { maxLongEdge: 768, quality: 0.72 });
+  return { ...image, analysisDataUrl: preview.dataUrl };
 }
 
 export async function prepareReferencePoster(file: File): Promise<PreparedPosterImage> {

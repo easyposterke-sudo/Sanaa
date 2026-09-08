@@ -65,6 +65,33 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     expect(payload.store).toBe(false);
   });
 
+  it('sends small asset analysis images without a blank reference, then merges a patch review', async () => {
+    const responsePlan = {
+      schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION, suggestedTemplateName:'Test', category:'church', summary:'Draft',
+      canvas:{backgroundType:'solid',backgroundTop:'#ffffff',backgroundBottom:'#ffffff',gradientAngle:0},
+      elements:[reconstructionTextElement(null)], warnings:[], confidence:.9,
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(responsePlan)}]}]})));
+    vi.stubGlobal('fetch',fetchMock);
+    const creation = {prompt:'A church service poster',seed:'test',referenceId:1,phase:'design' as const,assets:[{role:'person' as const,dataUrl:'data:image/webp;base64,AAAA',width:600,height:1000}]};
+    const first = await reconstructPosterWithOpenAI({apiKey:'test',model:'test',request:{...request,creation}});
+    const firstBody = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(firstBody.input[1].content.filter((item: {type:string}) => item.type === 'input_image')).toEqual([{type:'input_image',image_url:creation.assets[0]!.dataUrl,detail:'low'}]);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify({summary:'Reviewed',upsert:[],removeKeys:[],canvas:null})}]}]})));
+    const reviewed = await reconstructPosterWithOpenAI({apiKey:'test',model:'test',request:{...request,creation:{...creation,phase:'review',responseMode:'patch',previousPlan:first.plan,assets:[{role:'person',width:600,height:1000}]}}});
+    expect(reviewed.plan.elements).toEqual(first.plan.elements);
+    const secondBody = JSON.parse(String((fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1].body));
+    expect(secondBody.input[1].content.filter((item: {type:string}) => item.type === 'input_image')).toHaveLength(1);
+    expect(secondBody.text.format.schema.required).toContain('upsert');
+  });
+
+  it('keeps the timeout active while reading a stalled response body', async () => {
+    vi.stubGlobal('fetch',vi.fn(async (_url: string, options?: RequestInit) => new Response(new ReadableStream({
+      start(controller) { options?.signal?.addEventListener('abort', () => controller.error(new Error('aborted'))); },
+    }))));
+    await expect(reconstructPosterWithOpenAI({apiKey:'test',model:'test',request,timeoutMs:10})).rejects.toMatchObject({code:'AI_TIMEOUT'});
+  });
+
   it('reports content-filter incompletes separately', async () => {
     vi.stubGlobal(
       'fetch',
