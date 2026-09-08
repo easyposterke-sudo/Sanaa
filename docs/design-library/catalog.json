@@ -423,6 +423,25 @@
         "turquoise-purple"
       ],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-019",
+      "title": "Navy cream serif with sweeping paths",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-019/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-019/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "editorial-serif",
+        "central-speaker",
+        "closed-filled-path",
+        "open-curve",
+        "navy-cream-gold",
+        "footer-logistics"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     }
   ]
 }

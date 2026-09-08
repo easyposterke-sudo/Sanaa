@@ -16,10 +16,11 @@ import fifteen from '../../docs/design-library/church-and-worship/church-service
 import sixteen from '../../docs/design-library/church-and-worship/church-service/church-service-016/reference.md?raw';
 import seventeen from '../../docs/design-library/church-and-worship/church-service/church-service-017/reference.md?raw';
 import eighteen from '../../docs/design-library/church-and-worship/church-service/church-service-018/reference.md?raw';
+import nineteen from '../../docs/design-library/church-and-worship/church-service/church-service-019/reference.md?raw';
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/13';
+export const CREATION_VERSION = 'church-creation/14';
 // Short executable art direction complements the long reference annotation.
 const headlineDirections = [
   'Split SUNDAY into SUN / DAY in a playful heavy face such as chewy or lilita_one; SERVICE is a separate contrasting line fitted to the same block width. Use a warm gradient in the logistics backing.',
@@ -40,6 +41,7 @@ const headlineDirections = [
   "Use a large black-to-amber gradient anton headline on a pale field, with a right portrait and supplied theme/scripture in distinct regions. Omit repeated decorative Church/Service side words. Label time circles clearly rather than guessing a range.",
   "Use a large elegant playfair_display or crimson_pro event headline over a warm dark photographic field, with quiet right-aligned details. Preserve intentional whitespace, avoid added cards and condensed block type. Do not invent a portrait or tomorrow/this Sunday wording.",
   "Use oversized mixed-case playfair_display Sunday and a contrasting expressive rounded display Service, such as chewy where suitable, with restrained coloured outline. Retain turquoise/purple atmosphere and a gradient date badge. A modifier strip is only for supplied wording; simplify unsupported border textures.",
+  'Use oversized cream playfair_display or crimson_pro event lettering on navy. Behind the central portrait create two independent editable paths: a rising closed cream region and an open gold sweep that crosses it. These are not one outlined shape. Reserve a structured date/time/venue footer.',
 ];
 export function posterCreationPrompt(request: PosterReconstructionRequest): string {
   const creation = request.creation!;
@@ -56,7 +58,7 @@ Choose a deliberate palette, type pairing, negative space and hierarchy. Summary
 Use the supplied reference annotation as adaptable design guidance, not mandatory coordinates.
 Variation seed: ${creation.seed}. Produce a fresh coherent variation of the chosen family.
 ${formatPosterLayoutSkillForPrompt({ phase: creation.phase === 'review' ? 'critique' : 'planning', posterType: 'church_ministry' })}
-Design reference ${creation.referenceId}:\n${[one,two,three,four,five,six,seven,eight,nine,ten,eleven,twelve,thirteen,fourteen,fifteen,sixteen,seventeen,eighteen][creation.referenceId - 1]}
+Design reference ${creation.referenceId}:\n${[one,two,three,four,five,six,seven,eight,nine,ten,eleven,twelve,thirteen,fourteen,fifteen,sixteen,seventeen,eighteen,nineteen][creation.referenceId - 1]}
 REQUIRED DESIGN CHARACTER: ${headlineDirections[creation.referenceId - 1]}
 Retain this family-specific typography in both design and review, unless the user explicitly requests a conflicting treatment or the wording makes it unsuitable. Do not flatten every family into identical plain SUNDAY / SERVICE text. Split a headline into editable word/letter elements when needed for mixed fonts, shared initials or script overlays; the whole assembly spells the event title once. Select real fontFamily tokens, never describe a font only in labels. Use at most two main headline faces, and measure their boxes separately. Preserve intentional decorative text overlaps, while keeping every word readable.
 SCRIPT CASING: Flowing script/calligraphic fonts (allura, great_vibes, dancing_script, sacramento, satisfy, tangerine, pacifico) use mixed case: Service, Sunday, With, rather than SERVICE, SUNDAY, WITH. Capitalise the initial and use lowercase for the remaining letters to preserve connected strokes. Keep proper names, acronyms and exact brand spelling intact. A standalone decorative initial S remains uppercase. Bold sans-serif headings may stay uppercase. Apply this in design and review unless the user explicitly requests all caps.
@@ -66,7 +68,7 @@ Geometry: boxes are normalized to the whole canvas. Keep text within 0.04..0.96 
 fontSizeRatio is visible glyph height divided by poster height. Use accurate boxes for intended line breaks.
 Use 8–25 useful layers, max 45. Text is editable, never image artwork. Only flat text for this prototype.
 All unused fields must use neutral values: empty strings, null nullable colours, zero effects, arial, normal, 400, empty pathPoints, pathClosed false, pathUsage not_applicable, pathTension 0.28, imageRole none, iconName none.
-Use rect/circle/ellipse/line for simple decoration; no complex paths or 3D text in this prototype.
+Use rect/circle/ellipse/line for regular decoration. For deliberate irregular regions or sweeping curves use kind='path' with 2–8 pathPoints normalised inside the element box. Filled region: pathUsage='closed_fill', pathClosed=true, non-null fill, at least 3 points; close via intended page/region edges and keep straight corners smooth=false. Independent curve: pathUsage='open_stroke', pathClosed=false, fill=null, non-null stroke and positive strokeWidthRatio; use smooth intermediate anchors and pathTension around 0.28. A line crossing a filled region must be a SEPARATE path, not its outline. A second filled variation must be separately closed. Keep decorative paths behind portraits and text, avoid self-intersections and unnecessary anchors. No complex detailed illustrations or 3D text in this prototype.
 Speaker roster (user-supplied data): ${JSON.stringify(creation.speakers ?? [])}. Include every supplied name and role as editable text beside the matching portrait. A speaker without a photo still gets their supplied name/role; do not invent a portrait. Never guess a role. Adapt to the actual number of speakers, not a fixed three: use rows or a balanced group for larger rosters, keeping faces and names readable. Only give host prominence when explicitly designated. Single-speaker height guidance does not apply to groups.
 Available uploaded asset roles: ${creation.assets.map(a => `${a.key ?? `asset_${a.role}`} (${a.role})`).join(', ') || 'none'}.
 When background_photo is supplied, its use is REQUIRED in both design and review. Emit asset_background_photo with imageRole background_photo and use the actual uploaded image, never stock as a substitute. Expose it visibly across a substantial region (at least 8% of canvas, opacity at least 0.05). Do not cover it completely with opaque shapes. Use restrained translucent overlays or leave a clear photographic region, and preserve readable text. During visual review explicitly check that the supplied background remains recognisable, not merely present as a hidden layer.

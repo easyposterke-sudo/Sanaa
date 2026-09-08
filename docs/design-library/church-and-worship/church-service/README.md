@@ -34,6 +34,8 @@ References for Sunday services and other regular or dated church services. Style
 17. [church-service-017 — Minimal Bible and warm bokeh](church-service-017/reference.md): no-speaker-portrait, bible-background, minimal, editorial-serif, right-aligned-details.
 18. [church-service-018 — Turquoise expressive encounter](church-service-018/reference.md): central-speaker, expressive-serif, textured-border-optional, gradient-date-badge, turquoise-purple.
 
+19. [Church Service 019 — Navy cream sweeping paths](church-service-019/reference.md): editorial serif headline, separate closed fill and open gold curve, central portrait and two-row footer.
+
 ## Collection guidance
 
 Add more typography-led designs without photographs, varied multiple-person compositions, atmospheric photography, restrained designs, and expressive layered designs. Across those examples, cover recurring services, long church names, optional themes, different service counts, long venues, and services held on weekdays other than Sunday.
