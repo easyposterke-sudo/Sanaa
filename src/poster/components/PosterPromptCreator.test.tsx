@@ -12,7 +12,7 @@ vi.mock('../canvasRef', () => ({ capturePosterThumbnail: vi.fn(), getFabricCanva
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe('prompt creator form', () => {
-  it('retries a review that drops Host and retains the valid draft until repair succeeds', async () => {
+  it('renders a complete draft with layout issues, then retries review when it drops Host', async () => {
     const plan = createFallbackReconstructionPlan();
     const text = plan.elements.find(element => element.kind === 'text')!;
     plan.elements = [{ ...text, key: 'role', kind: 'text', imageRole: 'none', box: {x:.1,y:.1,width:.3,height:.1}, text: 'Host', opacity: 1, fill: '#ffffff' }];
@@ -23,7 +23,11 @@ describe('prompt creator form', () => {
     vi.mocked(getFabricCanvasRef).mockReturnValue({ getObjects: () => [{ data: { posterId: 'role' }, text: 'Host' }], renderAll: vi.fn() } as unknown as ReturnType<typeof getFabricCanvasRef>);
     Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: Promise.resolve() } });
     const response = { plan } as Awaited<ReturnType<typeof requestPosterReconstruction>>;
-    vi.mocked(requestPosterReconstruction).mockResolvedValueOnce(response).mockResolvedValueOnce({ ...response, plan: invalid }).mockResolvedValueOnce(response);
+    const initialPlan = { ...plan, elements: [...plan.elements,
+      { ...plan.elements[0], key: 'date', text: '23rd August 2026', box: {x:.7,y:.1,width:.25,height:.1} },
+      { ...plan.elements[0], key: 'time', text: '8AM', box: {x:.1,y:.7,width:.4,height:.1} },
+    ] };
+    vi.mocked(requestPosterReconstruction).mockResolvedValueOnce({ ...response, plan: initialPlan }).mockResolvedValueOnce({ ...response, plan: invalid }).mockResolvedValueOnce(response);
     const onApply = vi.fn();
     render(<PosterPromptCreator onApply={onApply} onClose={vi.fn()} onImport={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Speaker 1 role'), { target: { value: 'Host' } });
@@ -31,6 +35,8 @@ describe('prompt creator form', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate editable poster' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your editable draft is ready.'), { timeout: 10000 });
     expect(requestPosterReconstruction).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(requestPosterReconstruction).mock.calls[1][0].creation?.phase).toBe('review');
+    expect(vi.mocked(requestPosterReconstruction).mock.calls[1][0].creation?.repairFeedback?.join(' ')).toContain('one readable logistics cluster');
     expect(vi.mocked(requestPosterReconstruction).mock.calls[2][0].creation?.repairFeedback).toContain('Include speaker detail as visible text: Host');
     expect(onApply).toHaveBeenCalledTimes(2);
     expect(compilePosterReconstruction).toHaveBeenCalledTimes(2);

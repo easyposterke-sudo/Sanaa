@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { blockingPosterCreationIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues, posterCompositionIssues } from '../../../shared/ai/posterCreationChecks';
+import { missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues, posterCompositionIssues } from '../../../shared/ai/posterCreationChecks';
 import { requestPosterReconstruction } from '../services/posterReconstructionApi';
 import { compilePosterReconstruction, type CompiledPosterReconstruction, type ReconstructionImageReplacement } from '../ai/compilePosterReconstruction';
 import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
@@ -75,22 +75,26 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       setStatus(`Designing with reference ${referenceId}…`);
       let response = await requestPosterReconstruction({ reference, quality: 'quality', creation });
       response.plan = preparePlan(response.plan);
-      const checkPlan = (plan: PosterReconstructionPlan) => [
-        ...blockingPosterCreationIssues(plan, prompt, !!assets.background_photo),
+      const layoutIssues = (plan: PosterReconstructionPlan) => [
+        ...posterCreationLayoutIssues(plan),
         ...portraitSizingIssues(plan, portraits.length === 1 ? portraits[0].image : undefined, prompt, reference),
         ...posterCompositionIssues(plan, prompt),
+      ];
+      const checkPlan = (plan: PosterReconstructionPlan) => [
+        ...missingPosterFacts(plan, prompt),
+        ...uploadedBackgroundIssues(plan, !!assets.background_photo),
         ...(creation.speakers ?? []).flatMap(speaker => [speaker.name, speaker.role]).filter(value => value && !plan.elements.filter(item => item.kind === 'text' && item.opacity > 0 && item.fill).map(item => item.text).join(' ').toLowerCase().replace(/\s+/g, ' ').includes(value.toLowerCase().replace(/\s+/g, ' '))).map(value => `Include speaker detail as visible text: ${value}`),
         ...portraits.filter(speaker => !plan.elements.some(item => item.key === `asset_person_${speaker.id}` && item.kind === 'image_region' && item.imageRole === 'person' && item.opacity > 0)).map(speaker => `Include the uploaded portrait for ${speaker.name || speaker.id} using key asset_person_${speaker.id}`),
       ];
       for (let attempt = 0; attempt < 3; attempt++) {
         const missing = checkPlan(response.plan);
         if (!missing.length) break;
-        setStatus(`Refining portrait size and information placement (${attempt + 1}/3)…`);
+        setStatus(`Restoring required details (${attempt + 1}/3)…`);
         response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, previousPlan: response.plan, repairFeedback: missing } });
         response.plan = preparePlan(response.plan);
       }
       const stillMissing = checkPlan(response.plan);
-      if (stillMissing.length) throw new Error('The poster could not be balanced after three automatic corrections. Your details and photos are still here, and your existing canvas is unchanged. Try another design direction.');
+      if (stillMissing.length) throw new Error('Some required details are still missing after three automatic corrections. Your details and photos are still here, and your existing canvas is unchanged. Try another design direction.');
       const compile = async (plan: PosterReconstructionPlan) => {
         plan = preparePlan(plan);
         const absent = checkPlan(plan);
@@ -123,11 +127,11 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         try {
           setStatus('Reviewing the canvas and making one correction pass…');
           let corrected: CompiledPosterReconstruction | null = null;
-          let feedback: string[] = [];
+          let feedback: string[] = layoutIssues(response.plan);
           for (let attempt = 0; attempt < 2; attempt++) {
             const reviewed = await requestPosterReconstruction({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: { ...creation, phase: 'review', previousPlan: response.plan, repairFeedback: feedback } });
             const candidate = preparePlan(reviewed.plan);
-            const issues = checkPlan(candidate);
+            const issues = [...checkPlan(candidate), ...layoutIssues(candidate)];
             if (issues.length) {
               feedback = issues;
               if (attempt === 1) throw new Error('The reviewed version did not pass the layout and content checks.');
