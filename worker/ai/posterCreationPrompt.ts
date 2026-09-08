@@ -20,12 +20,12 @@ import nineteen from '../../docs/design-library/church-and-worship/church-servic
 import { formatPosterLayoutSkillForPrompt } from '../../shared/ai/posterLayoutSkill';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 
-export const CREATION_VERSION = 'church-creation/16';
+export const CREATION_VERSION = 'church-creation/17';
 // Short executable art direction complements the long reference annotation.
 const headlineDirections = [
   'Split SUNDAY into SUN / DAY in a playful heavy face such as chewy or lilita_one; SERVICE is a separate contrasting line fitted to the same block width. Use a warm gradient in the logistics backing.',
   'Use playfair_display or crimson_pro for SUNDAY, with a separate allura or great_vibes Service overlapping its lower edge. Give the script a contrasting outline via stroke and strokeWidthRatio.',
-  'For Sunday Service use three editable text elements: one large serif S spanning two rows, UNDAY above ERVICE to its right. Together they read Sunday Service exactly once. Use playfair_display or georgia. For other titles adapt without inventing letters.',
+  'For Sunday Service use three editable text elements: one large serif S spanning the full measured height of BOTH rows INCLUDING the inter-row gap, UNDAY above ERVICE to its right. Together they read Sunday Service exactly once. Use playfair_display or georgia. For other titles adapt without inventing letters.',
   'Pair anton or oswald SUNDAY with a separate dancing_script or allura Service, light outline and restrained overlap. Keep the script expressive, not another condensed uppercase line.',
   'Use montserrat or raleway bold for the two-line event title, a wide geometric block with aligned edges. Do not default to Anton. White cards and the asymmetric portrait distinguish this family.',
   'For Sunday Service use an oversized great_vibes S, bold montserrat UNDAY and a separate great_vibes Service beneath. Apply a pink-to-orange text gradient to S and UNDAY, with a contrasting dark script Service. Preserve readable word order.',
@@ -43,6 +43,22 @@ const headlineDirections = [
   "Use oversized mixed-case playfair_display Sunday and a contrasting expressive rounded display Service, such as chewy where suitable, with restrained coloured outline. Retain turquoise/purple atmosphere and a gradient date badge. A modifier strip is only for supplied wording; simplify unsupported border textures.",
   'Use oversized cream playfair_display or crimson_pro event lettering on navy. Behind the central portrait create two independent editable paths: a rising closed cream region and an open gold sweep that crosses it. These are not one outlined shape. Reserve a structured date/time/venue footer.',
 ];
+export function themeDirection(seed: string, referenceId: number): string {
+  const treatments = [
+    'Use an upright theme phrase with a compact horizontal THEME label immediately above, aligned to the phrase. No label rotation.',
+    'Use an upright theme phrase and horizontal THEME label on a small contrasting rounded badge directly above its first line. Keep the badge and phrase together.',
+    'Use an upright theme in a restrained filled band or panel with padding; an optional horizontal THEME label belongs inside that same group.',
+    'Use the theme as an upright editorial text block without a separate THEME label. Match the reference typography and hierarchy.',
+    'Use an upright theme with a restrained editable open-stroke oval or underline; keep any THEME label horizontal and adjacent.',
+    'Use a vertical THEME label beside the upright phrase only if space permits. Its visible height should be about 70–90% of the phrase block height; vertically centre it beside the phrase with a small gap. Otherwise use a horizontal label above.',
+  ];
+  let hash = 0;
+  for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  // The diagonal family can coordinate a modest tilt; other families stay upright.
+  if (referenceId === 13 && hash % 3 === 0) return 'Use a modest coordinated tilt for the theme, its adjacent label and underline, following the diagonal headline. Keep the whole group together.';
+  return treatments[(hash + referenceId) % treatments.length]!;
+}
+
 export function posterCreationPrompt(request: PosterReconstructionRequest): string {
   const creation = request.creation!;
   return `You are a church-service graphic designer creating ORIGINAL editable posters, not tracing a reference.
@@ -59,7 +75,10 @@ Use the supplied reference annotation as adaptable design guidance, not mandator
 COMPOSITION FINISHING: Deliver a composed poster without delegating resizing, fading or arrangement to the user. Before delivery inspect the actual rendering at full size and thumbnail size. Repair portrait prominence, hard photo edges, title/identity collisions, isolated logistics, and decorative alignment while keeping factual text editable.
 Keep supplied dates exactly as written, allowing line breaks only; never infer a weekday. Name and role are separate visible editable text layers tied to the matching portrait. Preserve the complete venue including distance and landmarks through every correction.
 DATE/TIME PROXIMITY: Normally place date and all service times together in one cluster, with an independent date panel beside or within the schedule if appropriate. Keep logistics upright. A circle, outlined frame, strip or irregular closed path can provide the backing; fit the actual wording with padding. Do not strand a date at the top opposite a bottom schedule unless explicitly requested.
-THEME AND DETAIL VARIATION: Choose a theme treatment as deliberately as the headline, guided by the selected reference and wording. Vary across seeds: an editorial theme headline; a small vertical THEME label (angle=-90) beside an upright phrase; an editable open-stroke hand-drawn oval/sweep around a short phrase; a compact side block; a gradient band; or a coordinated tilted subtitle. Only add the THEME label when a theme is supplied. Do not always append the same italic line below Sunday Service. Select one coherent treatment, not every effect. Circles with fill=null and a substantial restrained stroke can form low-opacity background rims; keep them behind content. Use supported independent paths for irregular panels and gestures, preserving readable negative space.
+THEME AND DETAIL VARIATION: Treat the theme phrase and optional THEME label as one compact group, using keys theme_phrase and theme_label so their relationship stays explicit. Rotation is optional, never a default across posters. The chosen reference, available space and user instructions take precedence over a decorative trick. Use distinct horizontal labels, badges, panels, editorial phrases and occasional vertical labels across designs. Never place a tiny detached THEME label elsewhere on the page. Keep the label secondary but readable, adjacent to the phrase, and align against visible glyph bounds after rotation rather than the original textbox origin. A vertical label sits directly left of the phrase and is vertically centred on its full block, including line spacing. A horizontal label sits immediately above the first line and may have its own small backing. Do not rotate the theme phrase merely because its label is vertical. If no theme is supplied, omit the entire group.
+Suggested treatment for this variation: ${themeDirection(creation.seed, creation.referenceId)}
+During review preserve the draft's successful theme treatment rather than switching styles. Fix label proximity, scale and alignment without adding a new decoration or rotating an upright group.
+SHARED INITIAL: For the S + UNDAY / ERVICE arrangement, S spans from the visible top of UNDAY to the visible bottom of ERVICE. Its height is row one height + the gap + row two height, not just the sum of the two glyph heights. Reserve sufficient width for that natural glyph size; a narrow box must not shrink S. Align top and bottom optically and keep a consistent small horizontal gap to both suffix rows.
 COORDINATED DECORATION: An underline belonging to a tilted theme must follow that theme's angle and baseline with a consistent gap; transform its position as part of the group. Unrelated dividers and logistics remain upright. Check rotated corners and line endpoints in the rendered image.
 PHOTO INTEGRATION: For an unframed speaker whose lower photo edge ends visibly over the page, normally use imageEdge='fade', imageFadeDirection='bottom', imageFadeAmount=0.15, imageFadeMinOpacity=0. Keep the face and upper body opaque. Do not apply radial fade to faces or fade logos; retain intentional framed portraits and explicit hard-edge requests. Background photographs should form a substantial intentional field (often the upper half or full bleed), cropped to the region and subdued with opacity or an overlay. Avoid a small floating thumbnail behind the title. Keep the supplied subject recognisable and text contrast strong; do not force every family to use the same background geometry.
 Variation seed: ${creation.seed}. Produce a fresh coherent variation of the chosen family.

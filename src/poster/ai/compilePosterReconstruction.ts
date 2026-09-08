@@ -1,3 +1,4 @@
+import { alignCreatedTypography, type InkRect } from './createdTypography';
 import {
   PosterReconstructionPlanSchema,
   type PosterReconstructionPlan,
@@ -337,6 +338,10 @@ export async function compilePosterReconstruction(input: {
       const compiled = elements.find(element => element.id === sourceIds.get(item.key));
       if (compiled) compiled.top += (item.box.y - before.get(item.key)!) * canvasHeight;
     }
+  }
+  if (input.balanceInformationCards) {
+    const themeIds = new Set(plan.elements.filter(item => /theme/i.test(`${item.key} ${item.suggestedFieldKey ?? ''} ${item.label}`)).map(item => sourceIds.get(item.key)!));
+    alignCreatedTypography(elements.filter((item): item is PosterTextElement => item.type === 'text'), compiledTextInkRect, { width: canvasWidth, height: canvasHeight }, themeIds);
   }
   return {
     project: {
@@ -983,6 +988,16 @@ function horizontalInkBounds(
   return Number.isFinite(left) && Number.isFinite(right) && right > left
     ? { left, right }
     : { left: 0, right: Math.max(1, textboxWidth) };
+}
+
+export function compiledTextInkRect(text: PosterTextElement): InkRect {
+  const metrics = text.text.split(/\r?\n/).map(line => measuredTextLineMetrics({line, fontFamily:text.fontFamily, fontWeight:String(text.fontWeight ?? '400'), fontStyle:text.fontStyle ?? 'normal', charSpacing:text.charSpacing ?? 0, fontSize:text.fontSize}));
+  const v = verticalInkBounds(metrics, text.lineHeight ?? 1.16, text.fontSize);
+  const h = horizontalInkBounds(metrics, text.width ?? 200, text.textAlign ?? 'left');
+  const angle = text.angle * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+  const points = [[h.left,v.top],[h.right,v.top],[h.left,v.bottom],[h.right,v.bottom]].map(([x,y]) => ({x:text.left+x*text.scaleX*cos-y*text.scaleY*sin,y:text.top+x*text.scaleX*sin+y*text.scaleY*cos}));
+  const left = Math.min(...points.map(p => p.x)), top = Math.min(...points.map(p => p.y));
+  return {left,top,width:Math.max(...points.map(p => p.x))-left,height:Math.max(...points.map(p => p.y))-top};
 }
 
 function verticalInkBounds(

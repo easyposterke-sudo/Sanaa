@@ -9,6 +9,7 @@ import {
 import {
   amplifiedDetectedCornerRadius,
   compilePosterReconstruction,
+  compiledTextInkRect,
   fitDetectedTextFontSize,
   fitDetectedTextToInkBox,
   fitPersonReplacementIntoBox,
@@ -96,6 +97,25 @@ function plan(elements: ReconstructionElement[]): PosterReconstructionPlan {
 }
 
 describe('compilePosterReconstruction', () => {
+  it('aligns measured shared initials and rotated theme labels only for creation', async () => {
+    const input = {plan:plan([
+      element({key:'initial',kind:'text',text:'S',fontSizeRatio:.14,box:{x:.1,y:.2,width:.18,height:.16}}),
+      element({key:'upper',kind:'text',text:'UNDAY',fontSizeRatio:.07,box:{x:.33,y:.2,width:.55,height:.08}}),
+      element({key:'lower',kind:'text',text:'ERVICE',fontSizeRatio:.07,box:{x:.33,y:.31,width:.55,height:.08}}),
+      element({key:'theme_label',kind:'text',text:'THEME',angle:-90,fontSizeRatio:.015,box:{x:.1,y:.52,width:.1,height:.02}}),
+      element({key:'theme_phrase',kind:'text',text:'God the\nLoving Father',fontSizeRatio:.04,box:{x:.4,y:.6,width:.45,height:.13}}),
+    ]),reference:{dataUrl:'unused',width:1000,height:1250},referenceGuideOpacity:0};
+    const original=await compilePosterReconstruction(input);
+    const balanced=await compilePosterReconstruction({...input,balanceInformationCards:true});
+    const texts=balanced.project.elements.filter(item=>item.type==='text');
+    const [initial,upper,lower,label,phrase]=texts.map(compiledTextInkRect);
+    expect(initial.top).toBeCloseTo(upper.top,1);
+    expect(Math.abs(initial.top+initial.height-lower.top-lower.height)).toBeLessThanOrEqual(1);
+    expect(label.top+label.height/2).toBeCloseTo(phrase.top+phrase.height/2,1);
+    expect(label.left+label.width).toBeCloseTo(phrase.left-12,1);
+    expect(original.project.elements[3].top).not.toBeCloseTo(texts[3].top,1);
+  });
+
   it('centres measured text in creation cards without changing reference reconstruction', async () => {
     const input = {plan:plan([
       element({key:'card',kind:'rect',box:{x:.1,y:.1,width:.5,height:.2}}),

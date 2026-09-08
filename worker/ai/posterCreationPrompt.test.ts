@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PosterReconstructionRequestSchema, createFallbackReconstructionPlan, type PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
-import { posterCreationPrompt } from './posterCreationPrompt';
+import { posterCreationPrompt, themeDirection } from './posterCreationPrompt';
 
 const request: PosterReconstructionRequest = {
   reference: { dataUrl: 'data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAA==', width: 1080, height: 1350 },
@@ -80,4 +80,12 @@ describe('prompt-based poster creation', () => {
     expect(prompt).toContain('actual rendered draft');
     expect(prompt).toContain('Do not start a new concept');
   });
+});
+
+it('varies theme treatments without making rotation the default', () => {
+  const choices = Array.from({length:60}, (_, index) => themeDirection(`seed-${index}`, 7));
+  expect(new Set(choices).size).toBe(6);
+  expect(choices.filter(choice => choice.includes('vertical THEME')).length).toBeLessThan(20);
+  expect(choices.some(choice => choice.includes('rounded badge'))).toBe(true);
+  expect(choices.some(choice => choice.includes('without a separate'))).toBe(true);
 });
