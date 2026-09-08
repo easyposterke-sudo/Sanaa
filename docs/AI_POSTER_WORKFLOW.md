@@ -6,7 +6,7 @@ EasyPoster includes a first **Create with AI** prompt prototype for Church and W
 
 In the poster editor, open Create with AI. Enter exact wording and a visual brief, optionally upload a speaker photo, logo, or background, and choose a direction or let the app select a fresh family. Output is currently 1080 × 1350.
 
-The Worker retrieves one of the ten actual Markdown annotations from `docs/design-library`, adds the runtime layout skill, and requests an original editable manifest. Example images and identities are not used as generated artwork. This initial retrieval uses portrait availability or an explicit style choice, not semantic ranking. A new seed varies each request; the automatic choice avoids immediately repeating the previous family within the open dialog.
+The Worker retrieves one of the eighteen actual Markdown annotations from `docs/design-library`, adds the runtime layout skill, and requests an original editable manifest. Example images and identities are not used as generated artwork. This initial retrieval uses portrait availability or an explicit style choice, not semantic ranking. A new seed varies each request; the automatic choice avoids immediately repeating the previous family within the open dialog.
 
 The browser resolves supplied assets and optionally the first Pexels background match, compiles native editable layers, opens the draft, captures the rendered canvas including its background, and requests one correction pass. A failed review retains the first draft. The review is another quota-counted model request. Review quality is not guaranteed; inspect the result before publishing.
 
@@ -80,3 +80,5 @@ in D1; reference pixels are not persisted by the AI route.
 Before production exposure, protect `/api/*` with Cloudflare Access and avoid
 an unprotected `workers.dev` bypass. The production identity boundary trusts
 Cloudflare Access's authenticated email header.
+
+The reference library also contains Conference 001, annotated independently. It is excluded from the Church Service selector and automatic pool until a conference workflow is added.

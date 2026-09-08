@@ -24,6 +24,16 @@ References for Sunday services and other regular or dated church services. Style
 
 10. [Church Service 010 — Purple and gold layered occasion](church-service-010/reference.md): clothing-matched background, central portrait, side theme/scripture, outlined script and gradient logistics strip.
 
+11. [Church Service 011 — Purple and gold framed logistics](church-service-011/reference.md): large left portrait, tall gold headline, optional blue theme card, purple texture and outlined information frame.
+
+12. [church-service-012 — Warm schedule and right speaker](church-service-012/reference.md): right-speaker, stacked-schedule, warm-dark, square-layout, condensed-title.
+13. [church-service-013 — Diagonal maroon date sidebar](church-service-013/reference.md): diagonal-layout, tilted-headline, date-sidebar, torn-paper-optional, right-speaker.
+14. [church-service-014 — Dark luminous title and portrait](church-service-014/reference.md): central-speaker, luminous-background, time-badge, condensed-title, yellow-accents.
+15. [church-service-015 — Orange blue circular backdrop](church-service-015/reference.md): central-speaker, circular-backdrop, orange-blue, broad-geometric-title, gradient-time-band.
+16. [church-service-016 — White amber scripture layout](church-service-016/reference.md): right-speaker, pale-worship-background, gradient-title, scripture-card, schedule-circles.
+17. [church-service-017 — Minimal Bible and warm bokeh](church-service-017/reference.md): no-speaker-portrait, bible-background, minimal, editorial-serif, right-aligned-details.
+18. [church-service-018 — Turquoise expressive encounter](church-service-018/reference.md): central-speaker, expressive-serif, textured-border-optional, gradient-date-badge, turquoise-purple.
+
 ## Collection guidance
 
 Add more typography-led designs without photographs, varied multiple-person compositions, atmospheric photography, restrained designs, and expressive layered designs. Across those examples, cover recurring services, long church names, optional themes, different service counts, long venues, and services held on weekdays other than Sunday.

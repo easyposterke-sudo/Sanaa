@@ -1,12 +1,13 @@
 # Poster design reference library
 
-Annotated visual references for future AI poster design. This library is source material, not a connected generation feature or a separate skill for every style.
+Annotated visual references for future AI poster design. This library contains individual annotated references, not a separate skill for every style. Church Service annotations are connected to the current generator; other subcategories have their readiness documented separately.
 
 ## Categories
 
 - **Church and Worship** (`church-and-worship`)
   - [Church Service](church-and-worship/church-service/README.md) (`church-service`): Sunday services and other regular or dated church services.
-  - Future subcategories can include Worship Experience and Conference. Add them when the first reference is ready.
+  - [Conference](church-and-worship/conference/README.md) (`conference`): multi-day gatherings and speaker programmes.
+  - Future subcategories can include Worship Experience when its first reference is ready.
 
 ## Using the library
 
@@ -26,4 +27,4 @@ Prefer diverse compositions and content challenges over many near-identical exam
 
 ## Current scope
 
-Eight user-selected, annotated references. The first prompt prototype now loads these annotations and the layout skill, compiles editable canvas layers, optionally fetches a Pexels background, and attempts one rendered review. Reference selection is currently based on portrait availability or user choice; visual reference-image retrieval, richer image selection, and conversational editing remain future work. See [the workflow](../AI_POSTER_WORKFLOW.md). Category IDs here belong to this documentation library and do not change application or database categories.
+Nineteen user-selected, individually annotated references: eighteen Church Service designs and one Conference design. The eighteen service references are connected to generation; Conference is catalogued but not yet routed into a generation workflow. The first prompt prototype now loads these annotations and the layout skill, compiles editable canvas layers, optionally fetches a Pexels background, and attempts one rendered review. Reference selection is currently based on portrait availability or user choice; visual reference-image retrieval, richer image selection, and conversational editing remain future work. See [the workflow](../AI_POSTER_WORKFLOW.md). Category IDs here belong to this documentation library and do not change application or database categories.

@@ -8,6 +8,10 @@
         {
           "id": "church-service",
           "label": "Church Service"
+        },
+        {
+          "id": "conference",
+          "label": "Conference"
         }
       ]
     }
@@ -254,6 +258,169 @@
         "outlined-script",
         "gradient-logistics-strip",
         "optional-edition"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-011",
+      "title": "Purple and gold worship service — left portrait with framed logistics",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-011/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-011/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "left-speaker",
+        "square-layout",
+        "purple-texture",
+        "gold-condensed-headline",
+        "blue-theme-card",
+        "framed-logistics"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-012",
+      "title": "Warm schedule and right speaker",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-012/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-012/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "right-speaker",
+        "stacked-schedule",
+        "warm-dark",
+        "square-layout",
+        "condensed-title"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-013",
+      "title": "Diagonal maroon date sidebar",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-013/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-013/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "diagonal-layout",
+        "tilted-headline",
+        "date-sidebar",
+        "torn-paper-optional",
+        "right-speaker"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-014",
+      "title": "Dark luminous title and portrait",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-014/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-014/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "central-speaker",
+        "luminous-background",
+        "time-badge",
+        "condensed-title",
+        "yellow-accents"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-015",
+      "title": "Orange blue circular backdrop",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-015/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-015/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "central-speaker",
+        "circular-backdrop",
+        "orange-blue",
+        "broad-geometric-title",
+        "gradient-time-band"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "conference-001",
+      "title": "Red gold multi-speaker Alpha conference",
+      "category": "church-and-worship",
+      "subcategory": "conference",
+      "image": "church-and-worship/conference/conference-001/reference.png",
+      "annotation": "church-and-worship/conference/conference-001/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "multi-day-conference",
+        "three-speakers",
+        "blackletter-title",
+        "gradient-time-bar",
+        "theme-scripture"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-016",
+      "title": "White amber scripture layout",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-016/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-016/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "right-speaker",
+        "pale-worship-background",
+        "gradient-title",
+        "scripture-card",
+        "schedule-circles"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-017",
+      "title": "Minimal Bible and warm bokeh",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-017/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-017/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "no-speaker-portrait",
+        "bible-background",
+        "minimal",
+        "editorial-serif",
+        "right-aligned-details"
+      ],
+      "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
+    },
+    {
+      "id": "church-service-018",
+      "title": "Turquoise expressive encounter",
+      "category": "church-and-worship",
+      "subcategory": "church-service",
+      "image": "church-and-worship/church-service/church-service-018/reference.png",
+      "annotation": "church-and-worship/church-service/church-service-018/reference.md",
+      "editableSource": null,
+      "status": "annotated-user-selected",
+      "tags": [
+        "central-speaker",
+        "expressive-serif",
+        "textured-border-optional",
+        "gradient-date-badge",
+        "turquoise-purple"
       ],
       "assetReuse": "Reference only; ownership and reuse permissions have not been recorded."
     }

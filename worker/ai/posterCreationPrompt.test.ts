@@ -15,6 +15,20 @@ describe('prompt-based poster creation', () => {
     expect(sharedInitial).toContain('UNDAY above ERVICE');
     expect(script).toContain('These fields also apply to rect/circle/ellipse/triangle/star');
   });
+  it('loads the purple framed logistics family and its headline direction', () => {
+    const selected = { ...request, creation: { ...request.creation!, referenceId: 11 } };
+    expect(PosterReconstructionRequestSchema.safeParse(selected).success).toBe(true);
+    expect(posterCreationPrompt(selected)).toContain('church-service-011');
+    expect(posterCreationPrompt(selected)).toContain('Use tall gold bebas_neue');
+  });
+  it.each([12, 13, 14, 15, 16, 17, 18])('loads individual service reference %i with its art direction', referenceId => {
+    const selected = { ...request, creation: { ...request.creation!, referenceId } };
+    expect(PosterReconstructionRequestSchema.safeParse(selected).success).toBe(true);
+    const prompt = posterCreationPrompt(selected);
+    expect(prompt).toContain(`church-service-${String(referenceId).padStart(3, '0')}`);
+    expect(prompt).not.toContain('REQUIRED DESIGN CHARACTER: undefined');
+    expect(prompt).not.toContain('conference-001');
+  });
   it('loads the selected real annotation and the runtime layout skill', () => {
     const prompt = posterCreationPrompt(request);
     expect(prompt).toContain('church-service-006');
@@ -26,7 +40,7 @@ describe('prompt-based poster creation', () => {
     expect(PosterReconstructionRequestSchema.safeParse(request).success).toBe(true);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, phase: 'review' } }).success).toBe(false);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 8 } }).success).toBe(true);
-    expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 11 } }).success).toBe(false);
+    expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, referenceId: 19 } }).success).toBe(false);
     expect(PosterReconstructionRequestSchema.safeParse({ ...request, creation: { ...request.creation, assets: [{ role: 'person', dataUrl: 'https://example.com/unsafe', width: 100, height: 100 }] } }).success).toBe(false);
   });
   it('loads the editorial theme family', () => {
