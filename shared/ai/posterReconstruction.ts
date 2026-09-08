@@ -211,6 +211,7 @@ export const PosterReconstructionRequestSchema = z
       referenceId: z.number().int().min(1).max(19),
       phase: z.enum(['design', 'review']),
       previousPlan: PosterReconstructionPlanSchema.optional(),
+      repairFeedback: z.array(z.string().max(2000)).max(100).optional(),
       speakers: z.array(z.object({ id: z.string().regex(/^speaker_[a-z0-9_]{1,27}$/), name: z.string().max(120), role: z.string().max(80) }).strict()).optional(),
       assets: z.array(z.object({
         key: z.string().max(48).regex(/^asset_(person(?:_[a-z0-9_]+)?|logo|background_photo)$/).optional(),

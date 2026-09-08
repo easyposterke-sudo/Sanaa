@@ -82,14 +82,15 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         ...(creation.speakers ?? []).flatMap(speaker => [speaker.name, speaker.role]).filter(value => value && !plan.elements.filter(item => item.kind === 'text' && item.opacity > 0 && item.fill).map(item => item.text).join(' ').toLowerCase().replace(/\s+/g, ' ').includes(value.toLowerCase().replace(/\s+/g, ' '))).map(value => `Include speaker detail as visible text: ${value}`),
         ...portraits.filter(speaker => !plan.elements.some(item => item.key === `asset_person_${speaker.id}` && item.kind === 'image_region' && item.imageRole === 'person' && item.opacity > 0)).map(speaker => `Include the uploaded portrait for ${speaker.name || speaker.id} using key asset_person_${speaker.id}`),
       ];
-      const missing = checkPlan(response.plan);
-      if (missing.length) {
-        setStatus('Repairing missing details, assets, or layout…');
-        response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, seed: `${creation.seed}-repair`, prompt: `${prompt}\nMandatory correction: the last draft failed these content, asset, or layout checks: ${missing.join('; ')}. Restore all supplied facts as editable text and all required image assets as visible image layers. Fix the reported layout issues. Do not add duplicate titles or invitation slogans.` } });
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const missing = checkPlan(response.plan);
+        if (!missing.length) break;
+        setStatus(`Refining portrait size and information placement (${attempt + 1}/3)…`);
+        response = await requestPosterReconstruction({ reference, quality: 'quality', creation: { ...creation, previousPlan: response.plan, repairFeedback: missing } });
         response.plan = preparePlan(response.plan);
       }
       const stillMissing = checkPlan(response.plan);
-      if (stillMissing.length) throw new Error(`The draft needs these corrections: ${stillMissing.join('; ')}. Your canvas has not been replaced. Please retry.`);
+      if (stillMissing.length) throw new Error('The poster could not be balanced after three automatic corrections. Your details and photos are still here, and your existing canvas is unchanged. Try another design direction.');
       const compile = async (plan: PosterReconstructionPlan) => {
         plan = preparePlan(plan);
         const absent = checkPlan(plan);
@@ -122,14 +123,14 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         try {
           setStatus('Reviewing the canvas and making one correction pass…');
           let corrected: CompiledPosterReconstruction | null = null;
-          let feedback = '';
+          let feedback: string[] = [];
           for (let attempt = 0; attempt < 2; attempt++) {
-            const reviewed = await requestPosterReconstruction({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: { ...creation, phase: 'review', previousPlan: response.plan, prompt: `${prompt}${feedback}` } });
+            const reviewed = await requestPosterReconstruction({ reference: { ...reference, dataUrl: snapshot }, quality: 'quality', creation: { ...creation, phase: 'review', previousPlan: response.plan, repairFeedback: feedback } });
             const candidate = preparePlan(reviewed.plan);
             const issues = checkPlan(candidate);
             if (issues.length) {
-              feedback = `\nThe proposed correction was rejected: ${issues.join('; ')}. Correct these issues while preserving every supplied fact and asset from the original draft shown. Do not ask the user to repair the layout.`;
-              if (attempt === 1) throw new Error(`Review corrections failed validation: ${issues.join('; ')}`);
+              feedback = issues;
+              if (attempt === 1) throw new Error('The reviewed version did not pass the layout and content checks.');
               setStatus('Repairing the reviewed composition…');
               continue;
             }
@@ -146,6 +147,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       setResult({ ...draft, warnings: [...draft.warnings, ...warnings] });
       setStatus('Your editable draft is ready.');
     } catch (caught) {
+      setStatus('');
       setError(caught instanceof Error ? caught.message : 'Generation failed.');
       if (draft) setResult(draft);
     } finally { setBusy(false); }

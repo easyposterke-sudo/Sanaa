@@ -8,6 +8,13 @@ const request: PosterReconstructionRequest = {
   creation: { prompt: 'Sunday Service for Hope Church, every Sunday at 9 AM.', seed: 'test', referenceId: 6, phase: 'design', assets: [] },
 };
 describe('prompt-based poster creation', () => {
+  it('accepts repair feedback separately from a maximum-length brief and supplies the failed manifest', () => {
+    const repair = { ...request, creation: { ...request.creation!, prompt: 'a'.repeat(4000), previousPlan: createFallbackReconstructionPlan(), repairFeedback: ['Enlarge asset_person to fit its column'] } };
+    expect(PosterReconstructionRequestSchema.safeParse(repair).success).toBe(true);
+    expect(posterCreationPrompt(repair)).toContain('Repair the following existing manifest');
+    expect(posterCreationPrompt(repair)).toContain('Enlarge asset_person to fit its column');
+  });
+
   it('preserves distinct headline directions and exposes shape gradient controls', () => {
     const script = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 2 } });
     const sharedInitial = posterCreationPrompt({ ...request, creation: { ...request.creation!, referenceId: 3 } });

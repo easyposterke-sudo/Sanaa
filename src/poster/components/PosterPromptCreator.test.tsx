@@ -31,11 +31,34 @@ describe('prompt creator form', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate editable poster' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your editable draft is ready.'), { timeout: 10000 });
     expect(requestPosterReconstruction).toHaveBeenCalledTimes(3);
-    expect(vi.mocked(requestPosterReconstruction).mock.calls[2][0].creation?.prompt).toContain('Include speaker detail as visible text: Host');
+    expect(vi.mocked(requestPosterReconstruction).mock.calls[2][0].creation?.repairFeedback).toContain('Include speaker detail as visible text: Host');
     expect(onApply).toHaveBeenCalledTimes(2);
     expect(compilePosterReconstruction).toHaveBeenCalledTimes(2);
   }, 15000);
 
+
+  it('passes each failed manifest into bounded repairs without extending a full brief', async () => {
+    const plan = createFallbackReconstructionPlan();
+    plan.elements = [];
+    const response = { plan } as Awaited<ReturnType<typeof requestPosterReconstruction>>;
+    vi.mocked(requestPosterReconstruction).mockResolvedValue(response);
+    const onApply = vi.fn();
+    render(<PosterPromptCreator onApply={onApply} onClose={vi.fn()} onImport={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Speaker 1 role'), { target: { value: 'Host' } });
+    const brief = 'A church poster ' + 'a'.repeat(3984);
+    fireEvent.change(screen.getByLabelText('Describe your church service poster'), { target: { value: brief } });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate editable poster' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('three automatic corrections'));
+    expect(requestPosterReconstruction).toHaveBeenCalledTimes(4);
+    for (const [request] of vi.mocked(requestPosterReconstruction).mock.calls.slice(1)) {
+      expect(request.creation?.previousPlan).toEqual(plan);
+      expect(request.creation?.prompt).toBe(brief);
+      expect(request.creation?.repairFeedback).toContain('Include speaker detail as visible text: Host');
+    }
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Include speaker detail');
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    expect(onApply).not.toHaveBeenCalled();
+  });
 
   it('adds arbitrary speaker slots and preserves names and roles when removing another speaker', async () => {
     vi.mocked(requestPosterReconstruction).mockRejectedValue(new Error('test stop'));
