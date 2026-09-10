@@ -359,7 +359,15 @@ export async function compilePosterReconstruction(input: {
       canvasBackground: compileCanvasBackground(plan),
       elements,
     },
-    ...(layoutMode === 'reference' ? { sourceReference: { ...input.reference } } : {}),
+    ...(layoutMode === 'reference'
+      ? {
+          sourceReference: {
+            dataUrl: input.reference.dataUrl,
+            width: input.reference.width,
+            height: input.reference.height,
+          },
+        }
+      : {}),
     fieldBindings: fields,
     suggestedTemplateName: plan.suggestedTemplateName,
     category: plan.category,

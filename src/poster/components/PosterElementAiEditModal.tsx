@@ -64,7 +64,11 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
       const fontCatalog = await prepareReconstructionFontCatalog().catch(() => null);
       const previewScale = Math.min(1, 960 / initial.canvasWidth);
       const response = await requestPosterElementEdit({
-        reference: initial.aiReference,
+        reference: {
+          dataUrl: initial.aiReference.dataUrl,
+          width: initial.aiReference.width,
+          height: initial.aiReference.height,
+        },
         currentDraft: {
           dataUrl: snapshot,
           width: Math.max(64, Math.round(initial.canvasWidth * previewScale)),

@@ -270,7 +270,10 @@ describe('compilePosterReconstruction', () => {
         dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
         width: 1000,
         height: 1500,
-      },
+        sourceWidth: 1545,
+        sourceHeight: 1999,
+        fileName: 'reference.png',
+      } as any,
       referenceGuideOpacity: 0,
     });
 
