@@ -13,6 +13,8 @@ import {
   fitDetectedTextFontSize,
   fitDetectedTextToInkBox,
   fitPersonReplacementIntoBox,
+  fitPersonReplacementToFillBox,
+  fitRotatedTextToInkBox,
   resolvedDetectedCornerRadius,
 } from './compilePosterReconstruction';
 
@@ -127,6 +129,55 @@ describe('compilePosterReconstruction', () => {
     expect(balanced.project.elements[1]!.left).toBe(original.project.elements[1]!.left);
     expect(balanced.project.elements[0]).toEqual(original.project.elements[0]);
   });
+
+  it('fits rotated reference text by its final visible ink bounds', async () => {
+    const target = { left: 50, top: 700, width: 40, height: 120 };
+    const layout = fitRotatedTextToInkBox({
+      lines: ['THEME'],
+      fontFamily: 'Arial, sans-serif',
+      fontWeight: '700',
+      fontStyle: 'normal',
+      charSpacing: 0,
+      lineHeight: 1.16,
+      textAlign: 'center',
+      targetBox: target,
+      targetVisibleGlyphHeight: 30,
+      angle: -90,
+    });
+    const text = {
+      id: 'rotated',
+      layerName: 'Rotated label',
+      type: 'text' as const,
+      text: 'THEME',
+      fontSize: layout.fontSize,
+      fontFamily: 'Arial, sans-serif',
+      fill: '#ffffff',
+      width: layout.width,
+      fontWeight: '700',
+      fontStyle: 'normal' as const,
+      charSpacing: 0,
+      lineHeight: 1.16,
+      textAlign: 'center' as const,
+      left: layout.left,
+      top: layout.top,
+      scaleX: 1,
+      scaleY: 1,
+      angle: -90,
+      opacity: 1,
+      zIndex: 1,
+    };
+    const ink = compiledTextInkRect(text);
+
+    // Browser text metrics can vary fractionally between consecutive canvas
+    // measurements; the final ink should still be centred within one pixel.
+    expect(ink.left).toBeGreaterThanOrEqual(target.left - 1);
+    expect(ink.top).toBeGreaterThanOrEqual(target.top - 1);
+    expect(ink.left + ink.width).toBeLessThanOrEqual(target.left + target.width + 1);
+    expect(ink.top + ink.height).toBeLessThanOrEqual(target.top + target.height + 1);
+    expect(Math.abs(ink.left + ink.width / 2 - target.left - target.width / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(ink.top + ink.height / 2 - target.top - target.height / 2)).toBeLessThanOrEqual(1);
+  });
+
   it('contains a supplied wide logo without cropping its source or distorting it', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([element({key:'logo', kind:'image_region', imageRole:'logo', box:{x:.1,y:.1,width:.1,height:.1}})]),
@@ -266,7 +317,42 @@ describe('compilePosterReconstruction', () => {
     const plan = createFallbackReconstructionPlan();
     plan.elements = [element({ key: 'gradient_card', kind: 'rect', textFillType: 'linear', textFillStart: '#ff0000', textFillEnd: '#ffff00', textFillAngle: 45 })];
     const result = await compilePosterReconstruction({ plan, reference: { dataUrl: 'data:image/png;base64,AAAA', width: 1080, height: 1350 } });
-    expect(result.project.elements.find(item => item.type === 'rect')).toMatchObject({ fillGradient: { type: 'linear', angle: 45, stops: [{ offset: 0, color: '#ff0000' }, { offset: 1, color: '#ffff00' }] } });
+    expect(result.project.elements.find(item => item.type === 'rect')).toMatchObject({ fill: { type: 'linear', angle: 45, stops: [{ offset: 0, color: '#ff0000' }, { offset: 1, color: '#ffff00' }] } });
+  });
+
+  it('preserves editable gradients on closed irregular paths', async () => {
+    const result = await compilePosterReconstruction({
+      plan: plan([element({
+        key: 'gradient_ribbon',
+        kind: 'path',
+        pathUsage: 'closed_fill',
+        pathClosed: true,
+        pathPoints: [
+          { x: 0, y: 0, smooth: false },
+          { x: 1, y: 0.2, smooth: true },
+          { x: 1, y: 1, smooth: false },
+          { x: 0, y: 1, smooth: false },
+        ],
+        textFillType: 'linear',
+        textFillStart: '#ff4455',
+        textFillEnd: '#ffee55',
+        textFillAngle: 90,
+      })]),
+      reference: { dataUrl: 'data:image/png;base64,AAAA', width: 1080, height: 1350 },
+      referenceGuideOpacity: 0,
+    });
+
+    expect(result.project.elements[0]).toMatchObject({
+      type: 'path',
+      fill: {
+        type: 'linear',
+        angle: 90,
+        stops: [
+          { offset: 0, color: '#ff4455' },
+          { offset: 1, color: '#ffee55' },
+        ],
+      },
+    });
   });
 
   it('rebuilds detected headline gradients as editable gradient-filled text', async () => {
@@ -631,7 +717,7 @@ describe('compilePosterReconstruction', () => {
     });
   });
 
-  it('keeps a complete person replacement visible and bottom-aligned in its detected region', async () => {
+  it('fills a reference portrait region and anchors the replacement at its detected top edge', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
         element({
@@ -664,10 +750,10 @@ describe('compilePosterReconstruction', () => {
     expect(portrait).toMatchObject({
       type: 'image',
       src: 'data:image/webp;base64,replacement',
-      left: 250,
+      left: 100,
       top: 300,
-      scaleX: 0.75,
-      scaleY: 0.75,
+      scaleX: 1.5,
+      scaleY: 1.5,
     });
   });
 
@@ -680,6 +766,47 @@ describe('compilePosterReconstruction', () => {
       top: 200,
       scaleX: 0.6,
       scaleY: 0.6,
+    });
+  });
+
+  it('computes uniform fill scaling for a reference portrait without stretching it', () => {
+    expect(fitPersonReplacementToFillBox(
+      { width: 500, height: 1200 },
+      { left: 100, top: 200, width: 600, height: 720 },
+    )).toEqual({
+      left: 100,
+      top: 200,
+      scaleX: 1.2,
+      scaleY: 1.2,
+    });
+  });
+
+  it('keeps prompt-created portrait containment unchanged', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([element({
+        key: 'asset_person',
+        kind: 'image_region',
+        box: { x: 0.1, y: 0.2, width: 0.6, height: 0.5 },
+        imageRole: 'person',
+      })]),
+      reference: { dataUrl: 'data:image/png;base64,AAAA', width: 1000, height: 1500 },
+      referenceGuideOpacity: 0,
+      imageReplacements: {
+        asset_person: {
+          src: 'data:image/webp;base64,replacement',
+          width: 400,
+          height: 1000,
+        },
+      },
+      layoutMode: 'creation',
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'image',
+      left: 250,
+      top: 300,
+      scaleX: 0.75,
+      scaleY: 0.75,
     });
   });
 
@@ -1099,6 +1226,8 @@ describe('compilePosterReconstruction', () => {
       const icon = compiled.project.elements[0];
       expect(icon).toMatchObject({ type: 'image', layerName: `AI icon: ${iconName} icon` });
       if (icon?.type !== 'image') throw new Error('Expected an icon image.');
+      expect(icon.scaleX).toBeCloseTo(0.25);
+      expect(icon.scaleY).toBeCloseTo(0.28125);
       const svg = decodeURIComponent(icon.src);
       expect(svg).toContain('fill="#176143"');
       expect(svg).toContain('<image href="data:image/png;base64,');

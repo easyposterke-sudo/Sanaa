@@ -100,7 +100,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
         // Never allow the blank canvas or review screenshot to become an image asset.
         const safePlan = { ...plan, elements: plan.elements.filter(item => item.kind !== 'image_region' || replacements[item.key] || (item.imageRole === 'icon' && item.iconName !== 'none')) };
 
-        const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements, balanceInformationCards: true });
+        const compiled = await compilePosterReconstruction({ plan: safePlan, reference, referenceGuideOpacity: 0, imageReplacements: replacements, balanceInformationCards: true, layoutMode: 'creation' });
         return compiled;
       };
       const stock = response.plan.elements.find(item => item.key === 'stock_background' && item.imageRole === 'background_photo');

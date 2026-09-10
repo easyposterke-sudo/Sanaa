@@ -14,6 +14,7 @@ import type {
   PosterPathElement,
   PosterPathPoint,
   PosterProject,
+  PosterShapeFill,
   PosterShapeElement,
   PosterTextElement,
 } from '../types';
@@ -136,6 +137,8 @@ export async function compilePosterReconstruction(input: {
   imageReplacements?: Readonly<Record<string, ReconstructionImageReplacement>>;
   fontCatalogFamilies?: Readonly<Record<string, string>>;
   balanceInformationCards?: boolean;
+  /** Keeps reference reconstruction geometry fixes isolated from prompt-created posters. */
+  layoutMode?: 'reference' | 'creation';
 }): Promise<CompiledPosterReconstruction> {
   const plan = PosterReconstructionPlanSchema.parse(input.plan);
   const canvasWidth = normalizeCanvasDimension(input.canvasSize?.width, input.reference.width);
@@ -147,6 +150,7 @@ export async function compilePosterReconstruction(input: {
   const usedFieldKeys = new Set<string>();
   const sourceIds = new Map<string, string>();
   let nextZ = 1;
+  const layoutMode = input.layoutMode ?? (input.balanceInformationCards ? 'creation' : 'reference');
 
   const guideOpacity = clamp(input.referenceGuideOpacity ?? 0.22, 0, 1);
   if (guideOpacity > 0) {
@@ -236,7 +240,7 @@ export async function compilePosterReconstruction(input: {
       if (hasVerifiedExtrusion && displayText.length <= 80) {
         element = compileThreeDTextElement(item, box, base, fontFamily);
       } else {
-        element = compileTextElement(item, box, canvasHeight, base, fontFamily);
+        element = compileTextElement(item, box, canvasHeight, base, fontFamily, layoutMode);
         if (item.textEffect === 'two_layer_3d' && !hasVerifiedExtrusion) {
           warnings.push(
             `“${item.label}” was kept flat because no measurable connected extrusion side faces were verified.`,
@@ -253,6 +257,7 @@ export async function compilePosterReconstruction(input: {
         reference: input.reference,
         replacement,
         warnings,
+        layoutMode,
       });
       element = {
         ...base,
@@ -291,9 +296,9 @@ export async function compilePosterReconstruction(input: {
         adjustTintAmount: item.imageTintAmount,
       } satisfies PosterImageElement;
     } else if (item.kind === 'path') {
-      element = compilePathElement(item, box, canvasHeight, base, warnings);
+      element = compilePathElement(item, box, canvasHeight, base, warnings, layoutMode);
     } else {
-      element = compileShapeElement(item, box, canvasHeight, base);
+      element = compileShapeElement(item, box, canvasHeight, base, layoutMode);
     }
     elements.push(element);
 
@@ -372,6 +377,7 @@ function compilePathElement(
     'id' | 'layerName' | 'left' | 'top' | 'scaleX' | 'scaleY' | 'angle' | 'opacity' | 'zIndex'
   >,
   warnings: string[],
+  layoutMode: 'reference' | 'creation',
 ): PosterPathElement {
   // A filled path with no drawable stroke cannot be an open stroke: compiling
   // it literally would create an invisible layer. Repair only this impossible
@@ -449,7 +455,9 @@ function compilePathElement(
     ...base,
     layerName: `AI path: ${item.label}`,
     type: 'path',
-    fill: pathUsage === 'open_stroke' ? 'transparent' : (item.fill ?? 'transparent'),
+    fill: pathUsage === 'open_stroke'
+      ? 'transparent'
+      : reconstructionVectorFill(item, layoutMode, item.fill ?? 'transparent'),
     fillOpacity: pathUsage === 'open_stroke' ? 0 : 1,
     stroke: item.stroke ?? undefined,
     strokeWidth,
@@ -465,6 +473,7 @@ async function compileImageRegion(input: {
   reference: { dataUrl: string; width: number; height: number };
   replacement?: ReconstructionImageReplacement;
   warnings: string[];
+  layoutMode: 'reference' | 'creation';
 }): Promise<{
   dataUrl: string;
   width: number;
@@ -472,12 +481,18 @@ async function compileImageRegion(input: {
   layerName?: string;
   layout?: Pick<PosterImageElement, 'left' | 'top' | 'scaleX' | 'scaleY'>;
 }> {
-  const { item, box, replacement, warnings } = input;
+  const { item, box, replacement, warnings, layoutMode } = input;
   if (item.imageRole === 'icon' && item.iconName !== 'none') {
+    // The supplied semantic PNG silhouettes are wrapped in a 320px SVG. Older
+    // reconstruction code treated every icon as 100px, so Fabric multiplied
+    // location/phone/web artwork to 3.2x the detected box.
+    const semanticIconSize = layoutMode === 'reference' && isSemanticIconName(item.iconName)
+      ? 320
+      : 100;
     return {
       dataUrl: builtInIconDataUrl(item.iconName, item.imageDominantColor ?? item.fill ?? '#111111'),
-      width: 100,
-      height: 100,
+      width: semanticIconSize,
+      height: semanticIconSize,
       layerName: `AI icon: ${item.label}`,
     };
   }
@@ -499,7 +514,9 @@ async function compileImageRegion(input: {
         width: Math.max(1, replacement.width),
         height: Math.max(1, replacement.height),
         layerName: `AI replacement: ${item.label}`,
-        layout: fitPersonReplacementIntoBox(replacement, box),
+        layout: layoutMode === 'reference'
+          ? fitPersonReplacementToFillBox(replacement, box)
+          : fitPersonReplacementIntoBox(replacement, box),
       };
     }
     const crop = await cropImageToAspect(replacement, box.width / box.height);
@@ -572,6 +589,30 @@ export function fitPersonReplacementIntoBox(
   };
 }
 
+/**
+ * Reference portraits should occupy the detected subject region. Preserve the
+ * source aspect ratio, fill the region, centre horizontally, and keep the
+ * person's head-side edge anchored where the reference subject begins. The
+ * lower body may extend beyond the detected region/canvas, as it does in many
+ * foreground poster cutouts.
+ */
+export function fitPersonReplacementToFillBox(
+  source: Pick<ReconstructionImageReplacement, 'width' | 'height'>,
+  box: PixelBox,
+): Pick<PosterImageElement, 'left' | 'top' | 'scaleX' | 'scaleY'> {
+  const sourceWidth = Math.max(1, source.width);
+  const sourceHeight = Math.max(1, source.height);
+  const scale = Math.max(box.width / sourceWidth, box.height / sourceHeight);
+  const renderedWidth = sourceWidth * scale;
+  const renderedHeight = sourceHeight * scale;
+  return {
+    left: box.left + (box.width - renderedWidth) / 2,
+    top: box.top,
+    scaleX: scale,
+    scaleY: scale,
+  };
+}
+
 function compileThreeDTextElement(
   item: ReconstructionElement,
   box: PixelBox,
@@ -633,6 +674,7 @@ function compileTextElement(
   canvasHeight: number,
   base: Pick<PosterTextElement, 'id' | 'layerName' | 'left' | 'top' | 'scaleX' | 'scaleY' | 'angle' | 'opacity' | 'zIndex'>,
   fontFamily: string,
+  layoutMode: 'reference' | 'creation',
 ): PosterTextElement {
   const displayText = item.text || item.label;
   const lines = displayText.split(/\r?\n/);
@@ -647,6 +689,8 @@ function compileTextElement(
     height: Math.max(1, box.height - inset * 2),
   };
   const usesStraightInkLayout = item.textCurve === 0 && Math.abs(item.angle) < 0.01;
+  const usesReferenceRotatedInkLayout =
+    layoutMode === 'reference' && item.textCurve === 0 && Math.abs(item.angle) >= 0.01;
   const layout = usesStraightInkLayout
     ? fitDetectedTextToInkBox({
         lines,
@@ -660,7 +704,20 @@ function compileTextElement(
         targetVisibleGlyphHeight: measuredSize,
         constrainToDetectedBox: item.visibleLineCount > 0 && item.visibleLineCount === lineCount,
       })
-    : legacyDetectedTextLayout({
+    : usesReferenceRotatedInkLayout
+      ? fitRotatedTextToInkBox({
+          lines,
+          fontFamily,
+          fontWeight: item.fontWeight,
+          fontStyle: item.fontStyle,
+          charSpacing: item.charSpacing,
+          lineHeight: item.lineHeight,
+          textAlign: item.textAlign,
+          targetBox: inkBox,
+          targetVisibleGlyphHeight: measuredSize,
+          angle: item.angle,
+        })
+      : legacyDetectedTextLayout({
         lines,
         fontFamily,
         fontWeight: item.fontWeight,
@@ -701,6 +758,87 @@ function compileTextElement(
     curve: item.textCurve,
     stroke: item.stroke ?? undefined,
     strokeWidth,
+  };
+}
+
+/**
+ * Fits the final rotated glyph ink to an axis-aligned detection box. Fabric
+ * rotates around the textbox's top-left origin, so using the detected top-left
+ * directly shifts vertical labels away from their reference position.
+ */
+export function fitRotatedTextToInkBox(input: {
+  lines: string[];
+  fontFamily: string;
+  fontWeight: string;
+  fontStyle: 'normal' | 'italic';
+  charSpacing: number;
+  lineHeight: number;
+  textAlign: 'left' | 'center' | 'right';
+  targetBox: PixelBox;
+  targetVisibleGlyphHeight: number;
+  angle: number;
+  measureLine?: (line: string, fontSize: number) => TextLineMetrics;
+}): DetectedTextLayout {
+  const lines = input.lines.length > 0 ? input.lines : [''];
+  const measureLine = input.measureLine ?? ((line: string, fontSize: number) =>
+    measuredTextLineMetrics({
+      line,
+      fontFamily: input.fontFamily,
+      fontWeight: input.fontWeight,
+      fontStyle: input.fontStyle,
+      charSpacing: input.charSpacing,
+      fontSize,
+    }));
+  const sampleMetrics = lines.map((line) => measureLine(line, TEXT_METRIC_SAMPLE_SIZE));
+  const tallestLineInk = Math.max(1, ...sampleMetrics.map((metric) => metric.ascent + metric.descent));
+  const measuredFontSize = Math.max(1, input.targetVisibleGlyphHeight)
+    * TEXT_METRIC_SAMPLE_SIZE / tallestLineInk;
+
+  const measuredMetrics = sampleMetrics.map((metric) =>
+    scaleTextLineMetrics(metric, measuredFontSize / TEXT_METRIC_SAMPLE_SIZE));
+  const measuredWidth = Math.max(1, ...measuredMetrics.map((metric) => metric.advanceWidth));
+  const measuredHorizontal = horizontalInkBounds(measuredMetrics, measuredWidth, input.textAlign);
+  const measuredVertical = verticalInkBounds(measuredMetrics, input.lineHeight, measuredFontSize);
+  const measuredInkWidth = Math.max(1, measuredHorizontal.right - measuredHorizontal.left);
+  const measuredInkHeight = Math.max(1, measuredVertical.bottom - measuredVertical.top);
+  const radians = input.angle * Math.PI / 180;
+  const absCos = Math.abs(Math.cos(radians));
+  const absSin = Math.abs(Math.sin(radians));
+  const rotatedWidth = absCos * measuredInkWidth + absSin * measuredInkHeight;
+  const rotatedHeight = absSin * measuredInkWidth + absCos * measuredInkHeight;
+  const fitScale = Math.min(
+    1,
+    input.targetBox.width / Math.max(1, rotatedWidth),
+    input.targetBox.height / Math.max(1, rotatedHeight),
+  );
+  const fontSize = Math.max(6, measuredFontSize * fitScale);
+  const metrics = sampleMetrics.map((metric) =>
+    scaleTextLineMetrics(metric, fontSize / TEXT_METRIC_SAMPLE_SIZE));
+  const maximumAdvance = Math.max(1, ...metrics.map((metric) => metric.advanceWidth));
+  const width = maximumAdvance + Math.max(2, fontSize * 0.015);
+  const horizontal = horizontalInkBounds(metrics, width, input.textAlign);
+  const vertical = verticalInkBounds(metrics, input.lineHeight, fontSize);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const corners = [
+    [horizontal.left, vertical.top],
+    [horizontal.right, vertical.top],
+    [horizontal.left, vertical.bottom],
+    [horizontal.right, vertical.bottom],
+  ].map(([x, y]) => ({ x: x * cos - y * sin, y: x * sin + y * cos }));
+  const localLeft = Math.min(...corners.map((point) => point.x));
+  const localTop = Math.min(...corners.map((point) => point.y));
+  const localRight = Math.max(...corners.map((point) => point.x));
+  const localBottom = Math.max(...corners.map((point) => point.y));
+  const renderedWidth = localRight - localLeft;
+  const renderedHeight = localBottom - localTop;
+
+  return {
+    left: input.targetBox.left + (input.targetBox.width - renderedWidth) / 2 - localLeft,
+    top: input.targetBox.top + (input.targetBox.height - renderedHeight) / 2 - localTop,
+    width,
+    fontSize,
+    scaleX: 1,
   };
 }
 
@@ -1193,11 +1331,12 @@ function compileShapeElement(
   box: PixelBox,
   canvasHeight: number,
   base: Pick<PosterShapeElement, 'id' | 'layerName' | 'left' | 'top' | 'scaleX' | 'scaleY' | 'angle' | 'opacity' | 'zIndex'>,
+  layoutMode: 'reference' | 'creation',
 ): PosterShapeElement {
   const common = {
     ...base,
-    fill: item.fill ?? 'transparent',
-    ...(item.textFillType === 'linear' && item.textFillStart && item.textFillEnd ? {
+    fill: reconstructionVectorFill(item, layoutMode, item.fill ?? 'transparent'),
+    ...(layoutMode === 'creation' && item.textFillType === 'linear' && item.textFillStart && item.textFillEnd ? {
       fillGradient: { type: 'linear' as const, angle: item.textFillAngle, stops: [
         { offset: 0, color: item.textFillStart }, { offset: 1, color: item.textFillEnd },
       ] },
@@ -1258,6 +1397,29 @@ function compileShapeElement(
     height: box.height,
     rx: resolvedDetectedCornerRadius(item.cornerStyle, item.cornerRadiusRatio, box),
   };
+}
+
+function reconstructionVectorFill(
+  item: Pick<ReconstructionElement, 'textFillType' | 'textFillStart' | 'textFillEnd' | 'textFillAngle'>,
+  layoutMode: 'reference' | 'creation',
+  fallback: string,
+): string | PosterShapeFill {
+  if (
+    layoutMode === 'reference' &&
+    item.textFillType === 'linear' &&
+    item.textFillStart &&
+    item.textFillEnd
+  ) {
+    return {
+      type: 'linear',
+      angle: item.textFillAngle,
+      stops: [
+        { offset: 0, color: item.textFillStart },
+        { offset: 1, color: item.textFillEnd },
+      ],
+    };
+  }
+  return fallback;
 }
 
 /**

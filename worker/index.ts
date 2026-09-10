@@ -57,6 +57,11 @@ import {
   type PosterTemplateCategoryInput,
 } from '../shared/poster/templateCategory';
 
+// Prompt-created posters have their own CREATION_VERSION. Keep their existing
+// cache namespace stable when only the reference-reconstruction prompt changes.
+const POSTER_CREATION_CACHE_PROMPT_VERSION =
+  'poster-reconstruction-v13-curved-text-and-region-coverage';
+
 type Variables = {
   ownerId: string;
   requestId: string;
@@ -696,7 +701,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
         context.get('ownerId'),
         cacheKey,
         POSTER_RECONSTRUCTION_SCHEMA_VERSION,
-        POSTER_RECONSTRUCTION_PROMPT_VERSION,
+        posterPlanPromptVersion(request),
         model,
         JSON.stringify(result.plan),
         result.inputTokens,
@@ -2082,12 +2087,18 @@ async function buildPosterReconstructionCacheKey(
     quality: request.quality,
     model,
     schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION,
-    promptVersion: POSTER_RECONSTRUCTION_PROMPT_VERSION,
+    promptVersion: posterPlanPromptVersion(request),
     fontCatalog: request.fontCatalog?.entries
       .map(({ id, label }) => ({ id, label }))
       .sort((a, b) => a.id.localeCompare(b.id)) ?? [],
   });
   return sha256Hex(new TextEncoder().encode(canonical));
+}
+
+function posterPlanPromptVersion(request: PosterReconstructionRequest): string {
+  return request.creation
+    ? POSTER_CREATION_CACHE_PROMPT_VERSION
+    : POSTER_RECONSTRUCTION_PROMPT_VERSION;
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {

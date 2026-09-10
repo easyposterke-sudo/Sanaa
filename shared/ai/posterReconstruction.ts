@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 13 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v13-curved-text-and-region-coverage' as const;
+  'poster-reconstruction-v13-reference-layout-and-vector-gradients' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',

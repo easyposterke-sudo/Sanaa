@@ -133,6 +133,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
       referenceGuideOpacity: creatingPoster && !includeReferenceGuide ? 0 : guideOpacity,
       imageReplacements: replacements,
       fontCatalogFamilies: current.fontFamilies,
+      layoutMode: 'reference',
     });
     onApply(compiled, { source: current.source, model: current.model });
     onClose();
