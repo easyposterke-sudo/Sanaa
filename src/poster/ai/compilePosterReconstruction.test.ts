@@ -42,6 +42,7 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     fontStyle: 'normal',
     textAlign: 'left',
     charSpacing: 0,
+    textWidthMode: 'natural',
     lineHeight: 1.16,
     visibleLineCount: 0,
     textCurve: 0,
@@ -188,7 +189,7 @@ describe('compilePosterReconstruction', () => {
       descent: 0,
     });
     const targetBox = { left: 100, top: 200, width: 700, height: 240 };
-    const reference = fitDetectedTextToInkBox({
+    const condensed = fitDetectedTextToInkBox({
       lines: ['SUNDAY'],
       fontFamily: 'Arial',
       fontWeight: '900',
@@ -199,10 +200,10 @@ describe('compilePosterReconstruction', () => {
       targetBox,
       targetVisibleGlyphHeight: 100,
       constrainToDetectedBox: true,
-      matchDetectedGeometry: true,
+      textWidthMode: 'condensed',
       measureLine,
     });
-    const creation = fitDetectedTextToInkBox({
+    const natural = fitDetectedTextToInkBox({
       lines: ['SUNDAY'],
       fontFamily: 'Arial',
       fontWeight: '900',
@@ -216,12 +217,38 @@ describe('compilePosterReconstruction', () => {
       measureLine,
     });
 
-    expect(reference.fontSize).toBeCloseTo(300);
-    expect(reference.scaleX).toBeCloseTo(700 / 1800);
-    expect(reference.width * reference.scaleX).toBeGreaterThan(700);
-    expect(creation.fontSize).toBeLessThan(reference.fontSize);
-    expect(creation.fontSize).toBeGreaterThan(100);
-    expect(creation.scaleX).toBe(1);
+    expect(condensed.fontSize).toBeCloseTo(300);
+    expect(condensed.scaleX).toBeCloseTo(700 / 1800);
+    expect(condensed.width * condensed.scaleX).toBeGreaterThan(700);
+    expect(natural.fontSize).toBeLessThan(condensed.fontSize);
+    expect(natural.fontSize).toBeGreaterThan(100);
+    expect(natural.scaleX).toBe(1);
+  });
+
+  it('rejects a contradictory width treatment instead of stretching text', () => {
+    const layout = fitDetectedTextToInkBox({
+      lines: ['PRESENTS'],
+      fontFamily: 'Arial',
+      fontWeight: '400',
+      fontStyle: 'normal',
+      charSpacing: 0,
+      lineHeight: 1,
+      textAlign: 'center',
+      targetBox: { left: 100, top: 200, width: 900, height: 100 },
+      targetVisibleGlyphHeight: 70,
+      constrainToDetectedBox: true,
+      textWidthMode: 'condensed',
+      measureLine: (line, fontSize) => ({
+        advanceWidth: line.length * fontSize * 0.5,
+        inkLeft: 0,
+        inkRight: line.length * fontSize * 0.5,
+        ascent: fontSize * 0.72,
+        descent: fontSize * 0.02,
+      }),
+    });
+
+    expect(layout.scaleX).toBe(1);
+    expect(layout.fontSize).toBeCloseTo(70 / 0.74);
   });
 
   it('contains a supplied wide logo without cropping its source or distorting it', async () => {
@@ -1018,6 +1045,7 @@ describe('compilePosterReconstruction', () => {
           text: 'ACTIVITIES INCLUDE:',
           fontFamily: 'anton',
           fontSizeRatio: 0.08,
+          textWidthMode: 'condensed',
           visibleLineCount: 1,
           box: { x: 0.1, y: 0.1, width: 0.25, height: 0.1 },
         }),
@@ -1570,6 +1598,7 @@ describe('PosterReconstructionPlanSchema', () => {
     const current = plan([element({ kind: 'text', text: 'Legacy heading' })]);
     const {
       visibleLineCount: _visibleLineCount,
+      textWidthMode: _textWidthMode,
       cornerStyle: _cornerStyle,
       imageMask: _imageMask,
       imageCutout: _imageCutout,
@@ -1591,6 +1620,7 @@ describe('PosterReconstructionPlanSchema', () => {
 
     expect(parsed.elements[0]).toMatchObject({
       visibleLineCount: 0,
+      textWidthMode: 'natural',
       cornerStyle: 'auto',
       imageMask: 'none',
       imageCutout: false,

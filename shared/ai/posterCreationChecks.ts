@@ -194,6 +194,7 @@ function uploadedImageRegion(
     fontStyle: 'normal',
     textAlign: 'left',
     charSpacing: 0,
+    textWidthMode: 'natural',
     lineHeight: 1,
     visibleLineCount: 0,
     textCurve: 0,

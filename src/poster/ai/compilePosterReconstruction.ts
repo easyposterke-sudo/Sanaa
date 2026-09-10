@@ -732,7 +732,7 @@ function compileTextElement(
         targetBox: inkBox,
         targetVisibleGlyphHeight: measuredSize,
         constrainToDetectedBox: item.visibleLineCount > 0 && item.visibleLineCount === lineCount,
-        matchDetectedGeometry: layoutMode === 'reference',
+        textWidthMode: layoutMode === 'reference' ? item.textWidthMode : 'natural',
       })
     : usesReferenceRotatedInkLayout
       ? fitRotatedTextToInkBox({
@@ -891,8 +891,8 @@ export function fitDetectedTextToInkBox(input: {
   targetBox: PixelBox;
   targetVisibleGlyphHeight: number;
   constrainToDetectedBox: boolean;
-  /** Match final ink geometry even when the closest font must be condensed or expanded. */
-  matchDetectedGeometry?: boolean;
+  /** Permit non-uniform scaling only when the reference explicitly shows it. */
+  textWidthMode?: 'natural' | 'condensed' | 'expanded';
   measureLine?: (line: string, fontSize: number) => TextLineMetrics;
 }): DetectedTextLayout {
   const lines = input.lines.length > 0 ? input.lines : [''];
@@ -915,9 +915,21 @@ export function fitDetectedTextToInkBox(input: {
   const boxFittedFontSize = input.targetBox.height * TEXT_METRIC_SAMPLE_SIZE / sampleInkHeight;
   const measuredGlyphFontSize = Math.max(1, input.targetVisibleGlyphHeight)
     * TEXT_METRIC_SAMPLE_SIZE / tallestLineInk;
-  const matchesTightDetectedBox = Boolean(
-    input.matchDetectedGeometry && input.constrainToDetectedBox,
+  const boxFittedMetrics = sampleMetrics.map((metric) =>
+    scaleTextLineMetrics(metric, boxFittedFontSize / TEXT_METRIC_SAMPLE_SIZE));
+  const boxFittedAdvance = Math.max(1, ...boxFittedMetrics.map((metric) => metric.advanceWidth));
+  const boxFittedHorizontal = horizontalInkBounds(
+    boxFittedMetrics,
+    boxFittedAdvance + Math.max(2, boxFittedFontSize * 0.015),
+    input.textAlign,
   );
+  const boxFittedInkWidth = Math.max(1, boxFittedHorizontal.right - boxFittedHorizontal.left);
+  const detectedScaleX = input.targetBox.width / boxFittedInkWidth;
+  const requestedWidthMode = input.textWidthMode ?? 'natural';
+  const widthEvidenceMatches =
+    (requestedWidthMode === 'condensed' && detectedScaleX <= 0.96)
+    || (requestedWidthMode === 'expanded' && detectedScaleX >= 1.04);
+  const matchesTightDetectedBox = input.constrainToDetectedBox && widthEvidenceMatches;
   const heightLimitedFontSize = matchesTightDetectedBox
     ? boxFittedFontSize
     : input.constrainToDetectedBox

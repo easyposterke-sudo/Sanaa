@@ -42,6 +42,8 @@ describe('editPosterElementWithOpenAI', () => {
       request.currentDraft.dataUrl,
     ]);
     expect(body.input[0].content[0].text).toContain('ONLY replacements for the one selected layer');
+    expect(body.input[0].content[0].text).toContain('Set textWidthMode to natural unless');
+    expect(body.input[0].content[0].text).toContain('immediately attached ring, oval');
   });
 });
 
@@ -52,7 +54,7 @@ function replacementText() {
     fill: '#111111', textFillType: 'solid', textFillStart: null, textFillEnd: null, textFillAngle: 0,
     stroke: null, strokeWidthRatio: 0, text: 'SUNDAY', fontFamily: 'anton', fontCatalogId: null,
     fontSizeRatio: 0.18, fontWeight: '900', fontStyle: 'normal', textAlign: 'left', charSpacing: -40,
-    lineHeight: 1, visibleLineCount: 1, textCurve: 0, textEffect: 'flat', textHasVisibleExtrusion: false,
+    textWidthMode: 'natural', lineHeight: 1, visibleLineCount: 1, textCurve: 0, textEffect: 'flat', textHasVisibleExtrusion: false,
     textExtrusionDepthRatio: 0, extrusionColor: null, cornerRadiusRatio: 0, cornerStyle: 'auto',
     pathPoints: [], pathUsage: 'not_applicable', pathClosed: false, pathTension: 0.28,
     imageRole: 'none', imageMask: 'none', imageCutout: false, imageEdge: 'none', imageFadeDirection: 'radial',

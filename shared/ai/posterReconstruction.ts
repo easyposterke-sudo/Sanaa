@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
-export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 13 as const;
+export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v13-reference-typography-path24' as const;
+  'poster-reconstruction-v14-evidence-based-text-width-path24' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -106,6 +106,7 @@ export const ReconstructionElementSchema = z
     fontStyle: z.enum(['normal', 'italic']),
     textAlign: z.enum(['left', 'center', 'right']),
     charSpacing: z.number().min(-250).max(1200),
+    textWidthMode: z.enum(['natural', 'condensed', 'expanded']).default('natural'),
     lineHeight: z.number().min(0.7).max(3),
     visibleLineCount: z.number().int().min(0).max(20).default(0),
     textCurve: z.number().min(-100).max(100).default(0),
@@ -335,6 +336,7 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         fontStyle: { type: 'string', enum: ['normal', 'italic'] },
         textAlign: { type: 'string', enum: ['left', 'center', 'right'] },
         charSpacing: { type: 'number', minimum: -250, maximum: 1200 },
+        textWidthMode: { type: 'string', enum: ['natural', 'condensed', 'expanded'] },
         lineHeight: { type: 'number', minimum: 0.7, maximum: 3 },
         visibleLineCount: { type: 'integer', minimum: 0, maximum: 20 },
         textCurve: { type: 'number', minimum: -100, maximum: 100 },
