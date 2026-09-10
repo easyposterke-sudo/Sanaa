@@ -58,6 +58,7 @@ export type DetectedTextLayout = {
 const FABRIC_FONT_SIZE_MULTIPLIER = 1.13;
 const FABRIC_FONT_SIZE_FRACTION = 0.222;
 const TEXT_METRIC_SAMPLE_SIZE = 100;
+const REFERENCE_SEMANTIC_ICON_MAX_HEIGHT_RATIO = 0.04;
 
 export const VERIFIED_TEXT_EXTRUSION_MIN_DEPTH_RATIO = 0.08;
 
@@ -258,6 +259,7 @@ export async function compilePosterReconstruction(input: {
         replacement,
         warnings,
         layoutMode,
+        canvasHeight,
       });
       element = {
         ...base,
@@ -474,6 +476,7 @@ async function compileImageRegion(input: {
   replacement?: ReconstructionImageReplacement;
   warnings: string[];
   layoutMode: 'reference' | 'creation';
+  canvasHeight: number;
 }): Promise<{
   dataUrl: string;
   width: number;
@@ -481,7 +484,7 @@ async function compileImageRegion(input: {
   layerName?: string;
   layout?: Pick<PosterImageElement, 'left' | 'top' | 'scaleX' | 'scaleY'>;
 }> {
-  const { item, box, replacement, warnings, layoutMode } = input;
+  const { item, box, replacement, warnings, layoutMode, canvasHeight } = input;
   if (item.imageRole === 'icon' && item.iconName !== 'none') {
     // The supplied semantic PNG silhouettes are wrapped in a 320px SVG. Older
     // reconstruction code treated every icon as 100px, so Fabric multiplied
@@ -489,11 +492,26 @@ async function compileImageRegion(input: {
     const semanticIconSize = layoutMode === 'reference' && isSemanticIconName(item.iconName)
       ? 320
       : 100;
+    const capsReferenceSemanticIcon = semanticIconSize === 320;
+    const maxRenderedSize = canvasHeight * REFERENCE_SEMANTIC_ICON_MAX_HEIGHT_RATIO;
     return {
       dataUrl: builtInIconDataUrl(item.iconName, item.imageDominantColor ?? item.fill ?? '#111111'),
       width: semanticIconSize,
       height: semanticIconSize,
       layerName: `AI icon: ${item.label}`,
+      ...(capsReferenceSemanticIcon
+        ? {
+            // Utility icons are supporting marks. A loose AI detection must not
+            // let one overtake its information strip. Keep the detected anchor
+            // and cap each rendered axis to 4% of the poster height.
+            layout: {
+              left: box.left,
+              top: box.top,
+              scaleX: Math.min(box.width, maxRenderedSize) / semanticIconSize,
+              scaleY: Math.min(box.height, maxRenderedSize) / semanticIconSize,
+            },
+          }
+        : {}),
     };
   }
 

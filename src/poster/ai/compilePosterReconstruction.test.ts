@@ -1226,14 +1226,35 @@ describe('compilePosterReconstruction', () => {
       const icon = compiled.project.elements[0];
       expect(icon).toMatchObject({ type: 'image', layerName: `AI icon: ${iconName} icon` });
       if (icon?.type !== 'image') throw new Error('Expected an icon image.');
-      expect(icon.scaleX).toBeCloseTo(0.25);
-      expect(icon.scaleY).toBeCloseTo(0.28125);
+      expect(icon.scaleX).toBeCloseTo(0.1875);
+      expect(icon.scaleY).toBeCloseTo(0.1875);
       const svg = decodeURIComponent(icon.src);
       expect(svg).toContain('fill="#176143"');
       expect(svg).toContain('<image href="data:image/png;base64,');
       expect(svg).toContain('mask="url(#icon-silhouette)"');
     },
   );
+
+  it('keeps prompt-created semantic icon layout unchanged', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([element({
+        key: 'location_icon',
+        kind: 'image_region',
+        box: { x: 0.05, y: 0.8, width: 0.08, height: 0.06 },
+        imageRole: 'icon',
+        iconName: 'location',
+      })]),
+      reference: { dataUrl: 'data:image/png;base64,iVBORw0KGgo=', width: 1000, height: 1500 },
+      referenceGuideOpacity: 0,
+      layoutMode: 'creation',
+    });
+
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'image',
+      scaleX: 0.8,
+      scaleY: 0.9,
+    });
+  });
 
   it.each([
     'facebook',
