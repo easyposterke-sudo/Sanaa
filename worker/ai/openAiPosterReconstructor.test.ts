@@ -69,6 +69,9 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     expect(payload.store).toBe(false);
     expect(payload.input[0]?.content[0]?.text).toContain('Use natural by default');
     expect(payload.input[0]?.content[0]?.text).toContain('one indivisible brand mark');
+    expect(payload.input[0]?.content[0]?.text).toContain('literal transcription channel');
+    expect(payload.input[0]?.content[0]?.text).toContain('Run a dedicated decorative-line audit');
+    expect(payload.input[0]?.content[0]?.text).toContain('“(JUDE 18:10)” exactly');
   });
 
   it('sends small asset analysis images without a blank reference, then merges a patch review', async () => {

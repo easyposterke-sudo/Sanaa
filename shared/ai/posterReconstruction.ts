@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v14-evidence-based-text-width-path24' as const;
+  'poster-reconstruction-v14-literal-copy-line-audit-path24' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',

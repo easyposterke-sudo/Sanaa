@@ -44,6 +44,8 @@ describe('editPosterElementWithOpenAI', () => {
     expect(body.input[0].content[0].text).toContain('ONLY replacements for the one selected layer');
     expect(body.input[0].content[0].text).toContain('Set textWidthMode to natural unless');
     expect(body.input[0].content[0].text).toContain('immediately attached ring, oval');
+    expect(body.input[0].content[0].text).toContain("copy the original's literal visible characters exactly");
+    expect(body.input[0].content[0].text).toContain('reproduce its exact visible length');
   });
 });
 
