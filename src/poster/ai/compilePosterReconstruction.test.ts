@@ -178,6 +178,51 @@ describe('compilePosterReconstruction', () => {
     expect(Math.abs(ink.top + ink.height / 2 - target.top - target.height / 2)).toBeLessThanOrEqual(1);
   });
 
+  it('matches tall condensed reference text with independent horizontal scaling', () => {
+    const measureLine = (_line: string, fontSize: number) => ({
+      advanceWidth: fontSize * 6,
+      inkLeft: 0,
+      inkRight: fontSize * 6,
+      ascent: fontSize * 0.8,
+      descent: 0,
+    });
+    const targetBox = { left: 100, top: 200, width: 700, height: 240 };
+    const reference = fitDetectedTextToInkBox({
+      lines: ['SUNDAY'],
+      fontFamily: 'Arial',
+      fontWeight: '900',
+      fontStyle: 'normal',
+      charSpacing: -40,
+      lineHeight: 1,
+      textAlign: 'left',
+      targetBox,
+      targetVisibleGlyphHeight: 100,
+      constrainToDetectedBox: true,
+      matchDetectedGeometry: true,
+      measureLine,
+    });
+    const creation = fitDetectedTextToInkBox({
+      lines: ['SUNDAY'],
+      fontFamily: 'Arial',
+      fontWeight: '900',
+      fontStyle: 'normal',
+      charSpacing: -40,
+      lineHeight: 1,
+      textAlign: 'left',
+      targetBox,
+      targetVisibleGlyphHeight: 100,
+      constrainToDetectedBox: true,
+      measureLine,
+    });
+
+    expect(reference.fontSize).toBeCloseTo(300);
+    expect(reference.scaleX).toBeCloseTo(700 / 1800);
+    expect(reference.width * reference.scaleX).toBeGreaterThan(700);
+    expect(creation.fontSize).toBeLessThan(reference.fontSize);
+    expect(creation.fontSize).toBeGreaterThan(100);
+    expect(creation.scaleX).toBe(1);
+  });
+
   it('contains a supplied wide logo without cropping its source or distorting it', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([element({key:'logo', kind:'image_region', imageRole:'logo', box:{x:.1,y:.1,width:.1,height:.1}})]),
@@ -231,6 +276,11 @@ describe('compilePosterReconstruction', () => {
 
     expect(compiled.project.canvasWidth).toBe(1000);
     expect(compiled.project.canvasHeight).toBe(1500);
+    expect(compiled.sourceReference).toEqual({
+      dataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+      width: 1000,
+      height: 1500,
+    });
     expect(compiled.project.elements).toHaveLength(2);
     const panel = compiled.project.elements.find((item) => item.type === 'rect');
     expect(panel).toMatchObject({ width: 900, height: 300 });
@@ -808,6 +858,7 @@ describe('compilePosterReconstruction', () => {
       scaleX: 0.75,
       scaleY: 0.75,
     });
+    expect(compiled.sourceReference).toBeUndefined();
   });
 
   it('only amplifies corners already detected as rounded', () => {
@@ -953,7 +1004,7 @@ describe('compilePosterReconstruction', () => {
     expect(layout.width).toBeCloseTo(240);
   });
 
-  it('reduces an over-wide detected heading uniformly instead of stretching it', async () => {
+  it('preserves a reference heading height and condenses it to its detected width', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
         element({
@@ -978,9 +1029,9 @@ describe('compilePosterReconstruction', () => {
     const heading = compiled.project.elements[0];
     expect(heading).toMatchObject({ type: 'text', text: 'ACTIVITIES INCLUDE:' });
     if (heading?.type !== 'text') throw new Error('Expected flat text.');
-    expect(heading.fontSize).toBeLessThan(80);
-    expect(heading.scaleX).toBe(1);
-    expect((heading.width ?? 0) * heading.scaleX).toBeCloseTo(250);
+    expect(heading.fontSize).toBeGreaterThan(80);
+    expect(heading.scaleX).toBeLessThan(1);
+    expect(compiledTextInkRect(heading).width).toBeCloseTo(250, 0);
   });
 
   it('includes detected line spacing when limiting multi-line text height', async () => {

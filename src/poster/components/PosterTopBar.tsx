@@ -26,6 +26,8 @@ interface PosterTopBarProps {
   rightSidebarOpen?: boolean;
   onToggleLeftSidebar?: () => void;
   onToggleRightSidebar?: () => void;
+  onOpenAiEdit?: () => void;
+  canOpenAiEdit?: boolean;
 }
 
 export function PosterTopBar({
@@ -38,6 +40,8 @@ export function PosterTopBar({
   rightSidebarOpen,
   onToggleLeftSidebar,
   onToggleRightSidebar,
+  onOpenAiEdit,
+  canOpenAiEdit = false,
 }: PosterTopBarProps = {}) {
   const navigate = useNavigate();
   const undo = usePosterStore((s) => s.undo);
@@ -297,6 +301,22 @@ export function PosterTopBar({
           title="Change canvas size"
         >
           <span className="font-mono text-xs">{canvasWidth}×{canvasHeight}</span>
+        </button>
+      )}
+
+      {onOpenAiEdit && (
+        <button
+          type="button"
+          onClick={guard(onOpenAiEdit)}
+          disabled={!canOpenAiEdit}
+          aria-label="Edit selected layer with AI"
+          className="rounded bg-violet-600 px-2 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 sm:px-2.5 sm:text-sm dark:disabled:bg-zinc-800"
+          title={canOpenAiEdit
+            ? 'Edit only the selected layer by comparing it with the original reference'
+            : 'Select one unlocked layer from a reconstructed poster'}
+        >
+          <span className="hidden sm:inline">Edit with AI</span>
+          <span className="sm:hidden" aria-hidden>AI ✦</span>
         </button>
       )}
 

@@ -14,6 +14,7 @@ import { TemplateAuthoringBanner } from './TemplateAuthoringBanner';
 import { TemplateElementLabelModal } from './TemplateElementLabelModal';
 import { SavePosterTemplateModal } from './SavePosterTemplateModal';
 import { TemplateCreatorWizard } from './TemplateCreatorWizard';
+import { PosterElementAiEditModal } from './PosterElementAiEditModal';
 import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
 import { usePosterStore } from '../store/posterStore';
 import { useAuthStore } from '../../auth/authStore';
@@ -91,6 +92,7 @@ export function PosterLayout() {
   const [templateAuthoring, setTemplateAuthoring] = useState<TemplateAuthoringState | null>(null);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
   const [labelTargetId, setLabelTargetId] = useState<string | null>(null);
+  const [aiEditTargetId, setAiEditTargetId] = useState<string | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 800, height: 600 });
   const mainRef = useRef<HTMLElement>(null);
 
@@ -121,6 +123,12 @@ export function PosterLayout() {
 
   const selectedIds = usePosterStore((s) => s.selectedIds);
   const elements = usePosterStore((s) => s.elements);
+  const aiReference = usePosterStore((s) => s.aiReference);
+  const aiEditableSelection = useMemo(() => {
+    if (!aiReference || selectedIds.length !== 1) return null;
+    const selected = elements.find((element) => element.id === selectedIds[0]);
+    return selected && !selected.locked && !selected.excludeFromExport ? selected : null;
+  }, [aiReference, elements, selectedIds]);
   const lastCloudSaveRef = useRef<PosterProject | null>(null);
   /** Structurally shared baseline used to avoid serializing an unchanged cold-start project. */
   const coldAutosaveBaselineRef = useRef<PosterProject | null>(null);
@@ -721,7 +729,10 @@ export function PosterLayout() {
       coldAutosaveBaselineRef.current = null;
       setLabelTargetId(null);
       setShowCanvasSizeModal(false);
-      loadProject(compiled.project, { fieldBindings: compiled.fieldBindings });
+      loadProject(compiled.project, {
+        fieldBindings: compiled.fieldBindings,
+        ...(compiled.sourceReference ? { aiReference: compiled.sourceReference } : {}),
+      });
       setAutomatic3DRenderIds(
         compiled.project.elements
           .filter((element) => element.type === '3d-text')
@@ -753,7 +764,9 @@ export function PosterLayout() {
       setSaveTemplateModalOpen(false);
       setLabelTargetId(null);
       setShowCanvasSizeModal(false);
-      loadProject(compiled.project);
+      loadProject(compiled.project, compiled.sourceReference
+        ? { aiReference: compiled.sourceReference }
+        : undefined);
       setAutomatic3DRenderIds(
         compiled.project.elements
           .filter((element) => element.type === '3d-text')
@@ -794,6 +807,10 @@ export function PosterLayout() {
           rightSidebarOpen={rightOpen}
           onToggleLeftSidebar={() => setLeftOpen((v) => !v)}
           onToggleRightSidebar={() => setRightOpen((v) => !v)}
+          onOpenAiEdit={() => {
+            if (aiEditableSelection) setAiEditTargetId(aiEditableSelection.id);
+          }}
+          canOpenAiEdit={Boolean(aiEditableSelection)}
         />
       </div>
       <div className={`shrink-0 lg:hidden ${mobileTopStackSpacer}`} aria-hidden />
@@ -949,6 +966,21 @@ export function PosterLayout() {
             setThreeTextModal(null);
           }}
           onEditComplete={() => setThreeTextModal(null)}
+        />
+      )}
+      {aiEditTargetId && (
+        <PosterElementAiEditModal
+          selectedId={aiEditTargetId}
+          onApplied={(replacementIds) => {
+            const state = usePosterStore.getState();
+            const threeDIds = replacementIds.filter((id) =>
+              state.elements.some((element) => element.id === id && element.type === '3d-text'),
+            );
+            if (threeDIds.length > 0) {
+              setAutomatic3DRenderIds((ids) => [...new Set([...ids, ...threeDIds])]);
+            }
+          }}
+          onClose={() => setAiEditTargetId(null)}
         />
       )}
       <Poster3DPreviewRenderer

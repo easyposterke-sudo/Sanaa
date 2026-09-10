@@ -78,6 +78,8 @@ export function hasVerifiedTextExtrusion(
 
 export interface CompiledPosterReconstruction {
   project: PosterProject;
+  /** Transient source used by the editor's isolated selected-layer AI workflow. */
+  sourceReference?: { dataUrl: string; width: number; height: number };
   fieldBindings: PosterTemplateFieldBinding[];
   suggestedTemplateName: string;
   category: PosterTemplateCategory;
@@ -357,6 +359,7 @@ export async function compilePosterReconstruction(input: {
       canvasBackground: compileCanvasBackground(plan),
       elements,
     },
+    ...(layoutMode === 'reference' ? { sourceReference: { ...input.reference } } : {}),
     fieldBindings: fields,
     suggestedTemplateName: plan.suggestedTemplateName,
     category: plan.category,
@@ -721,6 +724,7 @@ function compileTextElement(
         targetBox: inkBox,
         targetVisibleGlyphHeight: measuredSize,
         constrainToDetectedBox: item.visibleLineCount > 0 && item.visibleLineCount === lineCount,
+        matchDetectedGeometry: layoutMode === 'reference',
       })
     : usesReferenceRotatedInkLayout
       ? fitRotatedTextToInkBox({
@@ -879,6 +883,8 @@ export function fitDetectedTextToInkBox(input: {
   targetBox: PixelBox;
   targetVisibleGlyphHeight: number;
   constrainToDetectedBox: boolean;
+  /** Match final ink geometry even when the closest font must be condensed or expanded. */
+  matchDetectedGeometry?: boolean;
   measureLine?: (line: string, fontSize: number) => TextLineMetrics;
 }): DetectedTextLayout {
   const lines = input.lines.length > 0 ? input.lines : [''];
@@ -901,9 +907,14 @@ export function fitDetectedTextToInkBox(input: {
   const boxFittedFontSize = input.targetBox.height * TEXT_METRIC_SAMPLE_SIZE / sampleInkHeight;
   const measuredGlyphFontSize = Math.max(1, input.targetVisibleGlyphHeight)
     * TEXT_METRIC_SAMPLE_SIZE / tallestLineInk;
-  const heightLimitedFontSize = input.constrainToDetectedBox
-    ? Math.min(measuredGlyphFontSize, boxFittedFontSize)
-    : measuredGlyphFontSize;
+  const matchesTightDetectedBox = Boolean(
+    input.matchDetectedGeometry && input.constrainToDetectedBox,
+  );
+  const heightLimitedFontSize = matchesTightDetectedBox
+    ? boxFittedFontSize
+    : input.constrainToDetectedBox
+      ? Math.min(measuredGlyphFontSize, boxFittedFontSize)
+      : measuredGlyphFontSize;
 
   const heightScale = heightLimitedFontSize / TEXT_METRIC_SAMPLE_SIZE;
   const heightFittedMetrics = sampleMetrics.map((metric) => scaleTextLineMetrics(metric, heightScale));
@@ -915,6 +926,30 @@ export function fitDetectedTextToInkBox(input: {
     input.textAlign,
   );
   const provisionalInkWidth = Math.max(1, provisionalInkBounds.right - provisionalInkBounds.left);
+  if (matchesTightDetectedBox) {
+    const fontSize = Math.max(6, heightLimitedFontSize);
+    const wrapGuard = Math.max(2, fontSize * 0.015);
+    const width = Math.max(12, maximumAdvance + wrapGuard);
+    const horizontalBounds = horizontalInkBounds(heightFittedMetrics, width, input.textAlign);
+    const naturalInkWidth = Math.max(1, horizontalBounds.right - horizontalBounds.left);
+    // Fabric supports independent horizontal scaling. This preserves the
+    // measured height of tall condensed display faces while matching their
+    // exact visible width.
+    const scaleX = clamp(input.targetBox.width / naturalInkWidth, 0.12, 2.5);
+    const renderedInkWidth = naturalInkWidth * scaleX;
+    const horizontalSlack = Math.max(0, input.targetBox.width - renderedInkWidth);
+    const horizontalAnchor = input.textAlign === 'center' ? 0.5 : input.textAlign === 'right' ? 1 : 0;
+    const desiredInkLeft = input.targetBox.left + horizontalSlack * horizontalAnchor;
+    const verticalBounds = verticalInkBounds(heightFittedMetrics, input.lineHeight, fontSize);
+
+    return {
+      left: desiredInkLeft - horizontalBounds.left * scaleX,
+      top: input.targetBox.top - verticalBounds.top,
+      width,
+      fontSize,
+      scaleX,
+    };
+  }
   // Preserve the font's natural aspect ratio. If the chosen font is wider than
   // the detected region, reduce fontSize uniformly instead of applying scaleX.
   const widthFit = Math.min(

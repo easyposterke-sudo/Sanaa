@@ -78,6 +78,7 @@ export type PathToolMode = 'pen' | 'pen-straight' | 'pen-curve' | 'direct' | 'co
 export type PenCreationMode = 'shape' | 'line';
 export type PathNodeSelection = { elementId: string; nodeIndex: number; islandIndex?: number };
 export type PathHandleSelection = PathNodeSelection & { kind: 'in' | 'out' };
+export type PosterAiReference = { dataUrl: string; width: number; height: number };
 
 interface PosterStore {
   elements: PosterElement[];
@@ -139,6 +140,8 @@ interface PosterStore {
   historyIndex: number;
   /** Field bindings from template (key/label/sourceElementId). Null when loading from file or no template. */
   fieldBindings: PosterTemplateFieldBinding[] | null;
+  /** Session-only original used by selected-layer AI edits; never serialized with the project. */
+  aiReference: PosterAiReference | null;
   addElement: (el: PosterElementInput) => void;
   addElementToBack: (el: PosterElementInput) => void;
   /** One undo step: optional background image, cropped regions, then text layers (for Magic import). */
@@ -166,7 +169,10 @@ interface PosterStore {
   undo: () => void;
   redo: () => void;
   pushHistory: () => void;
-  loadProject: (project: PosterProject, options?: { fieldBindings?: PosterTemplateFieldBinding[] }) => void;
+  loadProject: (project: PosterProject, options?: {
+    fieldBindings?: PosterTemplateFieldBinding[];
+    aiReference?: PosterAiReference;
+  }) => void;
   getProject: () => PosterProject;
   /** Field bindings for the current project (from template). Used by Poster AI to resolve element references. */
   getFieldBindings: () => PosterTemplateFieldBinding[] | null;
@@ -341,6 +347,7 @@ export const usePosterStore = create<PosterStore>((set, get) => ({
   history: [[]],
   historyIndex: 0,
   fieldBindings: null,
+  aiReference: null,
   remotePosterTemplates: [],
   remotePosterTemplatesLoadState: 'idle',
   remotePosterTemplatesLoadError: null,
@@ -612,6 +619,7 @@ export const usePosterStore = create<PosterStore>((set, get) => ({
       fitCenterNonce: s.fitCenterNonce + 1,
       selectedIds: [],
       fieldBindings: options?.fieldBindings ?? null,
+      aiReference: options?.aiReference ?? null,
       imageCropTargetId: null,
       pathEditTargetId: null,
       activePathId: null,

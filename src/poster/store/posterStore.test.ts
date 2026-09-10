@@ -32,6 +32,7 @@ function resetStore() {
     history: [[]],
     historyIndex: 0,
     fieldBindings: null,
+    aiReference: null,
     penCreationMode: 'shape',
     penStrokeWidth: 4,
   });
@@ -270,6 +271,16 @@ describe('loadProject', () => {
     };
     usePosterStore.getState().loadProject(project as any);
     expect(usePosterStore.getState().elements).toHaveLength(1);
+  });
+
+  it('keeps the AI reference session-only and clears it on the next ordinary load', () => {
+    const project = { elements: [], canvasWidth: 800, canvasHeight: 600 };
+    const aiReference = { dataUrl: 'data:image/webp;base64,AAAA', width: 800, height: 600 };
+    usePosterStore.getState().loadProject(project, { aiReference });
+    expect(usePosterStore.getState().aiReference).toBe(aiReference);
+    expect(usePosterStore.getState().getProject()).not.toHaveProperty('aiReference');
+    usePosterStore.getState().loadProject(project);
+    expect(usePosterStore.getState().aiReference).toBeNull();
   });
 });
 

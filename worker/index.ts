@@ -7,12 +7,14 @@ import {
   createFallbackReconstructionPlan,
   type PosterReconstructionRequest,
 } from '../shared/ai/posterReconstruction';
+import { PosterElementEditRequestSchema } from '../shared/ai/posterElementEdit';
 import { OpenAiPlannerError } from './ai/openAiPosterPlanner';
 import { CREATION_VERSION } from './ai/posterCreationPrompt';
 import {
   OpenAiPosterReconstructionError,
   reconstructPosterWithOpenAI,
 } from './ai/openAiPosterReconstructor';
+import { editPosterElementWithOpenAI } from './ai/openAiPosterElementEditor';
 import {
   MAX_POSTER_BACKGROUND_BYTES,
   cleanPosterBackgroundLabel,
@@ -566,6 +568,77 @@ app.delete('/api/poster-backgrounds/:id', async (context) => {
     .run();
   if (result.meta.changes === 0) return context.json({ error: 'Background not found.' }, 404);
   return context.body(null, 204);
+});
+
+app.post('/api/ai/poster-element-edit', async (context) => {
+  const requestId = context.get('requestId');
+  context.header('cache-control', 'private, no-store');
+  const contentType = context.req.header('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return context.json(
+      { error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE', requestId },
+      415,
+    );
+  }
+
+  let unknownRequest: unknown;
+  try {
+    unknownRequest = JSON.parse(await readBoundedText(context.req.raw, maxAiRequestBytes(context.env)));
+  } catch {
+    return context.json(
+      { error: 'The selected-layer edit request is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const parsed = PosterElementEditRequestSchema.safeParse(unknownRequest);
+  if (!parsed.success) {
+    return context.json(
+      { error: 'The selected-layer edit request is invalid.', code: 'INVALID_AI_REQUEST', requestId },
+      400,
+    );
+  }
+  const request = parsed.data;
+  if (!parseReferenceImage(request.reference.dataUrl) || !parseReferenceImage(request.currentDraft.dataUrl)) {
+    return context.json(
+      { error: 'Use PNG, JPEG, or WebP images for AI layer editing.', code: 'INVALID_REFERENCE_IMAGE', requestId },
+      400,
+    );
+  }
+
+  const apiKey = context.env.OPENAI_API_KEY?.trim();
+  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-5.6-luna';
+  if (!apiKey) {
+    return context.json(
+      { error: 'Set OPENAI_API_KEY to edit a poster layer with AI.', code: 'AI_NOT_CONFIGURED', requestId },
+      503,
+    );
+  }
+  const quota = maxAiGenerationsPerDay(context.env);
+  if (!await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota)) {
+    return context.json(
+      { error: `The daily AI poster limit of ${quota} has been reached.`, code: 'AI_DAILY_LIMIT', requestId },
+      429,
+    );
+  }
+
+  try {
+    const result = await editPosterElementWithOpenAI({ apiKey, model, request });
+    return context.json({ patch: result.patch, model, requestId });
+  } catch (error) {
+    if (error instanceof OpenAiPlannerError) {
+      console.warn(JSON.stringify({
+        message: 'OpenAI selected-layer edit failed',
+        code: error.code,
+        status: error.status,
+        requestId,
+      }));
+      return context.json(
+        { error: error.message, code: error.code, requestId },
+        error.status as 422 | 429 | 502 | 503 | 504,
+      );
+    }
+    throw error;
+  }
 });
 
 app.post('/api/ai/poster-reconstruction', async (context) => {
