@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_RECONSTRUCTION_PATH_POINTS,
   POSTER_RECONSTRUCTION_SCHEMA_VERSION,
   PosterReconstructionPlanSchema,
   createFallbackReconstructionPlan,
@@ -1532,6 +1533,30 @@ describe('compilePosterReconstruction', () => {
 });
 
 describe('PosterReconstructionPlanSchema', () => {
+  it('accepts up to 24 path anchors and rejects a twenty-fifth', () => {
+    const anchors = Array.from({ length: MAX_RECONSTRUCTION_PATH_POINTS }, (_, index) => ({
+      x: index / (MAX_RECONSTRUCTION_PATH_POINTS - 1),
+      y: index % 2 === 0 ? 0.2 : 0.8,
+      smooth: index > 0 && index < MAX_RECONSTRUCTION_PATH_POINTS - 1,
+    }));
+    const current = plan([element({
+      kind: 'path',
+      pathUsage: 'open_stroke',
+      pathPoints: anchors,
+      fill: null,
+      stroke: '#112233',
+      strokeWidthRatio: 0.004,
+    })]);
+    expect(current.elements[0].pathPoints).toHaveLength(24);
+    expect(PosterReconstructionPlanSchema.safeParse({
+      ...current,
+      elements: [{
+        ...current.elements[0],
+        pathPoints: [...anchors, { x: 0.5, y: 0.5, smooth: true }],
+      }],
+    }).success).toBe(false);
+  });
+
   it('accepts limited overflow for regular geometry clipped by the canvas', () => {
     expect(plan([
       element({

@@ -136,7 +136,7 @@ Normally return exactly one element. Return 2–8 elements only when the selecte
 
 Typography is geometry-critical. Set each text box tightly around final visible glyph ink. Measure visible glyph height into fontSizeRatio. Measure gaps between adjacent letters into charSpacing; use negative spacing for touching/overlapping display letters and never add generic headline tracking. Preserve exact visible word spaces. The box width and height must describe condensed or expanded text even when the closest font needs horizontal scaling during compilation. Select the closest allowed font token or supplied custom font ID. Keep visible line breaks and set visibleLineCount accurately.
 
-Use normalized coordinates relative to the complete poster. Use text for wording; native shapes for regular geometry; path only for irregular vector geometry; image_region only when the selected layer is actually raster artwork. Do not return HTML, SVG, code, URLs, or base64 data.
+Use normalized coordinates relative to the complete poster. Use text for wording; native shapes for regular geometry; path only for irregular vector geometry; image_region only when the selected layer is actually raster artwork. A path may use up to 24 ordered anchors, but add points only at visible extrema, turns, inflections, or local contour changes; ordinary curves should use fewer. Do not return HTML, SVG, code, URLs, or base64 data.
 
 All schema fields are required. For unused properties use the schema's neutral values. Set the plan canvas to a solid white placeholder because it is ignored. Set warnings empty, confidence honestly, and the summary to a short description of this selected-layer correction.`;
 
