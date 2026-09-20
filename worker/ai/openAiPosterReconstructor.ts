@@ -91,7 +91,7 @@ export async function reconstructPosterWithOpenAI(input: {
       body: JSON.stringify({
         model: input.model,
         store: false,
-        reasoning: { effort: 'medium' },
+        reasoning: { effort: 'high' },
         max_output_tokens: POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS,
         input: [
           {
