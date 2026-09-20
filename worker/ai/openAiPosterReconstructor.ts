@@ -11,7 +11,7 @@ import { applyPosterCreationPatch, POSTER_CREATION_PATCH_JSON_SCHEMA } from '../
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const POSTER_RECONSTRUCTION_TIMEOUT_MS = 110_000;
 
-export const POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS = 12_000;
+export const POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS = 25_000;
 
 export type OpenAiPosterReconstructionIncompleteReason =
   | 'max_output_tokens'
