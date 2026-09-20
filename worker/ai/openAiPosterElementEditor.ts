@@ -51,7 +51,7 @@ export async function editPosterElementWithOpenAI(input: {
       body: JSON.stringify({
         model: input.model,
         store: false,
-        reasoning: { effort: 'none' },
+        reasoning: { effort: 'medium' },
         max_output_tokens: POSTER_ELEMENT_EDIT_MAX_OUTPUT_TOKENS,
         input: [
           { role: 'system', content: [{ type: 'input_text', text: SYSTEM_PROMPT }] },
