@@ -7,6 +7,7 @@ import { PosterCanvas } from './PosterCanvas';
 import { PosterRightSidebar } from './PosterRightSidebar';
 import { ThreeTextModal } from './ThreeTextModal';
 import { Poster3DPreviewRenderer } from './Poster3DPreviewRenderer';
+import { posterTextToTwoLayer3D } from '../convertPosterTextTo3D';
 import { CanvasSizeModal } from './CanvasSizeModal';
 import { MobilePropertyBar } from './MobilePropertyBar';
 import { PosterMobileScaleFader } from './PosterMobileScaleFader';
@@ -83,6 +84,16 @@ export function PosterLayout() {
   const navigate = useNavigate();
   const [threeTextModal, setThreeTextModal] = useState<'add' | { editId: string } | null>(null);
   const [automatic3DRenderIds, setAutomatic3DRenderIds] = useState<string[]>([]);
+  const handleTransformText3D = useCallback((id: string, faceColor: string, extrusionColor: string, customFontId?: string) => {
+    const store = usePosterStore.getState();
+    const source = store.elements.find((element) => element.id === id);
+    if (source?.type !== 'text') throw new Error('The selected text is no longer available.');
+    const converted = posterTextToTwoLayer3D(source, faceColor, extrusionColor, customFontId);
+    store.pushHistory();
+    store.setElements(store.elements.map((element) => element.id === id ? converted : element));
+    store.pushHistory();
+    setAutomatic3DRenderIds((ids) => [...new Set([...ids, id])]);
+  }, []);
   const handleAutomatic3DRendered = useCallback((elementId: string) => {
     setAutomatic3DRenderIds((ids) => ids.filter((id) => id !== elementId));
   }, []);
@@ -932,6 +943,7 @@ export function PosterLayout() {
           <PosterRightSidebar
             readOnly={readOnly}
             onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
+            onTransformText3D={handleTransformText3D}
             onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
             templateFieldLabel={selectedTemplateFieldLabel}
           />
@@ -942,6 +954,7 @@ export function PosterLayout() {
       <MobilePropertyBar
         readOnly={readOnly}
         onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
+        onTransformText3D={handleTransformText3D}
         onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
         templateFieldLabel={selectedTemplateFieldLabel}
       />

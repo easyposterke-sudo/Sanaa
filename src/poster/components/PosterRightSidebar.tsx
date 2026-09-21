@@ -58,6 +58,7 @@ import { isPosterFontWeightBold } from '../textFontStyle';
 interface PosterRightSidebarProps {
   readOnly?: boolean;
   onOpenEdit3D?: (id: string) => void;
+  onTransformText3D?: (id: string, faceColor: string, extrusionColor: string, customFontId?: string) => void;
   /** Available only while preparing a reusable template. */
   onOpenTemplateField?: (id: string) => void;
   templateFieldLabel?: string;
@@ -1744,9 +1745,11 @@ function TextBackgroundControls({
 function PosterTextControls({
   text,
   updateElement,
+  onTransform3D,
 }: {
   text: PosterTextElement;
   updateElement: (id: string, updates: Partial<PosterElement>) => void;
+  onTransform3D?: (id: string, faceColor: string, extrusionColor: string, customFontId?: string) => void;
 }) {
   const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const fontMenuRef = useRef<HTMLDivElement>(null);
@@ -1754,6 +1757,10 @@ function PosterTextControls({
   const [fontUploadStatus, setFontUploadStatus] = useState<string | null>(null);
   const [fontUploading, setFontUploading] = useState(false);
   const [deletingFontId, setDeletingFontId] = useState<string | null>(null);
+  const [show3DColors, setShow3DColors] = useState(false);
+  const [faceColor, setFaceColor] = useState(() => /^#[0-9a-f]{6}$/i.test(text.fill) ? text.fill : '#ffffff');
+  const [extrusionColor, setExtrusionColor] = useState('#000000');
+  const [transformError, setTransformError] = useState<string | null>(null);
   const fontOptions = usePosterFontOptions();
 
   const deleteSavedFont = async (
@@ -1853,6 +1860,47 @@ function PosterTextControls({
   return (
     <div className="flex flex-col gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
       <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Text</p>
+
+      {onTransform3D && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-800 dark:bg-amber-950/20">
+          <button
+            type="button"
+            onClick={() => { setShow3DColors((open) => !open); setTransformError(null); }}
+            className="w-full rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600"
+            aria-expanded={show3DColors}
+          >
+            Transform to 3D
+          </button>
+          {show3DColors && (
+            <div className="mt-3 flex flex-col gap-3">
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">Two-layer face and shell style</p>
+              <label className="flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                Front color
+                <ColorPickerPopover color={faceColor} onChange={setFaceColor} aria-label="3D front color" />
+              </label>
+              <label className="flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+                Back color
+                <ColorPickerPopover color={extrusionColor} onChange={setExtrusionColor} aria-label="3D back color" />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    setTransformError(null);
+                    onTransform3D(text.id, faceColor, extrusionColor, knownMatch?.previewKey);
+                  } catch (error) {
+                    setTransformError(error instanceof Error ? error.message : 'Could not transform this text.');
+                  }
+                }}
+                className="w-full rounded-md bg-zinc-900 px-3 py-2 text-xs font-semibold text-white hover:bg-zinc-700 dark:bg-white dark:text-zinc-900"
+              >
+                Confirm 3D transform
+              </button>
+              {transformError && <p role="alert" className="text-xs text-red-600">{transformError}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label className="text-xs text-zinc-600 dark:text-zinc-400" id="poster-font-label">
@@ -2564,6 +2612,7 @@ function ShadowControls({
 export function PosterRightSidebar({
   readOnly = false,
   onOpenEdit3D,
+  onTransformText3D,
   onOpenTemplateField,
   templateFieldLabel,
 }: PosterRightSidebarProps) {
@@ -2887,6 +2936,7 @@ export function PosterRightSidebar({
             <PosterTextControls
               text={single as PosterTextElement}
               updateElement={updateElement}
+              onTransform3D={onTransformText3D}
             />
           )}
 

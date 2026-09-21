@@ -21,9 +21,8 @@ function nextPaint(): Promise<void> {
 }
 
 /**
- * Sequentially replaces AI SVG placeholders with genuine WebGL exports. It is
- * mounted only for reconstruction-created 3D layers and never touches normal
- * poster text, shapes, or images.
+ * Sequentially replaces temporary two-layer SVG previews with WebGL exports.
+ * Used by reconstruction and by the poster's text-to-3D action.
  */
 export function Poster3DPreviewRenderer({
   elementIds,
@@ -35,7 +34,7 @@ export function Poster3DPreviewRenderer({
   const api = useEditorStore((state) => state.webglExportAPI);
   const loadPoster3DConfig = useEditorStore((state) => state.loadPoster3DConfig);
   const setWebGLExportAPI = useEditorStore((state) => state.setWebGLExportAPI);
-  const updateElement = usePosterStore((state) => state.updateElement);
+  const finalizeAutomatic3DRender = usePosterStore((state) => state.finalizeAutomatic3DRender);
 
   useEffect(() => {
     if (!currentId) {
@@ -91,7 +90,7 @@ export function Poster3DPreviewRenderer({
           ? { width: existing.previewWidth, height: existing.previewHeight }
           : await readRasterDimensions(existing.image);
         const geometry = computeUniform3DTextReplacement(existing, exported, previousIntrinsic);
-        updateElement(currentId, {
+        finalizeAutomatic3DRender(currentId, existing.image, {
           image: exported.dataUrl,
           config: serializeEditorState(),
           ...geometry,
@@ -107,7 +106,7 @@ export function Poster3DPreviewRenderer({
     return () => {
       cancelled = true;
     };
-  }, [api, configuredId, currentId, onRendered, updateElement]);
+  }, [api, configuredId, currentId, finalizeAutomatic3DRender, onRendered]);
 
   if (!currentId) return null;
   return (

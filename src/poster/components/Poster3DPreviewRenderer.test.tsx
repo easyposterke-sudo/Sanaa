@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useEditorStore } from '../../store/editorStore';
 import { usePosterStore } from '../store/posterStore';
-import type { Poster3DTextElement } from '../types';
+import type { Poster3DTextElement, PosterTextElement } from '../types';
 import { Poster3DPreviewRenderer } from './Poster3DPreviewRenderer';
 
 vi.mock('../../components/canvas/Canvas', () => ({
@@ -53,12 +53,32 @@ function reconstructed3DTitle(): Poster3DTextElement {
 
 describe('Poster3DPreviewRenderer', () => {
   afterEach(() => {
-    usePosterStore.setState({ elements: [] });
+    usePosterStore.setState({ elements: [], history: [[]], historyIndex: 0 });
     useEditorStore.getState().setWebGLExportAPI(null);
   });
 
   it('automatically replaces an AI SVG placeholder with the real WebGL export', async () => {
-    usePosterStore.setState({ elements: [reconstructed3DTitle()] });
+    const preview = reconstructed3DTitle();
+    const original: PosterTextElement = {
+      id: preview.id,
+      type: 'text',
+      text: 'KIDDY CONNECT TUESDAY',
+      fontFamily: 'Times New Roman, serif',
+      fontSize: 64,
+      fill: '#ffffff',
+      left: preview.left,
+      top: preview.top,
+      scaleX: 1,
+      scaleY: 1,
+      angle: 0,
+      opacity: 1,
+      zIndex: preview.zIndex,
+    };
+    usePosterStore.setState({
+      elements: [preview],
+      history: [[original], [preview]],
+      historyIndex: 1,
+    });
     const onRendered = vi.fn();
     render(<Poster3DPreviewRenderer elementIds={['ai-3d-title']} onRendered={onRendered} />);
 
@@ -97,5 +117,9 @@ describe('Poster3DPreviewRenderer', () => {
       expect(title.previewHeight).toBe(250);
     });
     expect(onRendered).toHaveBeenCalledWith('ai-3d-title');
+    const history = usePosterStore.getState().history;
+    expect(history).toHaveLength(2);
+    expect(history[0]?.[0]?.type).toBe('text');
+    expect((history[1]?.[0] as Poster3DTextElement).image).toBe('data:image/webp;base64,shiny');
   });
 });

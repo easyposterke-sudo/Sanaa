@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   PosterElement,
   PosterElementInput,
+  Poster3DTextElement,
   PosterProject,
   CanvasBackground,
   PosterPathPoint,
@@ -151,6 +152,7 @@ interface PosterStore {
     texts: PosterElementInput[];
   }) => void;
   updateElement: (id: string, updates: Partial<PosterElement>) => void;
+  finalizeAutomatic3DRender: (id: string, previewImage: string, updates: Partial<Poster3DTextElement>) => void;
   removeElements: (ids: string[]) => void;
   duplicateElements: (ids: string[]) => void;
   setSelected: (ids: string[]) => void;
@@ -426,6 +428,18 @@ export const usePosterStore = create<PosterStore>((set, get) => ({
       ),
     }));
     scheduleHistoryPush(() => get().pushHistory());
+  },
+
+  finalizeAutomatic3DRender: (id, previewImage, updates) => {
+    const replacePreview = (elements: PosterElement[]) => elements.map((element) =>
+      element.id === id && element.type === '3d-text' && element.image === previewImage
+        ? { ...element, ...updates } as Poster3DTextElement
+        : element,
+    );
+    set((state) => ({
+      elements: replacePreview(state.elements),
+      history: state.history.map(replacePreview),
+    }));
   },
 
   removeElements: (ids) => {

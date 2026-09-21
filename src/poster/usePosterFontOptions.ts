@@ -74,7 +74,7 @@ export function usePosterFontOptions(): FontOption[] {
           const family = await ensureFontPreviewFromUrl(id, cached.previewSourceUrl);
           const label = cached.name;
           if (!options.some((o) => o.value === family)) {
-            options.push({ label: `${label} (session)`, value: family, isCustom: true });
+            options.push({ label: `${label} (session)`, value: family, isCustom: true, previewKey: id });
           }
         } catch {
           /* ignore */

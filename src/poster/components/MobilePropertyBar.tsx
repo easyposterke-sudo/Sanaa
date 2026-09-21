@@ -5,6 +5,7 @@ import { PosterRightSidebar } from './PosterRightSidebar';
 interface MobilePropertyBarProps {
   readOnly?: boolean;
   onOpenEdit3D?: (id: string) => void;
+  onTransformText3D?: (id: string, faceColor: string, extrusionColor: string, customFontId?: string) => void;
   onOpenTemplateField?: (id: string) => void;
   templateFieldLabel?: string;
 }
@@ -12,6 +13,7 @@ interface MobilePropertyBarProps {
 export function MobilePropertyBar({
   readOnly = false,
   onOpenEdit3D,
+  onTransformText3D,
   onOpenTemplateField,
   templateFieldLabel,
 }: MobilePropertyBarProps) {
@@ -50,6 +52,7 @@ export function MobilePropertyBar({
           <PosterRightSidebar
             readOnly={readOnly}
             onOpenEdit3D={onOpenEdit3D}
+            onTransformText3D={onTransformText3D}
             onOpenTemplateField={onOpenTemplateField}
             templateFieldLabel={templateFieldLabel}
           />
