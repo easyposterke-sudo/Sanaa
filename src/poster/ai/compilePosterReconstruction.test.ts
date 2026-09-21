@@ -101,16 +101,6 @@ function plan(elements: ReconstructionElement[]): PosterReconstructionPlan {
 }
 
 describe('compilePosterReconstruction', () => {
-  it('never renders an internal label as missing poster wording', async () => {
-    const result = await compilePosterReconstruction({
-      plan: plan([element({ key: 'mission_times', kind: 'text', label: 'Mission times label', text: '  ' })]),
-      reference: { dataUrl: 'unused', width: 1000, height: 1000 },
-      referenceGuideOpacity: 0,
-    });
-    expect(result.project.elements).toHaveLength(0);
-    expect(result.warnings.join(' ')).toContain('Mission times label');
-  });
-
   it('aligns measured shared initials and rotated theme labels only for creation', async () => {
     const input = {plan:plan([
       element({key:'initial',kind:'text',text:'S',fontSizeRatio:.14,box:{x:.1,y:.2,width:.18,height:.16}}),

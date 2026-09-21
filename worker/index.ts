@@ -2154,7 +2154,6 @@ async function buildPosterReconstructionCacheKey(
   const canonical = JSON.stringify({
     purpose: 'poster-reconstruction',
     creation: request.creation ?? null,
-    review: request.review?.previousPlan ?? null,
     creationVersion: request.creation ? CREATION_VERSION : null,
     imageDigest,
     width: request.reference.width,

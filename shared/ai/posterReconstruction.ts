@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v15-reference-review-logo-audit' as const;
+  'poster-reconstruction-v14-literal-copy-line-audit-path24' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -207,7 +207,6 @@ export const PosterReconstructionRequestSchema = z
       })
       .strict(),
     quality: z.enum(['quality']),
-    review: z.object({ previousPlan: PosterReconstructionPlanSchema }).strict().optional(),
     creation: z.object({
       prompt: z.string().trim().min(10).max(4000),
       seed: z.string().min(1).max(80),

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
-import { POSTER_RECONSTRUCTION_SCHEMA_VERSION, PosterReconstructionPlanSchema } from '../../shared/ai/posterReconstruction';
+import { POSTER_RECONSTRUCTION_SCHEMA_VERSION } from '../../shared/ai/posterReconstruction';
 import {
   OpenAiPosterReconstructionError,
   POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS,
@@ -94,26 +94,6 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     const secondBody = JSON.parse(String((fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1].body));
     expect(secondBody.input[1].content.filter((item: {type:string}) => item.type === 'input_image')).toHaveLength(1);
     expect(secondBody.text.format.schema.required).toContain('upsert');
-  });
-
-  it('audits a reference against its draft and applies only the returned correction', async () => {
-    const previousPlan = PosterReconstructionPlanSchema.parse({
-      schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION, suggestedTemplateName: 'Test', category: 'church', summary: 'Draft',
-      canvas: { backgroundType: 'solid', backgroundTop: '#ffffff', backgroundBottom: '#ffffff', gradientAngle: 0 },
-      elements: [reconstructionTextElement(null)], warnings: [], confidence: 0.9,
-    });
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify({
-        summary: 'Confirmed', upsert: [], removeKeys: [], canvas: null,
-      }) }] }],
-    })));
-    vi.stubGlobal('fetch', fetchMock);
-    const result = await reconstructPosterWithOpenAI({ apiKey: 'test', model: 'test', request: { ...request, review: { previousPlan } } });
-    expect(result.plan.elements).toEqual(previousPlan.elements);
-    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
-    expect(body.text.format.schema.required).toContain('upsert');
-    expect(body.input[0].content[0].text).toContain('every visible logo');
-    expect(body.input[1].content.some((item: { type: string }) => item.type === 'input_image')).toBe(true);
   });
 
   it('keeps the timeout active while reading a stalled response body', async () => {
