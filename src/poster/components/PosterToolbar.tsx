@@ -162,7 +162,7 @@ export const PosterToolbar = memo(function PosterToolbar() {
             >
               {tool.icon}
 
-              <div className="absolute right-full z-50 mr-2 hidden items-center whitespace-nowrap rounded bg-zinc-900 px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100 lg:flex">
+              <div className="pointer-events-none absolute right-full z-50 mr-2 hidden items-center whitespace-nowrap rounded bg-zinc-900 px-2 py-1 text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100 lg:flex">
                 {tool.label}
                 <span className="ml-2 rounded bg-zinc-800 px-1 text-zinc-400">
                   {tool.shortcut}
