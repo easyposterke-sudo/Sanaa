@@ -138,6 +138,7 @@ export async function compilePosterReconstruction(input: {
   canvasSize?: { width: number; height: number };
   referenceGuideOpacity?: number;
   imageReplacements?: Readonly<Record<string, ReconstructionImageReplacement>>;
+  omittedImageKeys?: readonly string[];
   fontCatalogFamilies?: Readonly<Record<string, string>>;
   balanceInformationCards?: boolean;
   /** Keeps reference reconstruction geometry fixes isolated from prompt-created posters. */
@@ -152,6 +153,7 @@ export async function compilePosterReconstruction(input: {
   const usedIds = new Set<string>();
   const usedFieldKeys = new Set<string>();
   const sourceIds = new Map<string, string>();
+  const omittedImageKeys = new Set(input.omittedImageKeys ?? []);
   let nextZ = 1;
   const layoutMode = input.layoutMode ?? (input.balanceInformationCards ? 'creation' : 'reference');
 
@@ -180,6 +182,7 @@ export async function compilePosterReconstruction(input: {
   const ordered = [...plan.elements].sort((a, b) => a.zIndex - b.zIndex);
   await ensureReconstructionFontsReady(ordered, input.fontCatalogFamilies);
   for (const item of ordered) {
+    if (item.kind === 'image_region' && omittedImageKeys.has(item.key)) continue;
     const box = pixelBox(
       item.box,
       canvasWidth,

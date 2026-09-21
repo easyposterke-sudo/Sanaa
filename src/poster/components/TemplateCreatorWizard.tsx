@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import { PosterPromptCreator } from './PosterPromptCreator';
+import { PosterAssetCropDialog } from './PosterAssetCropDialog';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import type {
   PosterReconstructionPlan,
   PosterReconstructionSource,
+  ReconstructionElement,
 } from '../../../shared/ai/posterReconstruction';
+import type { NormalizedCrop } from '../ai/cropPosterAsset';
 import {
   compilePosterReconstruction,
   type CompiledPosterReconstruction,
@@ -35,6 +38,8 @@ interface CanvasSizeSelection {
   width: number;
   height: number;
 }
+
+const NEW_LOGO_CROP_KEY = '__new_logo__';
 
 interface TemplateCreatorWizardProps {
   open: boolean;
@@ -67,6 +72,9 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
   const [candidates, setCandidates] = useState<Record<string, StockPhotoCandidate[]>>({});
   const [replacementMessages, setReplacementMessages] = useState<Record<string, string>>({});
   const [replacements, setReplacements] = useState<Record<string, ReconstructionImageReplacement>>({});
+  const [omittedImages, setOmittedImages] = useState<string[]>([]);
+  const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
+  const [cropItemKey, setCropItemKey] = useState<string | null>(null);
   const [preparingReplacement, setPreparingReplacement] = useState<string | null>(null);
 
   if (!open) return null;
@@ -95,6 +103,9 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
     setCandidates({});
     setReplacementMessages({});
     setReplacements({});
+    setOmittedImages([]);
+    setSearchQueries({});
+    setCropItemKey(null);
     setIncludeReferenceGuide(true);
     setPreparing(true);
     try {
@@ -126,11 +137,12 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
     fontFamilies: Readonly<Record<string, string>>;
   }) => {
     if (!reference || !canvasSize) return;
-    const missingLogo = current.plan.elements.find((item) =>
-      item.kind === 'image_region' && item.imageRole === 'logo' && !replacements[item.key],
+    const undecidedLogo = current.plan.elements.find((item) =>
+      item.kind === 'image_region' && item.imageRole === 'logo' &&
+      !replacements[item.key] && !omittedImages.includes(item.key),
     );
-    if (missingLogo) {
-      setError(`Upload the original logo for “${missingLogo.label}” before creating the draft.`);
+    if (undecidedLogo) {
+      setError(`Choose Upload, Crop from poster, or Leave out for “${undecidedLogo.label}”.`);
       return;
     }
     const compiled = await compilePosterReconstruction({
@@ -139,6 +151,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
       canvasSize,
       referenceGuideOpacity: creatingPoster && !includeReferenceGuide ? 0 : guideOpacity,
       imageReplacements: replacements,
+      omittedImageKeys: omittedImages,
       fontCatalogFamilies: current.fontFamilies,
       layoutMode: 'reference',
     });
@@ -146,32 +159,32 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
     onClose();
   };
 
+  const searchForItem = async (item: PosterReconstructionPlan['elements'][number], query: string) => {
+    const search = query.trim();
+    if (search.length < 2) {
+      setReplacementMessages((current) => ({ ...current, [item.key]: 'Enter at least two search characters.' }));
+      return;
+    }
+    setReplacementMessages((current) => ({ ...current, [item.key]: 'Searching Pexels…' }));
+    setCandidates((current) => ({ ...current, [item.key]: [] }));
+    try {
+      const photos = await searchStockPhotos({ query: search });
+      setCandidates((current) => ({ ...current, [item.key]: photos }));
+      setReplacementMessages((current) => ({
+        ...current,
+        [item.key]: photos.length ? '' : 'No matching Pexels photos found. Try a shorter search or upload an image.',
+      }));
+    } catch (caught) {
+      const message = caught instanceof StockPhotoError && caught.code === 'STOCK_PHOTOS_NOT_CONFIGURED'
+        ? 'Pexels is not configured. You can still upload or crop an image.'
+        : messageFromError(caught);
+      setReplacementMessages((current) => ({ ...current, [item.key]: message }));
+    }
+  };
+
   const loadStockSuggestions = async (plan: PosterReconstructionPlan) => {
-    const replaceablePhotos = replacementItems(plan).filter((item) =>
-      ['photo', 'background_photo'].includes(item.imageRole) && item.imageSearchQuery.trim(),
-    );
-    setReplacementMessages(Object.fromEntries(replaceablePhotos.map((item) => [item.key, 'Searching Pexels…'])));
-    await Promise.all(replaceablePhotos.map(async (item) => {
-      try {
-        const photos = await searchStockPhotos({
-          query: item.imageSearchQuery.trim(),
-          orientation: orientationFor(item.box.width / item.box.height),
-          color: item.imageDominantColor,
-        });
-        setCandidates((current) => ({ ...current, [item.key]: photos }));
-        setReplacementMessages((current) => ({
-          ...current,
-          [item.key]: photos.length === 0
-            ? 'No matching stock photos were found. Upload your own image or use the placeholder.'
-            : '',
-        }));
-      } catch (caught) {
-        const message = caught instanceof StockPhotoError && caught.code === 'STOCK_PHOTOS_NOT_CONFIGURED'
-          ? 'Pexels is not configured. Upload your own image or use the clean placeholder.'
-          : messageFromError(caught);
-        setReplacementMessages((current) => ({ ...current, [item.key]: message }));
-      }
-    }));
+    const searchable = replacementItems(plan).filter((item) => item.imageRole !== 'logo' && item.imageSearchQuery.trim());
+    await Promise.all(searchable.map((item) => searchForItem(item, item.imageSearchQuery)));
   };
 
   const handleCreate = async () => {
@@ -206,11 +219,8 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
         model: response.model,
         fontFamilies: fontCatalog?.families ?? {},
       };
-      if (replacementItems(response.plan).length === 0) {
-        await compileAndApply(current);
-        return;
-      }
       setAnalysis(current);
+      setSearchQueries(Object.fromEntries(replacementItems(response.plan).map((item) => [item.key, item.imageSearchQuery])));
       void loadStockSuggestions(response.plan);
     } catch (caught) {
       setError(messageFromError(caught));
@@ -230,6 +240,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
         ...current,
         [key]: { src: prepared.dataUrl, width: prepared.width, height: prepared.height },
       }));
+      setOmittedImages((current) => current.filter((item) => item !== key));
     } catch (caught) {
       setError(messageFromError(caught));
     } finally {
@@ -251,11 +262,53 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
           credit: `Photo by ${photo.photographer} on Pexels`,
         },
       }));
+      setOmittedImages((current) => current.filter((item) => item !== key));
     } catch (caught) {
       setError(messageFromError(caught));
     } finally {
       setPreparingReplacement(null);
     }
+  };
+
+  const handleCropApplied = (replacement: ReconstructionImageReplacement, crop: NormalizedCrop) => {
+    if (!analysis || !cropItemKey) return;
+    if (cropItemKey === NEW_LOGO_CROP_KEY) {
+      const base = analysis.plan.elements.find((item) => item.imageRole === 'logo') ?? analysis.plan.elements[0];
+      if (!base || analysis.plan.elements.length >= 45) return;
+      let number = 1;
+      while (analysis.plan.elements.some((item) => item.key === `additional_logo_${number}`)) number++;
+      const key = `additional_logo_${number}`;
+      const logo: ReconstructionElement = {
+        ...base,
+        key,
+        kind: 'image_region',
+        label: `Additional logo ${number}`,
+        box: crop,
+        angle: 0,
+        opacity: 1,
+        zIndex: Math.min(200, Math.max(...analysis.plan.elements.map((item) => item.zIndex)) + 1),
+        text: '',
+        fill: null,
+        stroke: null,
+        imageRole: 'logo',
+        imageMask: 'none',
+        imageCutout: false,
+        imageEdge: 'none',
+        imageHasOverlays: false,
+        replacementRecommended: false,
+        replacementReason: '',
+        imageSearchQuery: '',
+        suggestedFieldKey: key,
+        suggestedFieldLabel: `Additional logo ${number}`,
+        confidence: 1,
+      };
+      setAnalysis((current) => current ? { ...current, plan: { ...current.plan, elements: [...current.plan.elements, logo] } } : current);
+      setReplacements((current) => ({ ...current, [key]: replacement }));
+    } else {
+      setReplacements((current) => ({ ...current, [cropItemKey]: replacement }));
+      setOmittedImages((current) => current.filter((key) => key !== cropItemKey));
+    }
+    setCropItemKey(null);
   };
 
   return (
@@ -562,32 +615,30 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
         {analysis && (
           <section className="border-t border-zinc-200 bg-zinc-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
             <div className="mb-3">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Upload logos and review image replacements</h3>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Choose images for the editable draft</h3>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Upload each original logo so it stays complete. Other regions may contain overlapping artwork or incomplete subjects; upload a clean replacement or continue with a labeled placeholder.
+                Choose each image separately. Upload your own, crop a logo or illustration from the poster, pick a Pexels result, or leave an image out. Pexels may not have an exact match.
               </p>
             </div>
             <div className="space-y-4">
               {replacementItems(analysis.plan).map((item) => {
                 const selected = replacements[item.key];
                 const stock = candidates[item.key] ?? [];
+                const omitted = omittedImages.includes(item.key);
                 return (
                   <div key={item.key} className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-zinc-900 dark:text-white">{item.label}</p>
                         <p className="mt-1 max-w-2xl text-xs text-zinc-500 dark:text-zinc-400">
-                          {item.replacementReason || 'The original region is unsafe to crop cleanly.'}
+                          {item.replacementReason || 'Choose what to use for this image region.'}
                         </p>
                         {item.imageRole === 'logo' && (
-                          <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Original logo upload required. The poster crop will not be used.</p>
-                        )}
-                        {item.imageSearchQuery && (
-                          <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">Search: {item.imageSearchQuery}</p>
+                          <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Brand marks are not searched on Pexels. Upload an original, crop this logo, or leave it out.</p>
                         )}
                       </div>
                       <label className="cursor-pointer rounded-lg border border-violet-300 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/30">
-                        {preparingReplacement === item.key ? 'Preparing…' : item.imageRole === 'logo' ? 'Upload logo' : 'Upload replacement'}
+                        {preparingReplacement === item.key ? 'Preparing…' : item.imageRole === 'logo' ? 'Upload logo' : 'Upload image'}
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp"
@@ -602,7 +653,27 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                       </label>
                     </div>
 
-                    {selected && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {item.imageRole !== 'background_photo' && (
+                        <button type="button" disabled={Boolean(preparingReplacement) || submitting} onClick={() => setCropItemKey(item.key)} className="rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800">Crop from poster</button>
+                      )}
+                      <button type="button" aria-pressed={omitted} disabled={Boolean(preparingReplacement) || submitting} onClick={() => {
+                        setOmittedImages((current) => current.includes(item.key) ? current : [...current, item.key]);
+                        setReplacements((current) => { const next = { ...current }; delete next[item.key]; return next; });
+                      }} className={`rounded-lg border px-3 py-2 text-xs font-medium ${omitted ? 'border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950/30 dark:text-violet-200' : 'border-zinc-300 hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800'}`}>Leave out</button>
+                      {omitted && item.imageRole !== 'logo' && <button type="button" onClick={() => setOmittedImages((current) => current.filter((key) => key !== item.key))} className="rounded-lg border px-3 py-2 text-xs">Use placeholder</button>}
+                    </div>
+
+                    {item.imageRole !== 'logo' && (
+                      <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); void searchForItem(item, searchQueries[item.key] ?? ''); }}>
+                        <input aria-label={`Pexels search for ${item.label}`} value={searchQueries[item.key] ?? ''} maxLength={120} onChange={(event) => setSearchQueries((current) => ({ ...current, [item.key]: event.target.value }))} placeholder="Describe the image, including key objects" className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-xs dark:border-zinc-600 dark:bg-zinc-800" />
+                        <button type="submit" disabled={Boolean(preparingReplacement) || submitting} className="rounded-lg border border-violet-300 px-3 py-1.5 text-xs font-semibold text-violet-700 dark:border-violet-700 dark:text-violet-300">Search Pexels</button>
+                      </form>
+                    )}
+
+                    {omitted && <p className="mt-2 text-xs text-violet-700 dark:text-violet-300">This image will not be added to the draft.</p>}
+
+                    {selected && !omitted && (
                       <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-2 dark:border-emerald-800 dark:bg-emerald-950/20">
                         <img
                           src={selected.src}
@@ -614,7 +685,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                           }`}
                         />
                         <div className="min-w-0 flex-1 text-xs text-emerald-900 dark:text-emerald-200">
-                          <p className="font-semibold">Clean replacement selected</p>
+                          <p className="font-semibold">Image selected for this region</p>
                           {selected.credit && <p className="mt-1 truncate">{selected.credit}</p>}
                         </div>
                         <button
@@ -626,16 +697,16 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                           })}
                           className="ml-auto rounded px-2 py-1 text-xs text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/30"
                         >
-                          {item.imageRole === 'logo' ? 'Remove logo' : 'Use placeholder'}
+                          {item.imageRole === 'logo' ? 'Clear selection' : 'Use placeholder'}
                         </button>
                       </div>
                     )}
 
-                    {!selected && replacementMessages[item.key] && (
+                    {!omitted && replacementMessages[item.key] && (
                       <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">{replacementMessages[item.key]}</p>
                     )}
 
-                    {!selected && stock.length > 0 && (
+                    {!omitted && stock.length > 0 && (
                       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {stock.map((photo) => (
                           <div key={photo.id} className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-700">
@@ -660,6 +731,11 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                   </div>
                 );
               })}
+              {analysis.plan.elements.length < 45 && analysis.plan.elements.length > 0 && (
+                <button type="button" onClick={() => setCropItemKey(NEW_LOGO_CROP_KEY)} className="w-full rounded-xl border border-dashed border-violet-400 px-3 py-3 text-left text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/30">
+                  Add a missing logo from the poster
+                </button>
+              )}
             </div>
           </section>
         )}
@@ -692,6 +768,12 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
             </button>
           </div>
         </div>
+        {cropItemKey && reference && analysis && (() => {
+          const item = cropItemKey === NEW_LOGO_CROP_KEY
+            ? { ...analysis.plan.elements[0], label: 'Missing logo', imageRole: 'logo' as const, box: { x: 0.05, y: 0.8, width: 0.25, height: 0.15 } }
+            : analysis.plan.elements.find((element) => element.key === cropItemKey);
+          return item ? <PosterAssetCropDialog key={cropItemKey} reference={reference} item={item} onCancel={() => setCropItemKey(null)} onApply={handleCropApplied} /> : null;
+        })()}
       </div>
     </div>
   );
@@ -704,11 +786,5 @@ function messageFromError(error: unknown): string {
 }
 
 function replacementItems(plan: PosterReconstructionPlan) {
-  return plan.elements.filter((item) => item.kind === 'image_region' && (item.replacementRecommended || item.imageRole === 'logo'));
-}
-
-function orientationFor(aspect: number): 'landscape' | 'portrait' | 'square' {
-  if (aspect > 1.15) return 'landscape';
-  if (aspect < 0.87) return 'portrait';
-  return 'square';
+  return plan.elements.filter((item) => item.kind === 'image_region' && !(item.imageRole === 'icon' && item.iconName !== 'none'));
 }

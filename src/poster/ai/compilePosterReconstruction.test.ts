@@ -278,6 +278,21 @@ describe('compilePosterReconstruction', () => {
     });
     expect(compiled.project.elements[0]).toMatchObject({ type: 'image', opacity: 1, mask: 'none', edge: 'none', adjustTintAmount: 0, adjustBlur: 0 });
   });
+  it('omits only the image regions the user leaves out, including their field bindings', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([
+        element({ key: 'partner_a', kind: 'image_region', imageRole: 'logo', suggestedFieldKey: 'partner_a', suggestedFieldLabel: 'Partner A logo' }),
+        element({ key: 'partner_b', kind: 'image_region', imageRole: 'logo', box: { x: .6, y: .1, width: .2, height: .1 }, zIndex: 2, suggestedFieldKey: 'partner_b', suggestedFieldLabel: 'Partner B logo' }),
+      ]),
+      reference: { dataUrl: 'unused', width: 1000, height: 1000 },
+      referenceGuideOpacity: 0,
+      omittedImageKeys: ['partner_a'],
+      imageReplacements: { partner_b: { src: 'data:image/png;base64,partner', width: 200, height: 100 } },
+    });
+    expect(compiled.project.elements).toHaveLength(1);
+    expect(compiled.project.elements[0]).toMatchObject({ type: 'image', src: 'data:image/png;base64,partner' });
+    expect(compiled.fieldBindings.map((field) => field.key)).toEqual(['partner_b']);
+  });
   it('does not turn an empty transcription into a visible label', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([element({ key: 'times', kind: 'text', label: 'Mission times label', text: '' })]),
