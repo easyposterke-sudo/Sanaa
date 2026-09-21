@@ -184,27 +184,40 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
         return;
       }
       const fontCatalog = await prepareReconstructionFontCatalog().catch(() => null);
-      const response = await requestPosterReconstruction({
+      const request = {
           reference: {
             dataUrl: reference.dataUrl,
             width: reference.width,
             height: reference.height,
           },
-          quality: 'quality',
+          quality: 'quality' as const,
           ...(fontCatalog ? { fontCatalog: fontCatalog.request } : {}),
-        });
+        };
+      const response = await requestPosterReconstruction(request);
+      let reviewedPlan = response.plan;
+      if (response.source !== 'fallback') {
+        try {
+          const review = await requestPosterReconstruction({ ...request, review: { previousPlan: response.plan } });
+          reviewedPlan = review.plan;
+        } catch {
+          reviewedPlan = {
+            ...response.plan,
+            warnings: [...response.plan.warnings, 'The automatic comparison pass could not finish; review the draft against the original.'].slice(0, 12),
+          };
+        }
+      }
       const current = {
-        plan: response.plan,
+        plan: reviewedPlan,
         source: response.source,
         model: response.model,
         fontFamilies: fontCatalog?.families ?? {},
       };
-      if (replacementItems(response.plan).length === 0) {
+      if (replacementItems(reviewedPlan).length === 0) {
         await compileAndApply(current);
         return;
       }
       setAnalysis(current);
-      void loadStockSuggestions(response.plan);
+      void loadStockSuggestions(reviewedPlan);
     } catch (caught) {
       setError(messageFromError(caught));
     } finally {
@@ -577,7 +590,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                         )}
                       </div>
                       <label className="cursor-pointer rounded-lg border border-violet-300 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/30">
-                        {preparingReplacement === item.key ? 'Preparing…' : 'Upload replacement'}
+                        {preparingReplacement === item.key ? 'Preparing…' : item.imageRole === 'logo' ? 'Upload clean logo' : 'Upload replacement'}
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp"
@@ -598,7 +611,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                           src={selected.src}
                           alt="Selected clean replacement"
                           className={`h-16 w-20 rounded ${
-                            item.imageRole === 'person'
+                            item.imageRole === 'person' || item.imageRole === 'logo'
                               ? 'bg-zinc-100 object-contain dark:bg-zinc-800'
                               : 'object-cover'
                           }`}

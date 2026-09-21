@@ -180,6 +180,10 @@ export async function compilePosterReconstruction(input: {
   const ordered = [...plan.elements].sort((a, b) => a.zIndex - b.zIndex);
   await ensureReconstructionFontsReady(ordered, input.fontCatalogFamilies);
   for (const item of ordered) {
+    if (item.kind === 'text' && !item.text.trim()) {
+      warnings.push(`“${item.label}” was omitted because the reference supplied no visible wording for it.`);
+      continue;
+    }
     const box = pixelBox(
       item.box,
       canvasWidth,
@@ -237,7 +241,7 @@ export async function compilePosterReconstruction(input: {
 
     let element: PosterElement;
     if (item.kind === 'text') {
-      const displayText = (item.text || item.label).trim();
+      const displayText = item.text.trim();
       const fontFamily = resolveReconstructionFontFamily(item, input.fontCatalogFamilies);
       const hasVerifiedExtrusion = hasVerifiedTextExtrusion(item);
       if (hasVerifiedExtrusion && displayText.length <= 80) {
@@ -561,7 +565,7 @@ async function compileImageRegion(input: {
   }
 
   if (item.replacementRecommended) {
-    const role = item.imageRole === 'person' ? 'person' : 'photo';
+    const role = item.imageRole === 'person' ? 'person' : item.imageRole === 'logo' ? 'logo' : 'photo';
     const reason = item.replacementReason.trim() || 'the source area contains overlapping poster artwork';
     warnings.push(`“${item.label}” uses a clean ${role} placeholder because ${reason}. Replace it with an original, uploaded, or stock image.`);
     return {
@@ -648,7 +652,7 @@ function compileThreeDTextElement(
   base: Pick<Poster3DTextElement, 'id' | 'layerName' | 'zIndex'>,
   fontFamily: string,
 ): Poster3DTextElement {
-  const text = (item.text || item.label).trim();
+  const text = item.text.trim();
   const state = compileTwoLayer3DTextState({
     recipeId: TWO_LAYER_3D_TEXT_RECIPE_ID,
     text,
@@ -705,7 +709,7 @@ function compileTextElement(
   fontFamily: string,
   layoutMode: 'reference' | 'creation',
 ): PosterTextElement {
-  const displayText = item.text || item.label;
+  const displayText = item.text;
   const lines = displayText.split(/\r?\n/);
   const lineCount = Math.max(1, lines.length);
   const measuredSize = item.fontSizeRatio * canvasHeight;
@@ -1668,7 +1672,7 @@ async function cropImageToAspect(
 }
 
 function imagePlaceholderDataUrl(input: {
-  role: 'person' | 'photo';
+  role: 'person' | 'photo' | 'logo';
   label: string;
   color: string;
 }): string {
@@ -1676,6 +1680,8 @@ function imagePlaceholderDataUrl(input: {
   const color = /^#[0-9a-f]{6}$/i.test(input.color) ? input.color : '#64748b';
   const artwork = input.role === 'person'
     ? `<circle cx="200" cy="145" r="62" fill="#ffffff" fill-opacity=".9"/><path d="M88 360c10-91 54-137 112-137s102 46 112 137" fill="#ffffff" fill-opacity=".9"/>`
+    : input.role === 'logo'
+    ? `<circle cx="200" cy="172" r="90" fill="none" stroke="#ffffff" stroke-opacity=".9" stroke-width="12"/><text x="200" y="184" text-anchor="middle" font-family="Arial,sans-serif" font-size="38" font-weight="700" fill="#ffffff">LOGO</text>`
     : `<path d="M54 305l82-91 57 56 50-43 103 104H54z" fill="#ffffff" fill-opacity=".82"/><circle cx="291" cy="116" r="35" fill="#ffffff" fill-opacity=".82"/>`;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" rx="24" fill="${color}"/>${artwork}<rect y="344" width="400" height="56" fill="#000000" fill-opacity=".42"/><text x="200" y="378" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="#ffffff">REPLACE: ${label}</text></svg>`;
   return svgDataUrl(svg);
