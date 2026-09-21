@@ -64,10 +64,7 @@ export class DetectionEngine {
     return newPath;
   }
 
-  /**
-   * Detects the dominant object within the given path.
-   * For simplicity in this implementation, it finds the object with the largest intersection with the path.
-   */
+  /** Finds the layer most covered by the selection, preferring the front layer on ties. */
   public async detectObject(path: Point[]): Promise<string | null> {
     const objects = this.canvas.getObjects();
     const minX = Math.min(...path.map((p) => p.x));
@@ -82,7 +79,10 @@ export class DetectionEngine {
     const samples = 15;
     for (const obj of objects) {
       const posterId = (obj as any).data?.posterId;
-      if (!posterId) continue;
+      if (!posterId || obj.visible === false || obj.opacity === 0) continue;
+
+      const bounds = obj.getBoundingRect();
+      const objectArea = Math.max(1, bounds.width * bounds.height);
 
       let score = 0;
       for (let i = 0; i <= samples; i++) {
@@ -97,8 +97,11 @@ export class DetectionEngine {
         }
       }
 
-      if (score > 0 && score > maxScore) {
-        maxScore = score;
+      // Raw sample counts favor a full-canvas background over a smaller logo.
+      // Divide by the layer's area so a logo enclosed by the marquee can win.
+      const coverage = score / objectArea;
+      if (score > 0 && coverage >= maxScore) {
+        maxScore = coverage;
         bestTargetId = posterId;
       }
     }

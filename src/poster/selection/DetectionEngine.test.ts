@@ -8,6 +8,48 @@ describe('DetectionEngine', () => {
 
   const engine = new DetectionEngine(mockCanvas);
 
+  describe('detectObject', () => {
+    const image = (posterId: string, left: number, top: number, width: number, height: number) => ({
+      data: { posterId },
+      visible: true,
+      opacity: 1,
+      getBoundingRect: () => ({ left, top, width, height }),
+      containsPoint: ({ x, y }: { x: number; y: number }) =>
+        x >= left && x <= left + width && y >= top && y <= top + height,
+    });
+    const rectangle = (left: number, top: number, right: number, bottom: number) => [
+      { x: left, y: top }, { x: right, y: top },
+      { x: right, y: bottom }, { x: left, y: bottom },
+    ];
+
+    it('selects a logo above a full-canvas background', async () => {
+      mockCanvas.getObjects.mockReturnValue([
+        image('background', 0, 0, 1000, 1000),
+        image('logo', 100, 100, 100, 100),
+      ]);
+
+      expect(await engine.detectObject(rectangle(90, 90, 210, 210))).toBe('logo');
+    });
+
+    it('selects the background when it is the only covered layer', async () => {
+      mockCanvas.getObjects.mockReturnValue([
+        image('background', 0, 0, 1000, 1000),
+        image('logo', 100, 100, 100, 100),
+      ]);
+
+      expect(await engine.detectObject(rectangle(400, 400, 500, 500))).toBe('background');
+    });
+
+    it('prefers the front layer when coverage is equal', async () => {
+      mockCanvas.getObjects.mockReturnValue([
+        image('back', 100, 100, 100, 100),
+        image('front', 100, 100, 100, 100),
+      ]);
+
+      expect(await engine.detectObject(rectangle(90, 90, 210, 210))).toBe('front');
+    });
+  });
+
   describe('generatePrecisePath', () => {
     it('returns precise points for a polygon', async () => {
       const mockPolygon = {
