@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { Miniflare } from 'miniflare';
 import { findAccount, login, logout, refreshSession, signup } from './auth';
@@ -23,6 +23,24 @@ beforeAll(async () => {
 afterAll(async () => { await mf.dispose(); });
 
 describe('email/password accounts', () => {
+  it('signs up and logs in within Cloudflare production PBKDF2 limits', async () => {
+    const deriveBits = crypto.subtle.deriveBits.bind(crypto.subtle);
+    const productionLimit = vi.spyOn(crypto.subtle, 'deriveBits').mockImplementation((algorithm, key, length) => {
+      if (typeof algorithm === 'object' && 'iterations' in algorithm && Number(algorithm.iterations) > 100_000) {
+        throw new DOMException('PBKDF2 iteration count exceeds production limit', 'NotSupportedError');
+      }
+      return deriveBits(algorithm, key, length);
+    });
+    try {
+      const created = await signup(db, 'limit@example.com', 'StrongPass1', 'Limit Test');
+      expect(created).toHaveProperty('token');
+      expect(await login(db, 'limit@example.com', 'StrongPass1', 'limit-test-ip')).toHaveProperty('token');
+      expect(productionLimit).toHaveBeenCalledTimes(2);
+    } finally {
+      productionLimit.mockRestore();
+    }
+  });
+
   it('creates an isolated user, authenticates, rotates sessions, and signs out', async () => {
     const created = await signup(db, ' Person@Example.com ', 'StrongPass1', 'Person');
     expect(created).toHaveProperty('token');

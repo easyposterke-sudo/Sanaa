@@ -1,5 +1,6 @@
 const encoder = new TextEncoder();
-const ITERATIONS = 120_000;
+// Cloudflare's production Web Crypto rejects PBKDF2 counts above 100,000.
+const ITERATIONS = 100_000;
 const ACCESS_AGE = 60 * 60 * 24;
 const REFRESH_AGE = 60 * 60 * 24 * 30;
 
