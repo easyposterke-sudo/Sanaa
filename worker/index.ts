@@ -12,6 +12,7 @@ import { OpenAiPlannerError } from './ai/openAiPosterPlanner';
 import { CREATION_VERSION } from './ai/posterCreationPrompt';
 import {
   OpenAiPosterReconstructionError,
+  POSTER_RECONSTRUCTION_REASONING_EFFORT,
   reconstructPosterWithOpenAI,
 } from './ai/openAiPosterReconstructor';
 import { editPosterElementWithOpenAI } from './ai/openAiPosterElementEditor';
@@ -2159,6 +2160,7 @@ async function buildPosterReconstructionCacheKey(
     height: request.reference.height,
     quality: request.quality,
     model,
+    reasoningEffort: POSTER_RECONSTRUCTION_REASONING_EFFORT,
     schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION,
     promptVersion: posterPlanPromptVersion(request),
     fontCatalog: request.fontCatalog?.entries

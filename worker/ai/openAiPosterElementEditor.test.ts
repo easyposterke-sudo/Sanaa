@@ -36,6 +36,7 @@ describe('editPosterElementWithOpenAI', () => {
     expect(result.openAiRequestId).toBe('req_edit');
 
     const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.reasoning).toEqual({ effort: 'none' });
     const userContent = body.input[1].content as Array<{ type: string; image_url?: string }>;
     expect(userContent.filter(({ type }) => type === 'input_image').map(({ image_url }) => image_url)).toEqual([
       request.reference.dataUrl,

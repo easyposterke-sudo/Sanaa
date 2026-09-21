@@ -12,6 +12,7 @@ const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const POSTER_RECONSTRUCTION_TIMEOUT_MS = 110_000;
 
 export const POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS = 25_000;
+export const POSTER_RECONSTRUCTION_REASONING_EFFORT = 'none';
 
 export type OpenAiPosterReconstructionIncompleteReason =
   | 'max_output_tokens'
@@ -91,7 +92,7 @@ export async function reconstructPosterWithOpenAI(input: {
       body: JSON.stringify({
         model: input.model,
         store: false,
-        reasoning: { effort: 'medium' },
+        reasoning: { effort: POSTER_RECONSTRUCTION_REASONING_EFFORT },
         max_output_tokens: POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS,
         input: [
           {

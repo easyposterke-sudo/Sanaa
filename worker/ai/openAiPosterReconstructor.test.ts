@@ -62,10 +62,12 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const payload = JSON.parse(String(options.body)) as {
       max_output_tokens?: number;
+      reasoning?: { effort?: string };
       store?: boolean;
       input: Array<{ content: Array<{ text?: string }> }>;
     };
     expect(payload.max_output_tokens).toBe(POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS);
+    expect(payload.reasoning?.effort).toBe('none');
     expect(payload.store).toBe(false);
     expect(payload.input[0]?.content[0]?.text).toContain('Use natural by default');
     expect(payload.input[0]?.content[0]?.text).toContain('one indivisible brand mark');
