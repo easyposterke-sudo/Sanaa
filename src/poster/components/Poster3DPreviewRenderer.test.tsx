@@ -121,5 +121,10 @@ describe('Poster3DPreviewRenderer', () => {
     expect(history).toHaveLength(2);
     expect(history[0]?.[0]?.type).toBe('text');
     expect((history[1]?.[0] as Poster3DTextElement).image).toBe('data:image/webp;base64,shiny');
+    act(() => usePosterStore.getState().undo());
+    expect(usePosterStore.getState().elements[0]).toEqual(original);
+    act(() => usePosterStore.getState().redo());
+    expect((usePosterStore.getState().elements[0] as Poster3DTextElement).image)
+      .toBe('data:image/webp;base64,shiny');
   });
 });

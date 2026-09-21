@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isShapeLayer } from '../core/types';
 import type { PosterTextElement } from './types';
-import { posterTextToTwoLayer3D } from './convertPosterTextTo3D';
+import { posterTextToTwoLayer3D, restorePosterTextFrom3D } from './convertPosterTextTo3D';
 
 const source: PosterTextElement = {
   id: 'headline',
@@ -42,6 +42,17 @@ describe('posterTextToTwoLayer3D', () => {
     expect(result.config.textLayers?.[1]?.frontColor).toBe('#eeddcc');
     expect(result.image).toContain('data:image/svg+xml');
     expect(result.previewWidth).toBeGreaterThan(0);
+    expect(restorePosterTextFrom3D(result)).toEqual(source);
+  });
+
+  it('recovers wording and font from older two-layer 3D layers without a source snapshot', () => {
+    const converted = posterTextToTwoLayer3D(source, '#eeddcc', '#123456');
+    delete converted.sourceText;
+    const restored = restorePosterTextFrom3D(converted);
+    expect(restored?.type).toBe('text');
+    expect(restored?.text).toBe('SUMMIT');
+    expect(restored?.fontFamily).toBe(source.fontFamily);
+    expect(restored?.fill).toBe('#eeddcc');
   });
 
   it('keeps the selected custom font available to both 3D layers', () => {

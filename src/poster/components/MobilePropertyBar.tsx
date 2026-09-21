@@ -6,6 +6,7 @@ interface MobilePropertyBarProps {
   readOnly?: boolean;
   onOpenEdit3D?: (id: string) => void;
   onTransformText3D?: (id: string, faceColor: string, extrusionColor: string, customFontId?: string) => void;
+  onRevert3DToText?: (id: string) => void;
   onOpenTemplateField?: (id: string) => void;
   templateFieldLabel?: string;
 }
@@ -14,6 +15,7 @@ export function MobilePropertyBar({
   readOnly = false,
   onOpenEdit3D,
   onTransformText3D,
+  onRevert3DToText,
   onOpenTemplateField,
   templateFieldLabel,
 }: MobilePropertyBarProps) {
@@ -53,6 +55,7 @@ export function MobilePropertyBar({
             readOnly={readOnly}
             onOpenEdit3D={onOpenEdit3D}
             onTransformText3D={onTransformText3D}
+            onRevert3DToText={onRevert3DToText}
             onOpenTemplateField={onOpenTemplateField}
             templateFieldLabel={templateFieldLabel}
           />

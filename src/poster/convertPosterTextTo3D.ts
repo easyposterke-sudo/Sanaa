@@ -56,6 +56,7 @@ export function posterTextToTwoLayer3D(
   return {
     id: source.id,
     type: '3d-text',
+    sourceText: { ...source },
     layerName: source.layerName,
     image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
     config,
@@ -71,5 +72,40 @@ export function posterTextToTwoLayer3D(
     locked: source.locked,
     excludeFromExport: source.excludeFromExport,
     shadow: source.shadow,
+  };
+}
+
+/** Restore the exact source when available; older two-layer conversions retain enough typography to recover flat text. */
+export function restorePosterTextFrom3D(element: Poster3DTextElement): PosterTextElement | null {
+  if (element.sourceText?.type === 'text') return { ...element.sourceText };
+  const front = element.config.textLayers?.find(
+    (layer) => layer.id === 'two-layer-face-shell-v1:front-face' && 'text' in layer,
+  );
+  if (!front || !('text' in front)) return null;
+  const content = front.text.content;
+  if (!content) return null;
+  const shownWidth = Math.max(1, (element.previewWidth ?? 200) * Math.abs(element.scaleX));
+  const shownHeight = Math.max(1, (element.previewHeight ?? 100) * Math.abs(element.scaleY));
+  return {
+    id: element.id,
+    type: 'text',
+    text: content,
+    fontFamily: front.text.fontFamily,
+    fontSize: Math.max(8, Math.round(shownHeight * 0.65)),
+    fontWeight: front.text.fontWeight,
+    charSpacing: (front.text.letterSpacing ?? 0) * 1000 / Math.max(1, front.text.fontSize),
+    fill: front.frontColor ?? '#ffffff',
+    width: shownWidth,
+    left: element.left,
+    top: element.top,
+    scaleX: 1,
+    scaleY: 1,
+    angle: element.angle,
+    opacity: element.opacity,
+    zIndex: element.zIndex,
+    layerName: element.layerName,
+    locked: element.locked,
+    excludeFromExport: element.excludeFromExport,
+    shadow: element.shadow,
   };
 }

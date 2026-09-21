@@ -7,7 +7,7 @@ import { PosterCanvas } from './PosterCanvas';
 import { PosterRightSidebar } from './PosterRightSidebar';
 import { ThreeTextModal } from './ThreeTextModal';
 import { Poster3DPreviewRenderer } from './Poster3DPreviewRenderer';
-import { posterTextToTwoLayer3D } from '../convertPosterTextTo3D';
+import { posterTextToTwoLayer3D, restorePosterTextFrom3D } from '../convertPosterTextTo3D';
 import { CanvasSizeModal } from './CanvasSizeModal';
 import { MobilePropertyBar } from './MobilePropertyBar';
 import { PosterMobileScaleFader } from './PosterMobileScaleFader';
@@ -93,6 +93,17 @@ export function PosterLayout() {
     store.setElements(store.elements.map((element) => element.id === id ? converted : element));
     store.pushHistory();
     setAutomatic3DRenderIds((ids) => [...new Set([...ids, id])]);
+  }, []);
+  const handleRevert3DToText = useCallback((id: string) => {
+    const store = usePosterStore.getState();
+    const source = store.elements.find((element) => element.id === id);
+    if (source?.type !== '3d-text') return;
+    const restored = restorePosterTextFrom3D(source);
+    if (!restored) return;
+    store.pushHistory();
+    store.setElements(store.elements.map((element) => element.id === id ? restored : element));
+    store.pushHistory();
+    setAutomatic3DRenderIds((ids) => ids.filter((elementId) => elementId !== id));
   }, []);
   const handleAutomatic3DRendered = useCallback((elementId: string) => {
     setAutomatic3DRenderIds((ids) => ids.filter((id) => id !== elementId));
@@ -944,6 +955,7 @@ export function PosterLayout() {
             readOnly={readOnly}
             onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
             onTransformText3D={handleTransformText3D}
+            onRevert3DToText={handleRevert3DToText}
             onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
             templateFieldLabel={selectedTemplateFieldLabel}
           />
@@ -955,6 +967,7 @@ export function PosterLayout() {
         readOnly={readOnly}
         onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
         onTransformText3D={handleTransformText3D}
+        onRevert3DToText={handleRevert3DToText}
         onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
         templateFieldLabel={selectedTemplateFieldLabel}
       />

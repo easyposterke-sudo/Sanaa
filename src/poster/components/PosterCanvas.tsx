@@ -69,6 +69,7 @@ import {
 } from '../posterFabricReflectGuard';
 import { buildPosterTextEffectStyles, posterTextEffectPadding } from '../textEffects';
 import { DynamicBackgroundTextbox } from '../DynamicBackgroundTextbox';
+import { needsPosterFabricObjectRecreation } from '../posterFabricObjectType';
 import { setFabricObjectGlassFill } from '../glassShapeFabric';
 
 /** Stable signature of text font stacks for poster font preload + Fabric sync gating. */
@@ -609,6 +610,8 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
   }, [imageCropTargetId, readOnly, pathEditTargetId]);
 
   const creatingRef = useRef<Set<string>>(new Set());
+  const creatingElementRef = useRef<Map<string, PosterElement>>(new Map());
+  const creationTokenRef = useRef<Map<string, symbol>>(new Map());
   /**
    * True while we sync elements to Fabric — ignore selection:cleared / selection:* from Fabric.
    * Removing a recreated image fires selection:cleared; if we let it through, setSelected([]) runs
@@ -684,6 +687,12 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
     if (!fontsReady) return;
     if (fontSig && fontsLoadedForSigRef.current !== fontSig) return;
 
+    const invalidateCreation = (id: string) => {
+      creatingRef.current.delete(id);
+      creatingElementRef.current.delete(id);
+      creationTokenRef.current.delete(id);
+    };
+
     syncingSelectionFromStoreRef.current = true;
     try {
       const fabricObjects = canvas.getObjects();
@@ -705,7 +714,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
         const id = (obj as { data?: { posterId?: string } }).data?.posterId;
         if (id && !storeIds.has(id)) {
           canvas.remove(obj);
-          creatingRef.current.delete(id);
+          invalidateCreation(id);
         }
       });
 
@@ -718,7 +727,20 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
       );
       const sorted = [...elements].sort((a, b) => a.zIndex - b.zIndex);
       for (const el of sorted) {
+        if (creatingRef.current.has(el.id) && creatingElementRef.current.get(el.id) !== el) {
+          invalidateCreation(el.id);
+        }
         let existing = objectsByPosterId.get(el.id);
+
+        // Undoing text → 3D keeps the layer id, but the Fabric image must become
+        // a textbox again. Reusing the image and assigning a text width clips it.
+        if (existing && needsPosterFabricObjectRecreation(el.type, existing)) {
+          posterFabricSrcRecreatePending.add(el.id);
+          canvas.remove(existing);
+          objectsByPosterId.delete(el.id);
+          invalidateCreation(el.id);
+          existing = undefined;
+        }
 
         if (el.type === 'rect' && existing) {
           const shape = el as PosterShapeElement;
@@ -727,7 +749,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
           if ((wantsPath && !fabricIsPath) || (!wantsPath && fabricIsPath)) {
             canvas.remove(existing);
             objectsByPosterId.delete(el.id);
-            creatingRef.current.delete(el.id);
+            invalidateCreation(el.id);
             existing = undefined;
           }
         }
@@ -739,7 +761,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
           if ((wantsPath && !fabricIsPath) || (!wantsPath && fabricIsPath)) {
             canvas.remove(existing);
             objectsByPosterId.delete(el.id);
-            creatingRef.current.delete(el.id);
+            invalidateCreation(el.id);
             existing = undefined;
           }
         }
@@ -747,7 +769,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
         if (el.type === 'path' && existing && !(existing instanceof Path)) {
           canvas.remove(existing);
           objectsByPosterId.delete(el.id);
-          creatingRef.current.delete(el.id);
+          invalidateCreation(el.id);
           existing = undefined;
         }
 
@@ -1001,7 +1023,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
         if ((el as { type: string }).type === 'freehand') {
           if (existing) {
             canvas.remove(existing);
-            creatingRef.current.delete(el.id);
+            invalidateCreation(el.id);
           }
           continue;
         }
@@ -1238,15 +1260,23 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
           posterFabricSrcRecreatePending.add(el.id);
           canvas.remove(existing);
           objectsByPosterId.delete(el.id);
-          creatingRef.current.delete(el.id);
+          invalidateCreation(el.id);
         }
 
         const stillExists = objectsByPosterId.get(el.id);
         if (!stillExists && !creatingRef.current.has(el.id)) {
           creatingRef.current.add(el.id);
+          creatingElementRef.current.set(el.id, el);
+          const creationToken = Symbol(el.id);
+          creationTokenRef.current.set(el.id, creationToken);
           createFabricObject(el, readOnly)
             .then((obj) => {
-              creatingRef.current.delete(el.id);
+              if (creationTokenRef.current.get(el.id) !== creationToken) return;
+              invalidateCreation(el.id);
+              if (usePosterStore.getState().elements.find((element) => element.id === el.id) !== el) {
+                setPosterFontsGateNonce((nonce) => nonce + 1);
+                return;
+              }
               if (obj && canvasRef.current) {
                 const elIsImageLike = el.type === 'image' || el.type === '3d-text';
                 const imageSrc =
@@ -1398,7 +1428,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
               }
             })
             .finally(() => {
-              posterFabricSrcRecreatePending.delete(el.id);
+              if (!creatingRef.current.has(el.id)) posterFabricSrcRecreatePending.delete(el.id);
             });
         }
       }

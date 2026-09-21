@@ -54,11 +54,13 @@ import {
 } from '../textEffects';
 import { normalizePosterTextBackground } from '../textBackground';
 import { isPosterFontWeightBold } from '../textFontStyle';
+import { restorePosterTextFrom3D } from '../convertPosterTextTo3D';
 
 interface PosterRightSidebarProps {
   readOnly?: boolean;
   onOpenEdit3D?: (id: string) => void;
   onTransformText3D?: (id: string, faceColor: string, extrusionColor: string, customFontId?: string) => void;
+  onRevert3DToText?: (id: string) => void;
   /** Available only while preparing a reusable template. */
   onOpenTemplateField?: (id: string) => void;
   templateFieldLabel?: string;
@@ -2613,6 +2615,7 @@ export function PosterRightSidebar({
   readOnly = false,
   onOpenEdit3D,
   onTransformText3D,
+  onRevert3DToText,
   onOpenTemplateField,
   templateFieldLabel,
 }: PosterRightSidebarProps) {
@@ -2946,6 +2949,16 @@ export function PosterRightSidebar({
               className="mt-2 w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600"
             >
               Edit in 3D Editor
+            </button>
+          )}
+
+          {single.type === '3d-text' && onRevert3DToText && restorePosterTextFrom3D(single) && (
+            <button
+              type="button"
+              onClick={() => onRevert3DToText(single.id)}
+              className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Convert back to flat text
             </button>
           )}
 

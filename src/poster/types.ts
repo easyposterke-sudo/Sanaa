@@ -258,6 +258,8 @@ export interface Poster3DTextElement extends PosterElementBase, ImageAdjustments
   /** Raster shown on poster: HTTPS (library / cloud), data URL, or blob URL. */
   image: string;
   config: Partial<EditorState>; // Full 3D editor config for re-editing
+  /** Original flat text, retained so a converted layer can be restored after reopening the poster. */
+  sourceText?: PosterTextElement;
   /** Intrinsic preview pixels used to preserve displayed bounds after a WebGL re-export. */
   previewWidth?: number;
   previewHeight?: number;
