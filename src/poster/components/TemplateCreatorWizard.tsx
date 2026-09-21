@@ -10,7 +10,7 @@ import {
   type CompiledPosterReconstruction,
   type ReconstructionImageReplacement,
 } from '../ai/compilePosterReconstruction';
-import { prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
+import { prepareLogoImage, prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
 import { prepareReconstructionFontCatalog } from '../ai/prepareReconstructionFontCatalog';
 import {
   PosterReconstructionError,
@@ -126,6 +126,13 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
     fontFamilies: Readonly<Record<string, string>>;
   }) => {
     if (!reference || !canvasSize) return;
+    const missingLogo = current.plan.elements.find((item) =>
+      item.kind === 'image_region' && item.imageRole === 'logo' && !replacements[item.key],
+    );
+    if (missingLogo) {
+      setError(`Upload the original logo for “${missingLogo.label}” before creating the draft.`);
+      return;
+    }
     const compiled = await compilePosterReconstruction({
       plan: current.plan,
       reference,
@@ -217,7 +224,8 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
     setPreparingReplacement(key);
     setError(null);
     try {
-      const prepared = await prepareTemplateReference(file);
+      const isLogo = analysis?.plan.elements.some((item) => item.key === key && item.imageRole === 'logo');
+      const prepared = isLogo ? await prepareLogoImage(file) : await prepareTemplateReference(file);
       setReplacements((current) => ({
         ...current,
         [key]: { src: prepared.dataUrl, width: prepared.width, height: prepared.height },
@@ -554,10 +562,9 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
         {analysis && (
           <section className="border-t border-zinc-200 bg-zinc-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
             <div className="mb-3">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Review unsafe image crops</h3>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Upload logos and review image replacements</h3>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                These regions contain overlapping poster artwork or incomplete subjects. Choose a clean replacement,
-                upload one, or continue with a clearly labeled placeholder. The contaminated crop will not be inserted.
+                Upload each original logo so it stays complete. Other regions may contain overlapping artwork or incomplete subjects; upload a clean replacement or continue with a labeled placeholder.
               </p>
             </div>
             <div className="space-y-4">
@@ -572,12 +579,15 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                         <p className="mt-1 max-w-2xl text-xs text-zinc-500 dark:text-zinc-400">
                           {item.replacementReason || 'The original region is unsafe to crop cleanly.'}
                         </p>
+                        {item.imageRole === 'logo' && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Original logo upload required. The poster crop will not be used.</p>
+                        )}
                         {item.imageSearchQuery && (
                           <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">Search: {item.imageSearchQuery}</p>
                         )}
                       </div>
                       <label className="cursor-pointer rounded-lg border border-violet-300 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/30">
-                        {preparingReplacement === item.key ? 'Preparing…' : 'Upload replacement'}
+                        {preparingReplacement === item.key ? 'Preparing…' : item.imageRole === 'logo' ? 'Upload logo' : 'Upload replacement'}
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp"
@@ -598,7 +608,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                           src={selected.src}
                           alt="Selected clean replacement"
                           className={`h-16 w-20 rounded ${
-                            item.imageRole === 'person'
+                            item.imageRole === 'person' || item.imageRole === 'logo'
                               ? 'bg-zinc-100 object-contain dark:bg-zinc-800'
                               : 'object-cover'
                           }`}
@@ -616,7 +626,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', onAppl
                           })}
                           className="ml-auto rounded px-2 py-1 text-xs text-emerald-900 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/30"
                         >
-                          Use placeholder
+                          {item.imageRole === 'logo' ? 'Remove logo' : 'Use placeholder'}
                         </button>
                       </div>
                     )}
@@ -694,7 +704,7 @@ function messageFromError(error: unknown): string {
 }
 
 function replacementItems(plan: PosterReconstructionPlan) {
-  return plan.elements.filter((item) => item.kind === 'image_region' && item.replacementRecommended);
+  return plan.elements.filter((item) => item.kind === 'image_region' && (item.replacementRecommended || item.imageRole === 'logo'));
 }
 
 function orientationFor(aspect: number): 'landscape' | 'portrait' | 'square' {

@@ -54,9 +54,17 @@ Clearly dimensional headline blocks use the approved
 independently editable. Outlines, glows, and ordinary drop shadows remain flat
 text.
 
-Complex photos, logos, and decorations are currently reconstructed as
-rectangular raster crops. The result is an editable starting point rather than
-lossless layer recovery from pixels.
+Complex photos and decorations are currently reconstructed as rectangular
+raster crops. The result is an editable starting point rather than lossless
+layer recovery from pixels.
+
+Detected organization logos now require an upload of the original logo before a
+reference draft can be created. The uploaded image is fitted in full without a
+mask, fade, tint, or crop. The planner transcribes visible poster wording into
+editable text and keeps rotated labels as rotated text. A separate photo color
+wash can be reconstructed as an editable gradient with a transparent edge.
+Review small print against the reference before publishing; visual recognition
+can still misread characters or miss a layer.
 
 ## Local development
 

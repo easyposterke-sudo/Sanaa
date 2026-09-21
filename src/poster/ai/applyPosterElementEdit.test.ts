@@ -59,7 +59,7 @@ function plan(elements: ReturnType<typeof reconstructionText>[]): PosterReconstr
 function reconstructionText(key: string, value: string, box: { x: number; y: number; width: number; height: number }, zIndex: number) {
   return {
     key, kind: 'text' as const, label: value, box, angle: 0, opacity: 1, zIndex,
-    fill: '#111111', textFillType: 'solid' as const, textFillStart: null, textFillEnd: null, textFillAngle: 0,
+    fill: '#111111', textFillType: 'solid' as const, textFillStart: null, textFillEnd: null, textFillAngle: 0, fillStartOpacity: 1, fillEndOpacity: 1,
     stroke: null, strokeWidthRatio: 0, text: value, fontFamily: 'anton' as const, fontCatalogId: null,
     fontSizeRatio: 0.04, fontWeight: '700' as const, fontStyle: 'normal' as const,
     textAlign: 'left' as const, charSpacing: -20, textWidthMode: 'natural' as const,

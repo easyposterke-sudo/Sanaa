@@ -79,6 +79,8 @@ function element(overrides: Partial<ReconstructionElement>): ReconstructionEleme
     suggestedFieldLabel: '',
     confidence: 0.9,
     ...overrides,
+    fillStartOpacity: overrides.fillStartOpacity ?? 1,
+    fillEndOpacity: overrides.fillEndOpacity ?? 1,
   };
 }
 
@@ -267,6 +269,24 @@ describe('compilePosterReconstruction', () => {
     expect(logo.left).toBe(100);
     expect(logo.top).toBe(137.5);
   });
+  it('keeps uploaded logos complete despite AI mask, fade, and tint suggestions', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([element({ key: 'logo', kind: 'image_region', imageRole: 'logo', opacity: 0.3, imageMask: 'circle', imageEdge: 'fade', imageTintColor: '#ff0000', imageTintAmount: 80 })]),
+      reference: { dataUrl: 'data:image/png;base64,unused', width: 1000, height: 1000 },
+      referenceGuideOpacity: 0,
+      imageReplacements: { logo: { src: 'data:image/png;base64,uploaded', width: 400, height: 100 } },
+    });
+    expect(compiled.project.elements[0]).toMatchObject({ type: 'image', opacity: 1, mask: 'none', edge: 'none', adjustTintAmount: 0, adjustBlur: 0 });
+  });
+  it('does not turn an empty transcription into a visible label', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([element({ key: 'times', kind: 'text', label: 'Mission times label', text: '' })]),
+      reference: { dataUrl: 'unused', width: 1000, height: 1000 },
+      referenceGuideOpacity: 0,
+    });
+    expect(compiled.project.elements).toHaveLength(0);
+    expect(compiled.warnings.join(' ')).toContain('no transcribed wording');
+  });
   it('creates editable layers at source-relative coordinates and suggests fields', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
@@ -399,6 +419,14 @@ describe('compilePosterReconstruction', () => {
     plan.elements = [element({ key: 'gradient_card', kind: 'rect', textFillType: 'linear', textFillStart: '#ff0000', textFillEnd: '#ffff00', textFillAngle: 45 })];
     const result = await compilePosterReconstruction({ plan, reference: { dataUrl: 'data:image/png;base64,AAAA', width: 1080, height: 1350 } });
     expect(result.project.elements.find(item => item.type === 'rect')).toMatchObject({ fill: { type: 'linear', angle: 45, stops: [{ offset: 0, color: '#ff0000' }, { offset: 1, color: '#ffff00' }] } });
+  });
+  it('keeps a transparent-to-red photo wash as an editable overlay gradient', async () => {
+    const compiled = await compilePosterReconstruction({
+      plan: plan([element({ key: 'bottom_wash', kind: 'rect', textFillType: 'linear', textFillStart: '#cc0000', textFillEnd: '#dd1100', textFillAngle: 90, fillStartOpacity: 0, fillEndOpacity: 0.9 })]),
+      reference: { dataUrl: 'unused', width: 1000, height: 1000 },
+      referenceGuideOpacity: 0,
+    });
+    expect(compiled.project.elements[0]).toMatchObject({ fill: { type: 'linear', angle: 90, stops: [{ offset: 0, color: 'rgba(204, 0, 0, 0)' }, { offset: 1, color: 'rgba(221, 17, 0, 0.9)' }] } });
   });
 
   it('preserves editable gradients on closed irregular paths', async () => {

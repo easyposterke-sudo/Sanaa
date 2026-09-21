@@ -74,6 +74,9 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     expect(payload.input[0]?.content[0]?.text).toContain('literal transcription channel');
     expect(payload.input[0]?.content[0]?.text).toContain('Run a dedicated decorative-line audit');
     expect(payload.input[0]?.content[0]?.text).toContain('“(JUDE 18:10)” exactly');
+    expect(payload.input[0]?.content[0]?.text).toContain('“MISSION TIMES”');
+    expect(payload.input[0]?.content[0]?.text).toContain('“DAYS TO GO”');
+    expect(payload.input[0]?.content[0]?.text).toContain('fillStartOpacity 0');
   });
 
   it('sends small asset analysis images without a blank reference, then merges a patch review', async () => {

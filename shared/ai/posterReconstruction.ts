@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v14-literal-copy-line-audit-path24' as const;
+  'poster-reconstruction-v15-logo-upload-transcript-overlay' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -96,6 +96,8 @@ export const ReconstructionElementSchema = z
     textFillStart: NullableHexColorSchema.default(null),
     textFillEnd: NullableHexColorSchema.default(null),
     textFillAngle: z.number().min(0).max(360).default(0),
+    fillStartOpacity: z.number().min(0).max(1).default(1),
+    fillEndOpacity: z.number().min(0).max(1).default(1),
     stroke: NullableHexColorSchema,
     strokeWidthRatio: z.number().min(0).max(0.05),
     text: z.string().max(500),
@@ -323,6 +325,8 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
         textFillStart: nullable(hexJsonSchema),
         textFillEnd: nullable(hexJsonSchema),
         textFillAngle: { type: 'number', minimum: 0, maximum: 360 },
+        fillStartOpacity: { type: 'number', minimum: 0, maximum: 1 },
+        fillEndOpacity: { type: 'number', minimum: 0, maximum: 1 },
         stroke: nullable(hexJsonSchema),
         strokeWidthRatio: { type: 'number', minimum: 0, maximum: 0.05 },
         text: { type: 'string', maxLength: 500 },

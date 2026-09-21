@@ -237,7 +237,11 @@ export async function compilePosterReconstruction(input: {
 
     let element: PosterElement;
     if (item.kind === 'text') {
-      const displayText = (item.text || item.label).trim();
+      const displayText = item.text.trim();
+      if (!displayText) {
+        warnings.push(`“${item.label}” had no transcribed wording and was omitted rather than inserting a description.`);
+        continue;
+      }
       const fontFamily = resolveReconstructionFontFamily(item, input.fontCatalogFamilies);
       const hasVerifiedExtrusion = hasVerifiedTextExtrusion(item);
       if (hasVerifiedExtrusion && displayText.length <= 80) {
@@ -265,6 +269,7 @@ export async function compilePosterReconstruction(input: {
       });
       element = {
         ...base,
+        ...(item.imageRole === 'logo' ? { opacity: 1 } : {}),
         ...(image.layout ?? {
           left: box.left,
           top: box.top,
@@ -280,24 +285,24 @@ export async function compilePosterReconstruction(input: {
               backgroundLibraryLabel: item.label,
             }
           : {}),
-        mask: reconstructionImageMask(item.imageMask),
+        mask: item.imageRole === 'logo' ? 'none' : reconstructionImageMask(item.imageMask),
         ...(item.imageMask === 'rounded_rect'
           ? { maskCornerRadius: resolvedMaskCornerRadius(item.cornerStyle, item.cornerRadiusRatio) }
           : {}),
-        edge: item.imageEdge,
-        ...(item.imageEdge === 'fade'
+        edge: item.imageRole === 'logo' ? 'none' : item.imageEdge,
+        ...(item.imageRole !== 'logo' && item.imageEdge === 'fade'
           ? {
               edgeFadeDirection: item.imageFadeDirection,
               edgeFadeAmount: item.imageFadeAmount,
               edgeFadeMinOpacity: item.imageFadeMinOpacity,
             }
           : {}),
-        adjustBrightness: item.imageBrightness,
-        adjustContrast: item.imageContrast,
-        adjustSaturation: item.imageSaturation,
-        adjustBlur: item.imageBlur,
-        adjustTintColor: item.imageTintColor ?? undefined,
-        adjustTintAmount: item.imageTintAmount,
+        adjustBrightness: item.imageRole === 'logo' ? 0 : item.imageBrightness,
+        adjustContrast: item.imageRole === 'logo' ? 0 : item.imageContrast,
+        adjustSaturation: item.imageRole === 'logo' ? 0 : item.imageSaturation,
+        adjustBlur: item.imageRole === 'logo' ? 0 : item.imageBlur,
+        adjustTintColor: item.imageRole === 'logo' ? undefined : item.imageTintColor ?? undefined,
+        adjustTintAmount: item.imageRole === 'logo' ? 0 : item.imageTintAmount,
       } satisfies PosterImageElement;
     } else if (item.kind === 'path') {
       element = compilePathElement(item, box, canvasHeight, base, warnings, layoutMode);
@@ -557,6 +562,16 @@ async function compileImageRegion(input: {
       width: crop.width,
       height: crop.height,
       layerName: `AI replacement: ${item.label}`,
+    };
+  }
+
+  if (item.imageRole === 'logo' && layoutMode === 'reference') {
+    warnings.push(`Upload the original logo for “${item.label}”; the flattened poster crop was not reused.`);
+    return {
+      dataUrl: imagePlaceholderDataUrl({ role: 'photo', label: item.label, color: '#64748b' }),
+      width: 400,
+      height: 400,
+      layerName: `REPLACE IMAGE: ${item.label}`,
     };
   }
 
@@ -1473,7 +1488,7 @@ function compileShapeElement(
 }
 
 function reconstructionVectorFill(
-  item: Pick<ReconstructionElement, 'textFillType' | 'textFillStart' | 'textFillEnd' | 'textFillAngle'>,
+  item: Pick<ReconstructionElement, 'textFillType' | 'textFillStart' | 'textFillEnd' | 'textFillAngle' | 'fillStartOpacity' | 'fillEndOpacity'>,
   layoutMode: 'reference' | 'creation',
   fallback: string,
 ): string | PosterShapeFill {
@@ -1487,12 +1502,18 @@ function reconstructionVectorFill(
       type: 'linear',
       angle: item.textFillAngle,
       stops: [
-        { offset: 0, color: item.textFillStart },
-        { offset: 1, color: item.textFillEnd },
+        { offset: 0, color: gradientStopColor(item.textFillStart, item.fillStartOpacity) },
+        { offset: 1, color: gradientStopColor(item.textFillEnd, item.fillEndOpacity) },
       ],
     };
   }
   return fallback;
+}
+
+function gradientStopColor(hex: string, opacity: number): string {
+  if (opacity >= 1) return hex;
+  const value = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${opacity})`;
 }
 
 /**

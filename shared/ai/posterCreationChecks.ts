@@ -185,6 +185,8 @@ function uploadedImageRegion(
     textFillStart: null,
     textFillEnd: null,
     textFillAngle: 0,
+    fillStartOpacity: 1,
+    fillEndOpacity: 1,
     stroke: null,
     strokeWidthRatio: 0,
     text: '',

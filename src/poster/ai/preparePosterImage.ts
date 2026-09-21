@@ -29,9 +29,14 @@ export async function preparePortrait(file: File): Promise<PreparedPosterImage> 
   return resizePosterImage(file, { maxLongEdge: 1600, quality: 0.88 });
 }
 
+/** Keep logo edges and transparency intact while bounding the project size. */
+export async function prepareLogoImage(file: File): Promise<PreparedPosterImage> {
+  return resizePosterImage(file, { maxLongEdge: 1536, quality: 1, format: 'image/png' });
+}
+
 async function resizePosterImage(
   file: File,
-  options: { maxLongEdge: number; quality: number },
+  options: { maxLongEdge: number; quality: number; format?: 'image/png' },
 ): Promise<PreparedPosterImage> {
   if (!file.type.startsWith('image/')) throw new Error('Choose an image file.');
   if (file.size > 35 * 1024 * 1024) throw new Error('Images must be 35 MB or smaller.');
@@ -52,7 +57,7 @@ async function resizePosterImage(
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = 'high';
     context.drawImage(image, 0, 0, width, height);
-    const blob = await canvasToBlob(canvas, 'image/webp', options.quality);
+    const blob = await canvasToBlob(canvas, options.format ?? 'image/webp', options.quality);
     return {
       dataUrl: await blobToDataUrl(blob),
       width,
