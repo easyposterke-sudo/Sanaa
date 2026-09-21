@@ -79,6 +79,16 @@ type ProjectRow = {
   updated_at: string;
 };
 
+type SavedPosterRow = {
+  id: string;
+  name: string;
+  r2_key: string;
+  thumbnail_r2_key: string | null;
+  thumbnail_media_type: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 type AssetRow = {
   id: string;
   r2_key: string;
@@ -186,6 +196,7 @@ app.get('/api/health', (context) =>
     ok: true,
     service: 'easyposter-studio',
     environment: context.env.APP_ENV,
+    ownerId: context.get('ownerId'),
     requestId: context.get('requestId'),
   }),
 );
@@ -1434,6 +1445,133 @@ app.delete('/api/poster-templates/:id', async (context) => {
   return context.body(null, 204);
 });
 
+// The poster editor's working copy is separate from the named library below.
+const posterProjectsApp = new Hono<{ Bindings: Env; Variables: Variables }>();
+posterProjectsApp.get('/api/poster-projects', async (context): Promise<Response> => {
+  const key = `owners/${encodeURIComponent(context.get('ownerId'))}/poster-autosave.json`;
+  const object = await context.env.PROJECTS.get(key);
+  if (!object) return context.json({ project: null });
+  return context.json({ project: await object.json() });
+});
+
+posterProjectsApp.post('/api/poster-projects', async (context): Promise<Response> => {
+  const body = JSON.parse(await readBoundedText(context.req.raw, maxProjectBytes(context.env))) as { project?: unknown };
+  if (!isEditablePosterProject(body.project)) return context.json({ error: 'Invalid poster project.' }, 400);
+  const key = `owners/${encodeURIComponent(context.get('ownerId'))}/poster-autosave.json`;
+  await context.env.PROJECTS.put(key, JSON.stringify(body.project), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+  return context.json({ project: body.project });
+});
+
+posterProjectsApp.get('/api/my-poster-projects', async (context): Promise<Response> => {
+  const page = Math.max(1, Math.min(100000, Number(context.req.query('page')) || 1));
+  const limit = Math.max(1, Math.min(48, Number(context.req.query('limit')) || 24));
+  const ownerId = context.get('ownerId');
+  const count = await context.env.DB.prepare('SELECT COUNT(*) AS total FROM saved_posters WHERE owner_id = ?')
+    .bind(ownerId).first<{ total: number }>();
+  const result = await context.env.DB.prepare(
+    'SELECT id, name, r2_key, thumbnail_r2_key, thumbnail_media_type, created_at, updated_at FROM saved_posters WHERE owner_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?',
+  ).bind(ownerId, limit, (page - 1) * limit).all<SavedPosterRow>();
+  const total = count?.total ?? 0;
+  return context.json({
+    items: result.results.map(savedPosterListItem),
+    pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+  });
+});
+
+posterProjectsApp.get('/api/my-poster-projects/:id/thumbnail', async (context): Promise<Response> => {
+  const row = await findSavedPoster(context.env.DB, context.req.param('id'), context.get('ownerId'));
+  if (!row?.thumbnail_r2_key) return context.body(null, 404);
+  const object = await context.env.PROJECTS.get(row.thumbnail_r2_key);
+  if (!object) return context.body(null, 404);
+  return new Response(object.body, {
+    headers: {
+      'content-type': row.thumbnail_media_type || 'image/webp',
+      'cache-control': 'private, no-store',
+    },
+  });
+});
+
+posterProjectsApp.get('/api/my-poster-projects/:id', async (context): Promise<Response> => {
+  const row = await findSavedPoster(context.env.DB, context.req.param('id'), context.get('ownerId'));
+  if (!row) return context.json({ error: 'Poster not found.' }, 404);
+  const object = await context.env.PROJECTS.get(row.r2_key);
+  if (!object) return context.json({ error: 'Poster data is unavailable.' }, 503);
+  return context.json({ item: { ...savedPosterListItem(row), project: await object.json() } });
+});
+
+posterProjectsApp.post('/api/my-poster-projects', async (context): Promise<Response> => {
+  const body = JSON.parse(await readBoundedText(context.req.raw, maxProjectBytes(context.env))) as Record<string, unknown>;
+  const name = parseSavedPosterName(body.name);
+  if (!name || !isEditablePosterProject(body.project)) {
+    return context.json({ error: 'A name and valid poster project are required.' }, 400);
+  }
+  const thumbnail = parseSavedPosterThumbnail(body.thumbnail);
+  if (body.thumbnail !== undefined && !thumbnail) return context.json({ error: 'Invalid thumbnail.' }, 400);
+  const ownerId = context.get('ownerId');
+  const id = crypto.randomUUID();
+  const prefix = `owners/${encodeURIComponent(ownerId)}/saved-posters/${id}`;
+  const r2Key = `${prefix}/project.json`;
+  const thumbnailKey = thumbnail ? `${prefix}/thumbnail` : null;
+  const now = new Date().toISOString();
+  await context.env.PROJECTS.put(r2Key, JSON.stringify(body.project), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+  try {
+    if (thumbnail && thumbnailKey) await context.env.PROJECTS.put(thumbnailKey, thumbnail.bytes, {
+      httpMetadata: { contentType: thumbnail.mediaType },
+    });
+    await context.env.DB.prepare(
+      'INSERT INTO saved_posters (id, owner_id, name, r2_key, thumbnail_r2_key, thumbnail_media_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ).bind(id, ownerId, name, r2Key, thumbnailKey, thumbnail?.mediaType ?? null, now, now).run();
+  } catch (error) {
+    await context.env.PROJECTS.delete(thumbnailKey ? [r2Key, thumbnailKey] : [r2Key]);
+    throw error;
+  }
+  return context.json({ item: { id, name, thumbnail: thumbnailKey ? savedPosterThumbnailUrl(id) : undefined, createdAt: now, updatedAt: now } }, 201);
+});
+
+posterProjectsApp.patch('/api/my-poster-projects/:id', async (context): Promise<Response> => {
+  const id = context.req.param('id');
+  const row = await findSavedPoster(context.env.DB, id, context.get('ownerId'));
+  if (!row) return context.json({ error: 'Poster not found.' }, 404);
+  const body = JSON.parse(await readBoundedText(context.req.raw, maxProjectBytes(context.env))) as Record<string, unknown>;
+  if (body.ifUnmodifiedSince && body.ifUnmodifiedSince !== row.updated_at) {
+    return context.json({ error: 'This poster changed in another tab. Reload it before saving.' }, 409);
+  }
+  const name = body.name === undefined ? row.name : parseSavedPosterName(body.name);
+  if (!name || (body.project !== undefined && !isEditablePosterProject(body.project))) {
+    return context.json({ error: 'Invalid poster update.' }, 400);
+  }
+  const thumbnail = parseSavedPosterThumbnail(body.thumbnail);
+  if (body.thumbnail !== undefined && !thumbnail) return context.json({ error: 'Invalid thumbnail.' }, 400);
+  if (body.project !== undefined) await context.env.PROJECTS.put(row.r2_key, JSON.stringify(body.project), {
+    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+  });
+  const thumbnailKey = thumbnail ? (row.thumbnail_r2_key || `owners/${encodeURIComponent(context.get('ownerId'))}/saved-posters/${id}/thumbnail`) : row.thumbnail_r2_key;
+  if (thumbnail && thumbnailKey) await context.env.PROJECTS.put(thumbnailKey, thumbnail.bytes, {
+    httpMetadata: { contentType: thumbnail.mediaType },
+  });
+  const now = new Date(Math.max(Date.now(), Date.parse(row.updated_at) + 1)).toISOString();
+  await context.env.DB.prepare(
+    'UPDATE saved_posters SET name = ?, thumbnail_r2_key = ?, thumbnail_media_type = ?, updated_at = ? WHERE id = ? AND owner_id = ?',
+  ).bind(name, thumbnailKey, thumbnail?.mediaType ?? row.thumbnail_media_type, now, id, context.get('ownerId')).run();
+  return context.json({ item: { id, name, thumbnail: thumbnailKey ? savedPosterThumbnailUrl(id) : undefined, createdAt: row.created_at, updatedAt: now } });
+});
+
+posterProjectsApp.delete('/api/my-poster-projects/:id', async (context): Promise<Response> => {
+  const id = context.req.param('id');
+  const row = await findSavedPoster(context.env.DB, id, context.get('ownerId'));
+  if (!row) return context.json({ error: 'Poster not found.' }, 404);
+  await context.env.DB.prepare('DELETE FROM saved_posters WHERE id = ? AND owner_id = ?')
+    .bind(id, context.get('ownerId')).run();
+  await context.env.PROJECTS.delete(row.thumbnail_r2_key ? [row.r2_key, row.thumbnail_r2_key] : [row.r2_key]);
+  return context.body(null, 204);
+});
+
+app.route('/', posterProjectsApp);
+
 app.get('/api/projects', async (context) => {
   const ownerId = context.get('ownerId');
   const result = await context.env.DB.prepare(
@@ -1810,6 +1948,49 @@ app.onError((error, context) => {
 
 function posterTemplateThumbnailUrl(id: string): string {
   return `/api/poster-templates/${encodeURIComponent(id)}/thumbnail`;
+}
+
+function savedPosterThumbnailUrl(id: string): string {
+  return `/api/my-poster-projects/${encodeURIComponent(id)}/thumbnail`;
+}
+
+function savedPosterListItem(row: SavedPosterRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    thumbnail: row.thumbnail_r2_key ? savedPosterThumbnailUrl(row.id) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function findSavedPoster(db: D1Database, id: string, ownerId: string): Promise<SavedPosterRow | null> {
+  return db.prepare(
+    'SELECT id, name, r2_key, thumbnail_r2_key, thumbnail_media_type, created_at, updated_at FROM saved_posters WHERE id = ? AND owner_id = ?',
+  ).bind(id, ownerId).first<SavedPosterRow>();
+}
+
+function parseSavedPosterName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const name = value.trim();
+  return name.length > 0 && name.length <= 120 ? name : null;
+}
+
+function isEditablePosterProject(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const project = value as Record<string, unknown>;
+  return Array.isArray(project.elements) &&
+    project.elements.length <= 5000 &&
+    Number.isFinite(project.canvasWidth) && Number(project.canvasWidth) > 0 &&
+    Number.isFinite(project.canvasHeight) && Number(project.canvasHeight) > 0 &&
+    !!project.canvasBackground && typeof project.canvasBackground === 'object';
+}
+
+function parseSavedPosterThumbnail(value: unknown) {
+  if (value === undefined) return null;
+  if (typeof value !== 'string' || value.length > 3_000_000) return null;
+  const parsed = parsePosterTemplateThumbnail(value);
+  return parsed && parsed.bytes.length <= 2_000_000 ? parsed : null;
 }
 
 function parseStoredCategoryInputs(value: string): PosterTemplateCategoryInput[] | null {

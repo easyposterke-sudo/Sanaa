@@ -60,7 +60,7 @@ export async function listMyPosterProjects(params?: {
   const qs = sp.toString();
   const res = await apiFetch(`/api/my-poster-projects${qs ? `?${qs}` : ''}`);
   if (!res.ok) {
-    if (res.status === 401) return { items: [], pagination: { page: 1, limit: 24, total: 0, pages: 0 } };
+    if (res.status === 401) throw new Error('Sign in to view your saved posters.');
     throw new Error(`Failed to load saved posters (${res.status})`);
   }
   const data = (await res.json().catch(() => ({}))) as PaginatedSavedPosterProjects;
@@ -104,14 +104,16 @@ export async function deleteMyPosterProject(id: string): Promise<void> {
   if (!res.ok) throw new Error(data.error || `Delete failed (${res.status})`);
 }
 
-export async function renameMyPosterProject(id: string, name: string): Promise<void> {
+export async function renameMyPosterProject(id: string, name: string): Promise<SavedPosterProjectItem> {
   const res = await apiFetch(`/api/my-poster-projects/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: JSON_HEADERS,
     body: JSON.stringify({ name }),
   });
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  const data = (await res.json().catch(() => ({}))) as { error?: string; item?: SavedPosterProjectItem };
   if (!res.ok) throw new Error(data.error || `Rename failed (${res.status})`);
+  if (!data.item) throw new Error('Invalid response from server');
+  return data.item;
 }
 
 export async function updateMyPosterProject(params: {

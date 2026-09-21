@@ -18,13 +18,12 @@ import { TemplateCreatorWizard } from './TemplateCreatorWizard';
 import { PosterElementAiEditModal } from './PosterElementAiEditModal';
 import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
 import { usePosterStore } from '../store/posterStore';
-import { useAuthStore } from '../../auth/authStore';
+import { apiFetch } from '../../lib/api';
 import { getFabricCanvasRef } from '../canvasRef';
 import { loadPosterProjectFromStorage, savePosterProjectToStorage } from '../posterProjectStorage';
 import { loadPosterProjectFromCloud, savePosterProjectToCloud, savePosterProjectToMyCloud, updateMyPosterProject } from '../services/posterProjectsApi';
 import { syncLinkedUserPosterImagesAfterCloudSave } from '../services/userPosterImagesApi';
-import { resolveBlobUrlsInProject, applyProcessedProjectUrlsToStore } from '../utils/resolveBlobUrlsInProject';
-import { computePosterProjectPatch, patchIsEmpty } from '../utils/projectPatch';
+import { resolveBlobUrlsInProject, applyResolvedBlobUrlsToPosterStore } from '../utils/resolveBlobUrlsInProject';
 import { withFabricExportExclusions } from '../utils/exportPoster';
 import { projectHasBlobImageUrls, warnIfPosterHasBlobRefs } from '../userTemplatesStorage';
 import { removePathAnchorAt } from '../path/penToolMath';
@@ -195,9 +194,35 @@ export function PosterLayout() {
   }, [refreshRemotePosterTemplates]);
 
   const loadProject = usePosterStore((s) => s.loadProject);
-  const user = useAuthStore((s) => s.user);
-  const authReady = true;
+  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const readOnly = false;
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiFetch('/api/health').then(async (response) => {
+      if (!response.ok) return null;
+      const data = await response.json() as { ownerId?: string };
+      return data.ownerId ? { id: data.ownerId } : null;
+    }).catch(() => null).then((account) => {
+      if (cancelled) return;
+      setUser(account);
+      setAuthReady(true);
+      if (account && typeof sessionStorage !== 'undefined') {
+        const savedOwner = sessionStorage.getItem('poster_edit_my_project_owner');
+        if (savedOwner !== account.id) {
+          if (sessionStorage.getItem('poster_skip_restore')) {
+            sessionStorage.setItem('poster_edit_my_project_owner', account.id);
+          } else {
+            sessionStorage.removeItem('poster_edit_my_project_id');
+            sessionStorage.removeItem('poster_edit_my_project_updated_at');
+            sessionStorage.setItem('poster_edit_my_project_owner', account.id);
+          }
+        }
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Load auto-saved project when opening editor (cloud if logged in, else localStorage; skip if editing a template)
   useEffect(() => {
@@ -382,27 +407,35 @@ export function PosterLayout() {
   }, [user, cloudDirty]);
 
   const [savingToCloud, setSavingToCloud] = useState(false);
-  const handleSaveToCloud = useCallback(async () => {
+  const [saveNameOpen, setSaveNameOpen] = useState(false);
+  const [saveName, setSaveName] = useState('Untitled poster');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const handleSaveToCloud = useCallback(async (newName?: string) => {
     if (!user) return;
     setSavingToCloud(true);
+    setSaveError(null);
     try {
-      const baselineBeforeSave = lastCloudSaveRef.current;
       const project = usePosterStore.getState().getProject();
       const toSave = projectHasBlobImageUrls(project)
         ? await resolveBlobUrlsInProject(project)
         : project;
       const processed = await savePosterProjectToCloud(toSave);
-      applyProcessedProjectUrlsToStore(processed);
+      applyResolvedBlobUrlsToPosterStore(processed);
       void syncLinkedUserPosterImagesAfterCloudSave(processed).catch(() => {});
 
       // Also save a private snapshot to "My stuff" (per-user library)
       try {
         const fabric = getFabricCanvasRef();
-        const thumb = fabric
-          ? withFabricExportExclusions(fabric, () =>
+        let thumb: string | undefined;
+        if (fabric) {
+          try {
+            thumb = withFabricExportExclusions(fabric, () =>
               fabric.toDataURL({ format: 'webp', multiplier: 0.35, quality: 0.8 }),
-            )
-          : undefined;
+            );
+          } catch (error) {
+            console.warn('Poster preview could not be captured:', error);
+          }
+        }
         const editId =
           typeof sessionStorage !== 'undefined'
             ? sessionStorage.getItem('poster_edit_my_project_id')
@@ -412,75 +445,49 @@ export function PosterLayout() {
             ? sessionStorage.getItem('poster_edit_my_project_updated_at')
             : null;
         if (editId) {
-          let updated: Awaited<ReturnType<typeof updateMyPosterProject>> | undefined;
-          if (baselineBeforeSave) {
-            const patch = computePosterProjectPatch(baselineBeforeSave, processed);
-            if (!patchIsEmpty(patch)) {
-              try {
-                updated = await updateMyPosterProject({
-                  id: editId,
-                  patch,
-                  thumbnail: thumb,
-                  ifUnmodifiedSince: editUpdatedAt || undefined,
-                });
-              } catch (patchErr) {
-                const msg = patchErr instanceof Error ? patchErr.message : String(patchErr ?? '');
-                const blobStale = msg.includes('blob:') || msg.includes('browser-only');
-                if (!blobStale) throw patchErr;
-                updated = await updateMyPosterProject({
-                  id: editId,
-                  project: processed,
-                  thumbnail: thumb,
-                  ifUnmodifiedSince: editUpdatedAt || undefined,
-                });
-              }
-            } else {
-              // Patch diff empty (e.g. rare stringify edge) but user still saved — refresh snapshot + thumbnail.
-              updated = await updateMyPosterProject({
-                id: editId,
-                project: processed,
-                thumbnail: thumb,
-                ifUnmodifiedSince: editUpdatedAt || undefined,
-              });
-            }
-          } else {
-            // No baseline means we cannot build a trustworthy diff. Send full project so
-            // "My stuff" never misses changes (including flip state) on this save.
-            updated = await updateMyPosterProject({
-              id: editId,
-              project: processed,
-              thumbnail: thumb,
-              ifUnmodifiedSince: editUpdatedAt || undefined,
-            });
-          }
-          // Refresh conflict guard timestamp for next save when we performed an update.
-          if (updated && typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem('poster_edit_my_project_updated_at', updated.updatedAt ?? '');
-          }
+          const updated = await updateMyPosterProject({
+            id: editId,
+            project: processed,
+            thumbnail: thumb,
+            ifUnmodifiedSince: editUpdatedAt || undefined,
+          });
+          if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('poster_edit_my_project_updated_at', updated.updatedAt ?? '');
         } else {
           const created = await savePosterProjectToMyCloud({
-            name: `Poster ${new Date().toLocaleString()}`,
+            name: newName?.trim() || 'Untitled poster',
             project: processed,
             thumbnail: thumb,
           });
           if (typeof sessionStorage !== 'undefined') {
             sessionStorage.setItem('poster_edit_my_project_id', created.id);
             sessionStorage.setItem('poster_edit_my_project_updated_at', created.updatedAt ?? '');
+            sessionStorage.setItem('poster_edit_my_project_owner', user.id);
           }
         }
       } catch (err) {
         console.error('Failed to update "My stuff" snapshot:', err);
-        alert('Your project was auto-saved, but we could not update the "My stuff" snapshot. Please try again.');
+        setSaveError(err instanceof Error ? err.message : 'Your poster could not be saved.');
         return; // Keep dirty if My stuff failed
       }
 
       // Set baseline to current after successful save(s)
       lastCloudSaveRef.current = usePosterStore.getState().getProject();
-      setCloudDirty(false);
+      setCloudDirty(JSON.stringify(lastCloudSaveRef.current) !== JSON.stringify(processed));
+      setSaveNameOpen(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Your poster could not be saved.');
     } finally {
       setSavingToCloud(false);
     }
   }, [user]);
+
+  const requestCloudSave = useCallback(() => {
+    if (sessionStorage.getItem('poster_edit_my_project_id')) {
+      void handleSaveToCloud();
+    } else {
+      setSaveNameOpen(true);
+    }
+  }, [handleSaveToCloud]);
 
   const handleCanvasSizeSelect = (width: number, height: number) => {
     setCanvasSize(width, height);
@@ -802,6 +809,26 @@ export function PosterLayout() {
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden overscroll-none bg-zinc-100 dark:bg-zinc-950">
+      {saveError && (
+        <div role="alert" className="fixed bottom-4 left-1/2 z-[210] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-lg dark:border-red-800 dark:bg-red-950 dark:text-red-100">
+          <span>Save failed: {saveError}</span>
+          <button type="button" onClick={() => setSaveError(null)} aria-label="Dismiss save error" className="font-semibold">×</button>
+        </div>
+      )}
+      {saveNameOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
+          <form className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-900" onSubmit={(event) => { event.preventDefault(); if (saveName.trim()) void handleSaveToCloud(saveName); }}>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Save poster</h2>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">It will appear in My Stuff with a preview.</p>
+            <label className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="poster-save-name">Name</label>
+            <input id="poster-save-name" autoFocus maxLength={120} value={saveName} onChange={(event) => setSaveName(event.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={savingToCloud} onClick={() => setSaveNameOpen(false)} className="rounded-lg px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">Cancel</button>
+              <button type="submit" disabled={savingToCloud || !saveName.trim()} className="rounded-lg bg-accent-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{savingToCloud ? 'Saving…' : 'Save'}</button>
+            </div>
+          </form>
+        </div>
+      )}
       {autosaveError && (
         <div
           role="alert"
@@ -822,7 +849,7 @@ export function PosterLayout() {
         <PosterTopBar
           readOnly={readOnly}
           onOpenCanvasSize={() => setShowCanvasSizeModal(true)}
-          onSaveToCloud={user ? handleSaveToCloud : undefined}
+          onSaveToCloud={user ? requestCloudSave : undefined}
           cloudDirty={cloudDirty}
           savingToCloud={savingToCloud}
           leftSidebarOpen={leftOpen}

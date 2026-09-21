@@ -12,6 +12,9 @@ const TemplateManagementPage = lazy(() =>
     default: m.TemplateManagementPage,
   }))
 );
+const MyStuffPage = lazy(() =>
+  import('./poster/components/MyStuffPage').then((m) => ({ default: m.MyStuffPage }))
+);
 function LoadingFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 dark:bg-zinc-950">
@@ -33,6 +36,8 @@ function App() {
         <AppLayout />
       ) : pathname === '/poster/templates' ? (
         <TemplateManagementPage />
+      ) : pathname === '/poster/my' ? (
+        <MyStuffPage />
       ) : (
         <PosterLayout />
       )}

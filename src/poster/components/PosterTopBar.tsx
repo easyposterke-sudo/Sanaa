@@ -303,6 +303,16 @@ export function PosterTopBar({
           <span className="font-mono text-xs">{canvasWidth}×{canvasHeight}</span>
         </button>
       )}
+      <Link
+        to="/poster/my"
+        onClick={(event) => {
+          if (cloudDirty && !window.confirm('Your latest changes are not saved to My Stuff. Continue?')) event.preventDefault();
+        }}
+        className="rounded px-2 py-1 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        title="View your saved posters"
+      >
+        My Stuff
+      </Link>
 
       {onOpenAiEdit && (
         <button

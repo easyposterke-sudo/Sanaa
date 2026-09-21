@@ -17,7 +17,7 @@
     "cf:typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "cloudflare:deploy": "wrangler deploy && wrangler d1 migrations apply DB --remote",
+    "cloudflare:deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy",
     "deploy": "npm run build && npm run cloudflare:deploy"
   },
   "dependencies": {
