@@ -47,13 +47,16 @@ npm install
 npm run dev -- --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:5173/`. The root redirects to the poster editor.
+Apply the local D1 migrations with `npm run db:migrate:local`, then open
+`http://127.0.0.1:5173/`. The root is a public homepage; create an account
+with email and password, then choose **Create from a reference** to upload a
+poster and open its editable draft.
 The standalone 3D editor is also available at
 `http://127.0.0.1:5173/#/3d`.
 
 Local poster creation, 3D editing, uploads, JSON files, browser exports, and the
-built-in AI-workflow fallback do not require an OpenAI key. Apply the local D1
-migrations before testing the paid/cached planner path.
+built-in AI-workflow fallback do not require an OpenAI key. Account registration
+and sign-in require the D1 migration even when using the no-key fallback.
 
 ## Record a design process
 
@@ -134,10 +137,17 @@ objects-and-products model inside a browser worker. It does not use an API key
 or spend a Remove.bg credit. The first run downloads the pinned 4.6 MB model;
 the browser cache makes later runs faster.
 
-Before enabling project/AI APIs for users, protect `/api/*` with Cloudflare
-Access and make sure an unprotected `workers.dev` hostname cannot bypass that
-policy. The production API trusts Cloudflare Access's authenticated email
-header.
+The public homepage, `/api/auth/*`, and signed-in project/AI APIs must be
+reachable without a Cloudflare Access prompt. The Worker authenticates user
+API calls with its own D1-backed bearer sessions; it no longer trusts the
+`cf-access-authenticated-user-email` or development owner header. Keep
+Cloudflare Access only on a separate admin-only hostname or narrowly scoped
+admin path, and verify that public routes are not covered by a broad Access
+application. Cloudflare Access application policies are configured in the
+Cloudflare dashboard, outside this repository. Do not expose an admin route
+based on an unverified identity header. Google sign-in, email verification,
+password reset, and account migration from earlier Access identities are not
+part of this initial email/password release.
 
 ## Cloudflare storage bindings
 

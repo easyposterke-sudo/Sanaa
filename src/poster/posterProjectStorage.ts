@@ -15,18 +15,18 @@ function safeParse(json: string): PosterProject | null {
 }
 
 /** Load the auto-saved poster project from localStorage, or null if none or invalid. */
-export function loadPosterProjectFromStorage(): PosterProject | null {
+export function loadPosterProjectFromStorage(ownerId?: string): PosterProject | null {
   if (typeof localStorage === 'undefined') return null;
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = localStorage.getItem(ownerId ? `${STORAGE_KEY}:${ownerId}` : STORAGE_KEY);
   if (!raw) return null;
   return safeParse(raw);
 }
 
 /** Save the poster project to localStorage. Returns false when the browser rejects it (for example quota exceeded). */
-export function savePosterProjectToStorage(project: PosterProject): boolean {
+export function savePosterProjectToStorage(project: PosterProject, ownerId?: string): boolean {
   if (typeof localStorage === 'undefined') return false;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
+    localStorage.setItem(ownerId ? `${STORAGE_KEY}:${ownerId}` : STORAGE_KEY, JSON.stringify(project));
     return true;
   } catch {
     return false;

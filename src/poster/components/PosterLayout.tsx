@@ -19,6 +19,7 @@ import { PosterElementAiEditModal } from './PosterElementAiEditModal';
 import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
 import { usePosterStore } from '../store/posterStore';
 import { apiFetch } from '../../lib/api';
+import { useAuthStore } from '../../auth/authStore';
 import { getFabricCanvasRef } from '../canvasRef';
 import { loadPosterProjectFromStorage, savePosterProjectToStorage } from '../posterProjectStorage';
 import { loadPosterProjectFromCloud, savePosterProjectToCloud, savePosterProjectToMyCloud, updateMyPosterProject } from '../services/posterProjectsApi';
@@ -110,6 +111,14 @@ export function PosterLayout() {
   const [templateCreatorOpen, setTemplateCreatorOpen] = useState(false);
   const [templateCreatorMode, setTemplateCreatorMode] = useState<'template' | 'poster'>('template');
   const [showCanvasSizeModal, setShowCanvasSizeModal] = useState(false);
+
+  useEffect(() => {
+    if (!(location.state as { openReferenceCreator?: boolean } | undefined)?.openReferenceCreator) return;
+    setTemplateCreatorMode('poster');
+    setTemplateCreatorOpen(true);
+    setShowCanvasSizeModal(false);
+    navigate('/poster', { replace: true, state: {} });
+  }, [location.state, navigate]);
   const [templateAuthoring, setTemplateAuthoring] = useState<TemplateAuthoringState | null>(null);
   const [saveTemplateModalOpen, setSaveTemplateModalOpen] = useState(false);
   const [labelTargetId, setLabelTargetId] = useState<string | null>(null);
@@ -211,6 +220,12 @@ export function PosterLayout() {
       if (account && typeof sessionStorage !== 'undefined') {
         const savedOwner = sessionStorage.getItem('poster_edit_my_project_owner');
         if (savedOwner !== account.id) {
+          if (savedOwner) {
+            usePosterStore.getState().loadProject({
+              elements: [], canvasWidth: 800, canvasHeight: 600,
+              canvasBackground: { type: 'solid', color: '#ffffff' },
+            });
+          }
           if (sessionStorage.getItem('poster_skip_restore')) {
             sessionStorage.setItem('poster_edit_my_project_owner', account.id);
           } else {
@@ -284,7 +299,7 @@ export function PosterLayout() {
         }
         lastCloudSaveRef.current = null;
         if (!cancelled) {
-          const saved = loadPosterProjectFromStorage();
+          const saved = loadPosterProjectFromStorage(user?.id);
           if (saved && saved.elements.length > 0) {
             loadProject(saved);
             warnIfPosterHasBlobRefs(saved);
@@ -333,6 +348,7 @@ export function PosterLayout() {
 
   // Show canvas size modal when starting with empty canvas (not while tab-reload autosave is still loading)
   useEffect(() => {
+    if ((location.state as { openReferenceCreator?: boolean } | undefined)?.openReferenceCreator) return;
     const willRestoreAutosave =
       typeof sessionStorage !== 'undefined' &&
       sessionStorage.getItem(POSTER_RESTORE_AUTOSAVE_AFTER_RELOAD_KEY) === '1';
@@ -356,7 +372,7 @@ export function PosterLayout() {
         const baseline = coldAutosaveBaselineRef.current;
         if (sameProjectSnapshot(baseline, project)) return;
         if (baseline !== null) coldAutosaveBaselineRef.current = null;
-        setAutosaveError(!savePosterProjectToStorage(project));
+        setAutosaveError(!savePosterProjectToStorage(project, useAuthStore.getState().user?.id));
       }, 1000);
     });
     return () => {
@@ -1043,6 +1059,7 @@ export function PosterLayout() {
       <TemplateCreatorWizard
         open={templateCreatorOpen}
         mode={templateCreatorMode}
+        referenceOnly
         onClose={() => setTemplateCreatorOpen(false)}
         onApply={(compiled) => {
           if (templateCreatorMode === 'poster') {

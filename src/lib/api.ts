@@ -127,9 +127,6 @@ export async function apiFetch(
   const headers: HeadersInit = {
     ...(requestOptions.headers as Record<string, string>),
   };
-  if (import.meta.env.DEV && !(headers as Record<string, string>)['x-easyposter-owner']) {
-    (headers as Record<string, string>)['x-easyposter-owner'] = 'local-user@easyposter.test';
-  }
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
@@ -147,9 +144,6 @@ export async function apiFetch(
       const retryHeaders: HeadersInit = {
         ...(requestOptions.headers as Record<string, string>),
       };
-      if (import.meta.env.DEV && !(retryHeaders as Record<string, string>)['x-easyposter-owner']) {
-        (retryHeaders as Record<string, string>)['x-easyposter-owner'] = 'local-user@easyposter.test';
-      }
       if (newToken) {
         (retryHeaders as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
       }

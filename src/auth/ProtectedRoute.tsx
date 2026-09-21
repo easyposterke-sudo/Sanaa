@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './authStore';
 
@@ -7,12 +6,8 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, initState, init } = useAuthStore();
+  const { user, initState } = useAuthStore();
   const location = useLocation();
-
-  useEffect(() => {
-    void init();
-  }, [init]);
 
   if (initState === 'loading' || initState === 'idle') {
     return (

@@ -7,13 +7,14 @@ export function LoginPage() {
   const initState = useAuthStore((s) => s.initState);
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/poster';
+  const from = (location.state as { from?: { pathname: string; state?: unknown } })?.from;
+  const destination = from?.pathname || '/poster';
 
   useEffect(() => {
     if (initState === 'ready' && user) {
-      navigate(from, { replace: true });
+      navigate(destination, { replace: true, state: from?.state });
     }
-  }, [initState, user, navigate, from]);
+  }, [initState, user, navigate, destination, from?.state]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -31,7 +32,7 @@ export function LoginPage() {
         setError(result.error);
         return;
       }
-      navigate(from, { replace: true });
+      navigate(destination, { replace: true, state: from?.state });
     } finally {
       setLoading(false);
     }
@@ -94,7 +95,7 @@ export function LoginPage() {
         </form>
         <p className="mt-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Don&apos;t have an account?{' '}
-          <Link to="/signup" className="font-medium text-accent-600 hover:underline dark:text-accent-400">
+          <Link to="/signup" state={location.state} className="font-medium text-accent-600 hover:underline dark:text-accent-400">
             Sign up
           </Link>
         </p>

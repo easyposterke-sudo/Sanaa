@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './authStore';
 
 export function SignupPage() {
   const user = useAuthStore((s) => s.user);
   const initState = useAuthStore((s) => s.initState);
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: { pathname: string; state?: unknown } })?.from;
+  const destination = from?.pathname || '/poster';
 
   useEffect(() => {
     if (initState === 'ready' && user) {
-      navigate('/poster', { replace: true });
+      navigate(destination, { replace: true, state: from?.state });
     }
-  }, [initState, user, navigate]);
+  }, [initState, user, navigate, destination, from?.state]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -41,7 +44,7 @@ export function SignupPage() {
         setError(result.error);
         return;
       }
-      navigate('/poster', { replace: true });
+      navigate(destination, { replace: true, state: from?.state });
     } finally {
       setLoading(false);
     }
@@ -122,7 +125,7 @@ export function SignupPage() {
         </form>
         <p className="mt-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-accent-600 hover:underline dark:text-accent-400">
+          <Link to="/login" state={location.state} className="font-medium text-accent-600 hover:underline dark:text-accent-400">
             Sign in
           </Link>
         </p>

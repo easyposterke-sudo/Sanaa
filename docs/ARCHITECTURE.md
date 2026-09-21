@@ -77,7 +77,9 @@ called by the editor. See `AI_POSTER_WORKFLOW.md`.
 D1/R2 routes and migrations store projects, recordings, assets, cached AI
 plans, and usage counters. Local creative work does not depend on remote
 Cloudflare storage. Production deployment still requires real binding IDs,
-Cloudflare Access, migrations, the OpenAI secret, and environment configuration.
+the user-auth migration, the OpenAI secret, and environment configuration.
+Cloudflare Access is reserved for a separately protected admin surface; the
+public user APIs require D1-backed email/password sessions.
 
 Large export remains a separate production concern. Very large multipliers
 should ultimately use a queued Cloudflare container renderer with D1 job state

@@ -1,5 +1,11 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { HomePage } from './HomePage';
+import { LoginPage } from './auth/LoginPage';
+import { SignupPage } from './auth/SignupPage';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { useAuthStore } from './auth/authStore';
 
 const AppLayout = lazy(() =>
   import('./components/layout/AppLayout').then((m) => ({ default: m.AppLayout }))
@@ -25,13 +31,19 @@ function LoadingFallback() {
 
 function App() {
   const { pathname } = useLocation();
+  const init = useAuthStore((state) => state.init);
+
+  useEffect(() => { void init(); }, [init]);
 
   if (pathname === '/' || pathname === '') {
-    return <Navigate to="/poster" replace />;
+    return <HomePage />;
   }
 
+  if (pathname === '/login') return <LoginPage />;
+  if (pathname === '/signup') return <SignupPage />;
+
   return (
-    <Suspense fallback={<LoadingFallback />}>
+    <ProtectedRoute><Suspense fallback={<LoadingFallback />}>
       {pathname === '/3d' ? (
         <AppLayout />
       ) : pathname === '/poster/templates' ? (
@@ -41,7 +53,7 @@ function App() {
       ) : (
         <PosterLayout />
       )}
-    </Suspense>
+    </Suspense></ProtectedRoute>
   );
 }
 

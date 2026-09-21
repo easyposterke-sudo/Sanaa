@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { UserMenu } from '../../auth/UserMenu';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { usePosterStore } from '../store/posterStore';
 import { getFabricCanvasRef } from '../canvasRef';
@@ -329,6 +330,8 @@ export function PosterTopBar({
           <span className="sm:hidden" aria-hidden>AI ✦</span>
         </button>
       )}
+
+      <UserMenu compactUntilMd />
 
       {/* Zoom controls */}
       <div className="hidden items-center gap-0.5 md:flex">

@@ -94,10 +94,11 @@ export function Navigate({ to, replace, state }: NavigateProps) {
 
 interface LinkProps extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> {
   to: string;
+  state?: unknown;
   children?: ReactNode;
 }
 
-export function Link({ to, onClick, target, children, ...props }: LinkProps) {
+export function Link({ to, state, onClick, target, children, ...props }: LinkProps) {
   const navigate = useNavigate();
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -115,7 +116,7 @@ export function Link({ to, onClick, target, children, ...props }: LinkProps) {
     }
 
     event.preventDefault();
-    navigate(to);
+    navigate(to, { state });
   };
 
   return (

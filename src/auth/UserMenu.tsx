@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from './authStore';
 
 interface UserMenuProps {
@@ -10,6 +10,7 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ compact = false, compactUntilMd = false }: UserMenuProps) {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const isAdmin = useAuthStore((s) => s.isAdmin());
@@ -111,11 +112,11 @@ export function UserMenu({ compact = false, compactUntilMd = false }: UserMenuPr
               Manage poster templates
             </Link>
             <Link
-              to="/"
+              to="/poster"
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
             >
-              3D Text Editor
+              Poster editor
             </Link>
           </div>
           <div className="border-t border-zinc-100 py-1 dark:border-zinc-700">
@@ -124,6 +125,7 @@ export function UserMenu({ compact = false, compactUntilMd = false }: UserMenuPr
               onClick={() => {
                 setOpen(false);
                 logout();
+                navigate('/');
               }}
               className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
             >

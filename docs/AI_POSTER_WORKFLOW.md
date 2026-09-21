@@ -87,8 +87,10 @@ The Worker keeps `OPENAI_MODEL`, `MAX_AI_REQUEST_BYTES`, and
 an encrypted Worker secret. Reconstruction plans and usage counters are stored
 in D1; reference pixels are not persisted by the AI route.
 
-Before production exposure, protect `/api/*` with Cloudflare Access and avoid
-an unprotected `workers.dev` bypass. The production identity boundary trusts
-Cloudflare Access's authenticated email header.
+The public site uses email/password accounts backed by D1. Project and AI
+routes require a bearer session; the Worker does not trust an Access email
+header for user identity. Cloudflare Access should be scoped to a separate
+admin-only surface, not the homepage, account endpoints, or user APIs. Apply
+the D1 migrations before enabling sign-up.
 
 The reference library also contains Conference 001, annotated independently. It is excluded from the Church Service selector and automatic pool until a conference workflow is added.

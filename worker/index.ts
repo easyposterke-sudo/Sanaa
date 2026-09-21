@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { findAccount, login, logout, refreshSession, signup } from './auth';
 import {
   POSTER_RECONSTRUCTION_PROMPT_VERSION,
   POSTER_RECONSTRUCTION_SCHEMA_VERSION,
@@ -159,17 +160,13 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('/api/*', async (context, next) => {
   const requestId = crypto.randomUUID();
   context.set('requestId', requestId);
-  const developmentMode = String(context.env.APP_ENV) === 'development';
-  const accessIdentity = context.req.header('cf-access-authenticated-user-email');
-  const developmentHeader = developmentMode
-    ? context.req.header('x-easyposter-owner')
-    : undefined;
-  const developmentIdentity =
-    developmentHeader ||
-    (developmentMode
-      ? readCookie(context.req.header('cookie'), 'easyposter_dev_owner')
-      : undefined);
-  const ownerId = accessIdentity || developmentIdentity;
+  context.header('cache-control', 'no-store');
+  if (context.req.path.startsWith('/api/auth/')) {
+    await next();
+    return;
+  }
+  const user = await findAccount(context.env.DB, context.req.header('authorization'));
+  const ownerId = user?.id;
 
   if (!ownerId) {
     return context.json(
@@ -182,13 +179,62 @@ app.use('/api/*', async (context, next) => {
   }
 
   context.set('ownerId', ownerId);
-  if (developmentMode && developmentHeader) {
-    context.header(
-      'set-cookie',
-      `easyposter_dev_owner=${encodeURIComponent(developmentHeader)}; Path=/; HttpOnly; SameSite=Strict`,
-    );
-  }
   await next();
+});
+
+async function authBody(context: { req: { header: (name: string) => string | undefined; raw: Request } }) {
+  if (Number(context.req.header('content-length') || 0) > 4096) return null;
+  try {
+    const reader = context.req.raw.body?.getReader();
+    if (!reader) return null;
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > 4096) { await reader.cancel(); return null; }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const body: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    return body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : null;
+  } catch { return null; }
+}
+
+app.post('/api/auth/signup', async (context) => {
+  const body = await authBody(context);
+  if (!body || typeof body.email !== 'string' || typeof body.password !== 'string' || (body.name !== undefined && typeof body.name !== 'string')) return context.json({ error: 'Invalid account details.' }, 400);
+  const result = await signup(context.env.DB, body.email, body.password, body.name as string || '');
+  if ('error' in result) return context.json({ error: result.error }, result.status);
+  return context.json(result, 201);
+});
+
+app.post('/api/auth/login', async (context) => {
+  const body = await authBody(context);
+  if (!body || typeof body.email !== 'string' || typeof body.password !== 'string') return context.json({ error: 'Invalid email or password.' }, 400);
+  const result = await login(context.env.DB, body.email, body.password, context.req.header('cf-connecting-ip') || 'unknown');
+  if ('error' in result) return context.json({ error: result.error }, result.status);
+  return context.json(result);
+});
+
+app.get('/api/auth/me', async (context) => {
+  const user = await findAccount(context.env.DB, context.req.header('authorization'));
+  return user ? context.json({ user }) : context.json({ error: 'Authentication required.' }, 401);
+});
+
+app.post('/api/auth/refresh', async (context) => {
+  const body = await authBody(context);
+  const result = body && typeof body.refreshToken === 'string' ? await refreshSession(context.env.DB, body.refreshToken) : null;
+  return result ? context.json(result) : context.json({ error: 'Session expired.' }, 401);
+});
+
+app.post('/api/auth/logout', async (context) => {
+  const body = await authBody(context);
+  if (body && typeof body.refreshToken === 'string') await logout(context.env.DB, body.refreshToken);
+  return context.json({ ok: true });
 });
 
 app.get('/api/health', (context) =>
@@ -2396,24 +2442,6 @@ function cleanFileName(value: string): string {
     // Preserve the original header value when it is not percent encoded.
   }
   return decoded.replace(/[^\p{L}\p{N}_.\- ]+/gu, '_').slice(0, 180) || 'asset';
-}
-
-function readCookie(
-  cookieHeader: string | undefined,
-  name: string,
-): string | undefined {
-  if (!cookieHeader) return undefined;
-  for (const entry of cookieHeader.split(';')) {
-    const separator = entry.indexOf('=');
-    if (separator < 0) continue;
-    if (entry.slice(0, separator).trim() !== name) continue;
-    try {
-      return decodeURIComponent(entry.slice(separator + 1).trim());
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
 }
 
 export default app;
