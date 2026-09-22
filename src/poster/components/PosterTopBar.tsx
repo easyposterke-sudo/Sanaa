@@ -65,12 +65,14 @@ export function PosterTopBar({
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!exportOpen) return;
     const handleClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node) && !mobileMenuRef.current?.contains(e.target as Node)) {
         setExportOpen(false);
       }
     };
@@ -78,11 +80,34 @@ export function PosterTopBar({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [exportOpen]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false);
+        setExportOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [mobileMenuOpen]);
+
   const handleExport = useCallback(async (scale: number = 2) => {
     setExporting(true);
     setExportError(null);
     setExportProgress('preparing');
     setExportOpen(false);
+    setMobileMenuOpen(false);
     try {
       const fabricCanvas = getFabricCanvasRef();
       if (!fabricCanvas) throw new Error('The poster canvas is not ready yet.');
@@ -112,6 +137,7 @@ export function PosterTopBar({
       const message = error instanceof Error ? error.message : 'The poster could not be exported.';
       console.error('Poster export failed:', error);
       setExportError(message);
+      if (window.matchMedia('(max-width: 1023px)').matches) setMobileMenuOpen(true);
     } finally {
       setExporting(false);
       setExportProgress(null);
@@ -190,7 +216,7 @@ export function PosterTopBar({
   );
 
   return (
-    <header className="flex h-20 shrink-0 flex-wrap items-center gap-x-1 gap-y-1 border-b border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-2 sm:px-3 xl:h-12 xl:flex-nowrap xl:py-0">
+    <header className="flex h-12 shrink-0 items-center gap-x-1 border-b border-zinc-200 bg-white px-2 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-2 sm:px-3 lg:h-20 lg:flex-wrap lg:gap-y-1 lg:py-1 xl:h-12 xl:flex-nowrap xl:py-0">
       {/* ── Sidebar toggles (mobile/tablet) ── */}
       {onToggleLeftSidebar && (
         <button
@@ -257,7 +283,7 @@ export function PosterTopBar({
       <div className="order-2 hidden h-4 w-px bg-zinc-200 dark:bg-zinc-700 lg:block xl:order-none" />
       <button
         onClick={guard(handleNewProject)}
-        className="order-2 whitespace-nowrap rounded px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:text-sm xl:order-none"
+        className="order-1 whitespace-nowrap rounded px-1.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:text-sm lg:order-2 lg:px-2 xl:order-none"
         title="Start a new blank project"
       >
         New
@@ -283,7 +309,7 @@ export function PosterTopBar({
           type="button"
           onClick={onSaveToCloud}
           disabled={savingToCloud}
-          className={`order-2 whitespace-nowrap rounded px-2 py-1 text-xs font-medium sm:text-sm xl:order-none ${
+          className={`order-1 whitespace-nowrap rounded px-1.5 py-1 text-xs font-medium sm:text-sm lg:order-2 lg:px-2 xl:order-none ${
             cloudDirty
               ? 'bg-accent-600 text-white hover:bg-accent-500'
               : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
@@ -309,7 +335,7 @@ export function PosterTopBar({
         onClick={(event) => {
           if (cloudDirty && !window.confirm('Your latest changes are not saved to My Stuff. Continue?')) event.preventDefault();
         }}
-        className="order-2 whitespace-nowrap rounded px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:text-sm xl:order-none"
+        className="order-2 hidden whitespace-nowrap rounded px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 lg:block xl:order-none"
         title="View your saved posters"
       >
         My Stuff
@@ -321,7 +347,7 @@ export function PosterTopBar({
           onClick={guard(onOpenAiEdit)}
           disabled={!canOpenAiEdit}
           aria-label="Edit selected layer with AI"
-          className="order-2 whitespace-nowrap rounded bg-violet-600 px-2 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 sm:px-2.5 sm:text-sm xl:order-none dark:disabled:bg-zinc-800"
+          className="order-2 hidden whitespace-nowrap rounded bg-violet-600 px-2 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 sm:px-2.5 sm:text-sm lg:block xl:order-none dark:disabled:bg-zinc-800"
           title={canOpenAiEdit
             ? 'Edit only the selected layer by comparing it with the original reference'
             : 'Select one unlocked layer from a reconstructed poster'}
@@ -331,7 +357,7 @@ export function PosterTopBar({
         </button>
       )}
 
-      <div className="order-2 ml-auto xl:order-none xl:ml-0"><UserMenu compactUntilMd /></div>
+      <div className="order-2 ml-auto hidden lg:block xl:order-none xl:ml-0"><UserMenu compactUntilMd /></div>
 
       {/* Zoom controls */}
       <div className="order-1 hidden items-center gap-0.5 lg:flex xl:order-none">
@@ -362,9 +388,9 @@ export function PosterTopBar({
       {/* Spacer */}
       <div className="order-1 flex-1 xl:order-none" />
 
-      <div className="order-1 xl:order-none"><ThemeToggle size="md" /></div>
+      <div className="order-1 xl:order-none"><ThemeToggle size="sm" /></div>
 
-      <div className="relative order-1 xl:order-none" ref={exportMenuRef}>
+      <div className="relative order-1 hidden lg:block xl:order-none" ref={exportMenuRef}>
         <button
           onClick={guard(() => setExportOpen((o) => !o))}
           disabled={exporting}
@@ -435,7 +461,78 @@ export function PosterTopBar({
         )}
       </div>
 
-      <div className="order-1 basis-full xl:hidden" aria-hidden="true" />
+      <div className="relative order-1 lg:hidden" ref={mobileMenuRef}>
+        <button
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen((open) => !open);
+            setExportOpen(false);
+          }}
+          aria-label="Editor menu"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="poster-mobile-menu"
+          className="rounded border border-zinc-200 p-1.5 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        {mobileMenuOpen && (
+          <div id="poster-mobile-menu" className="absolute right-0 top-full z-[60] mt-2 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-zinc-200 bg-white p-2 text-sm shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-2 pb-2 dark:border-zinc-700">
+              <span className="font-medium text-zinc-700 dark:text-zinc-200">Profile</span>
+              <UserMenu />
+            </div>
+            <button
+              type="button"
+              onClick={() => setExportOpen((open) => !open)}
+              disabled={exporting}
+              aria-expanded={exportOpen}
+              className="mt-1 flex w-full items-center justify-between rounded px-2 py-2 text-left font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              {exporting ? 'Exporting…' : 'Export PNG'} <span aria-hidden="true">{exportOpen ? '⌃' : '⌄'}</span>
+            </button>
+            {exportOpen && exportOptions.map(({ scale, label, plan }) => (
+              <button
+                key={scale}
+                type="button"
+                onClick={guard(() => void handleExport(scale))}
+                disabled={!plan.safe}
+                title={plan.reason}
+                className="block w-full rounded px-4 py-2 text-left text-xs text-zinc-600 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-45 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                {label} · {scale}×
+              </button>
+            ))}
+            <Link
+              to="/poster/my"
+              onClick={(event) => {
+                if (cloudDirty && !window.confirm('Your latest changes are not saved to My Stuff. Continue?')) event.preventDefault();
+                else setMobileMenuOpen(false);
+              }}
+              className="block rounded px-2 py-2 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              My Stuff
+            </Link>
+            {onOpenAiEdit && (
+              <button
+                type="button"
+                onClick={guard(() => {
+                  onOpenAiEdit();
+                  setMobileMenuOpen(false);
+                })}
+                disabled={!canOpenAiEdit}
+                className="w-full rounded px-2 py-2 text-left text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Edit selected layer with AI
+              </button>
+            )}
+            {exportError && <p role="alert" className="px-2 py-2 text-xs text-red-600 dark:text-red-300">{exportError}</p>}
+          </div>
+        )}
+      </div>
+
+      <div className="order-1 hidden basis-full lg:block xl:hidden" aria-hidden="true" />
 
     </header>
   );
