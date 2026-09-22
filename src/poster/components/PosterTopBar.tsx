@@ -190,13 +190,13 @@ export function PosterTopBar({
   );
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-zinc-200 bg-white px-2 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-2 sm:px-3">
+    <header className="flex h-20 shrink-0 flex-wrap items-center gap-x-1 gap-y-1 border-b border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900 sm:gap-2 sm:px-3 xl:h-12 xl:flex-nowrap xl:py-0">
       {/* ── Sidebar toggles (mobile/tablet) ── */}
       {onToggleLeftSidebar && (
         <button
           type="button"
           onClick={onToggleLeftSidebar}
-          className={`rounded p-1.5 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 lg:hidden ${leftSidebarOpen ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
+          className={`order-1 rounded p-1.5 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 lg:hidden ${leftSidebarOpen ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
           title="Toggle left panel"
           aria-label="Toggle left panel"
         >
@@ -209,7 +209,7 @@ export function PosterTopBar({
       {/* ── Home link ── */}
       <Link
         to="/"
-        className="hidden rounded p-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:block"
+        className="order-1 hidden rounded p-1.5 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 lg:block xl:order-none"
         title="Go to Home"
       >
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -220,20 +220,20 @@ export function PosterTopBar({
       {/* ── Back to 3D (icon on mobile, text on sm+) ── */}
       <Link
         to="/3d"
-        className="hidden rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 sm:block"
+        className="order-1 hidden rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 lg:block xl:order-none"
         title="Go to 3D Text Editor"
       >
         <span className="hidden md:inline">← 3D Text</span>
         <span className="md:hidden">← 3D</span>
       </Link>
 
-      <div className="hidden h-4 w-px bg-zinc-200 dark:bg-zinc-700 sm:block" />
+      <div className="order-1 hidden h-4 w-px bg-zinc-200 dark:bg-zinc-700 lg:block xl:order-none" />
 
       {/* ── Undo / Redo ── */}
       <button
         onClick={guard(undo)}
         disabled={!canUndo}
-        className="rounded p-1.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className="order-1 rounded p-1.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 xl:order-none"
         title="Undo (Ctrl+Z)"
         aria-label="Undo"
       >
@@ -244,7 +244,7 @@ export function PosterTopBar({
       <button
         onClick={guard(redo)}
         disabled={!canRedo}
-        className="rounded p-1.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className="order-1 rounded p-1.5 text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-400 dark:hover:bg-zinc-800 xl:order-none"
         title="Redo (Ctrl+Y)"
         aria-label="Redo"
       >
@@ -254,17 +254,17 @@ export function PosterTopBar({
       </button>
 
       {/* ── Secondary actions (hidden on small screens) ── */}
-      <div className="hidden h-4 w-px bg-zinc-200 dark:bg-zinc-700 md:block" />
+      <div className="order-2 hidden h-4 w-px bg-zinc-200 dark:bg-zinc-700 lg:block xl:order-none" />
       <button
         onClick={guard(handleNewProject)}
-        className="rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        className="order-2 whitespace-nowrap rounded px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:text-sm xl:order-none"
         title="Start a new blank project"
       >
         New
       </button>
       <button
         onClick={guard(handleSave)}
-        className="hidden rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 md:block"
+        className="order-2 hidden rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 lg:block xl:order-none"
         title="Download as JSON file"
       >
         <span className="hidden lg:inline">Download JSON</span>
@@ -272,7 +272,7 @@ export function PosterTopBar({
       </button>
       <button
         onClick={guard(handleLoad)}
-        className="hidden rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 lg:block"
+        className="order-2 hidden rounded px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 lg:block xl:order-none"
       >
         Load JSON
       </button>
@@ -283,7 +283,7 @@ export function PosterTopBar({
           type="button"
           onClick={onSaveToCloud}
           disabled={savingToCloud}
-          className={`rounded px-2 py-1 text-sm font-medium ${
+          className={`order-2 whitespace-nowrap rounded px-2 py-1 text-xs font-medium sm:text-sm xl:order-none ${
             cloudDirty
               ? 'bg-accent-600 text-white hover:bg-accent-500'
               : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
@@ -298,7 +298,7 @@ export function PosterTopBar({
       {onOpenCanvasSize && (
         <button
           onClick={guard(onOpenCanvasSize)}
-          className="hidden rounded px-2 py-1 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 md:block"
+          className="order-2 hidden rounded px-2 py-1 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 lg:block xl:order-none"
           title="Change canvas size"
         >
           <span className="font-mono text-xs">{canvasWidth}×{canvasHeight}</span>
@@ -309,7 +309,7 @@ export function PosterTopBar({
         onClick={(event) => {
           if (cloudDirty && !window.confirm('Your latest changes are not saved to My Stuff. Continue?')) event.preventDefault();
         }}
-        className="rounded px-2 py-1 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        className="order-2 whitespace-nowrap rounded px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800 sm:text-sm xl:order-none"
         title="View your saved posters"
       >
         My Stuff
@@ -321,7 +321,7 @@ export function PosterTopBar({
           onClick={guard(onOpenAiEdit)}
           disabled={!canOpenAiEdit}
           aria-label="Edit selected layer with AI"
-          className="rounded bg-violet-600 px-2 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 sm:px-2.5 sm:text-sm dark:disabled:bg-zinc-800"
+          className="order-2 whitespace-nowrap rounded bg-violet-600 px-2 py-1 text-xs font-medium text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500 sm:px-2.5 sm:text-sm xl:order-none dark:disabled:bg-zinc-800"
           title={canOpenAiEdit
             ? 'Edit only the selected layer by comparing it with the original reference'
             : 'Select one unlocked layer from a reconstructed poster'}
@@ -331,10 +331,10 @@ export function PosterTopBar({
         </button>
       )}
 
-      <UserMenu compactUntilMd />
+      <div className="order-2 ml-auto xl:order-none xl:ml-0"><UserMenu compactUntilMd /></div>
 
       {/* Zoom controls */}
-      <div className="hidden items-center gap-0.5 md:flex">
+      <div className="order-1 hidden items-center gap-0.5 lg:flex xl:order-none">
         <div className="mx-1 h-4 w-px bg-zinc-200 dark:bg-zinc-700" />
         <button
           onClick={() => setCanvasZoom(canvasZoom - 0.25)}
@@ -360,23 +360,24 @@ export function PosterTopBar({
       </div>
 
       {/* Spacer */}
-      <div className="flex-1" />
+      <div className="order-1 flex-1 xl:order-none" />
 
-      <ThemeToggle size="md" />
+      <div className="order-1 xl:order-none"><ThemeToggle size="md" /></div>
 
-      <div className="relative" ref={exportMenuRef}>
+      <div className="relative order-1 xl:order-none" ref={exportMenuRef}>
         <button
           onClick={guard(() => setExportOpen((o) => !o))}
           disabled={exporting}
-          className="flex items-center gap-1 rounded bg-accent-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-accent-500 disabled:opacity-50 sm:px-4 sm:text-sm"
+          className="flex items-center gap-1 whitespace-nowrap rounded bg-accent-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-accent-500 disabled:opacity-50 sm:px-4 sm:text-sm"
         >
-          {exporting
+          <span className="sm:hidden">{exporting ? 'Working…' : 'Export'}</span>
+          <span className="hidden sm:inline">{exporting
             ? exportProgress === 'encoding'
               ? 'Encoding…'
               : exportProgress === 'downloading'
                 ? 'Downloading…'
                 : 'Rendering…'
-            : 'Export PNG'}
+            : 'Export PNG'}</span>
           <svg
             className={`h-4 w-4 transition-transform ${exportOpen ? 'rotate-180' : ''}`}
             fill="none"
@@ -433,6 +434,8 @@ export function PosterTopBar({
           </div>
         )}
       </div>
+
+      <div className="order-1 basis-full xl:hidden" aria-hidden="true" />
 
     </header>
   );

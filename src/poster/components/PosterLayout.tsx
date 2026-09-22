@@ -758,11 +758,11 @@ export function PosterLayout() {
 
   /** Mobile: fixed top stack (read-only strip + toolbar). Spacer + drawer top match this height. */
   const mobileTopStackSpacer = readOnly
-    ? 'h-[calc(env(safe-area-inset-top,0px)+3.5rem+3rem)]'
-    : 'h-[calc(env(safe-area-inset-top,0px)+3rem)]';
+    ? 'h-[calc(env(safe-area-inset-top,0px)+3.5rem+5rem)]'
+    : 'h-[calc(env(safe-area-inset-top,0px)+5rem)]';
   const mobileDrawerTopMaxLg = readOnly
-    ? 'max-lg:top-[calc(env(safe-area-inset-top,0px)+3.5rem+3rem)]'
-    : 'max-lg:top-[calc(env(safe-area-inset-top,0px)+3rem)]';
+    ? 'max-lg:top-[calc(env(safe-area-inset-top,0px)+3.5rem+5rem)]'
+    : 'max-lg:top-[calc(env(safe-area-inset-top,0px)+5rem)]';
 
   const applyTemplateCreatorDraft = useCallback(
     (compiled: CompiledPosterReconstruction) => {
