@@ -29,7 +29,7 @@ export type NavigateFunction = (
 
 function readPathname() {
   const value = window.location.hash.replace(/^#/, '').split('?')[0];
-  if (!value) return '/';
+  if (!value) return /^\/admin\/?$/.test(window.location.pathname) ? '/admin' : '/';
   return value.startsWith('/') ? value : `/${value}`;
 }
 

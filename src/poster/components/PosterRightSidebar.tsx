@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../../auth/authStore';
 import { ColorPickerPopover } from '../../components/ColorPickerPopover';
 import { usePosterStore } from '../store/posterStore';
 import { useIntentionalSliderDrag } from '../../hooks/useIntentionalSliderDrag';
@@ -1753,6 +1754,7 @@ function PosterTextControls({
   updateElement: (id: string, updates: Partial<PosterElement>) => void;
   onTransform3D?: (id: string, faceColor: string, extrusionColor: string, customFontId?: string) => void;
 }) {
+  const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
   const [fontMenuOpen, setFontMenuOpen] = useState(false);
   const fontMenuRef = useRef<HTMLDivElement>(null);
   const fontUploadRef = useRef<HTMLInputElement>(null);
@@ -1983,7 +1985,7 @@ function PosterTextControls({
                           o.label
                         )}
                       </button>
-                      {o.fontId && o.canDelete && (
+                      {isAdmin && o.fontId && o.canDelete && (
                         <button
                           type="button"
                           title={`Delete ${o.label.replace(/\s+\(saved\)$/i, '')} permanently`}
@@ -2005,7 +2007,7 @@ function PosterTextControls({
             </ul>
           )}
         </div>
-        <input
+        {isAdmin && <input
           ref={fontUploadRef}
           type="file"
           accept=".ttf,.otf,font/ttf,font/otf,application/x-font-ttf,application/x-font-opentype"
@@ -2016,8 +2018,8 @@ function PosterTextControls({
             event.target.value = '';
             void uploadFonts(files);
           }}
-        />
-        <button
+        />}
+        {isAdmin && <button
           type="button"
           disabled={fontUploading}
           onClick={() => fontUploadRef.current?.click()}
@@ -2025,7 +2027,7 @@ function PosterTextControls({
         >
           <span aria-hidden>{fontUploading ? '↻' : '+'}</span>
           {fontUploading ? 'Uploading fonts…' : 'Upload TTF / OTF fonts'}
-        </button>
+        </button>}
         {fontUploadStatus && (
           <p
             className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400"

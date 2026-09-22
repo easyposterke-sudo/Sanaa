@@ -24,6 +24,7 @@ interface AuthState {
   initError: string | null;
   init: () => Promise<void>;
   login: (email: string, password: string) => Promise<{ error?: string }>;
+  loginWithAccess: () => Promise<{ error?: string }>;
   signup: (email: string, password: string, name?: string) => Promise<{ error?: string }>;
   logout: () => void;
   isAdmin: () => boolean;
@@ -126,6 +127,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return {};
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'Login failed' };
+    }
+  },
+
+  loginWithAccess: async () => {
+    try {
+      const res = await fetchWithTimeout(apiUrl('/api/auth/access-admin'), { method: 'POST' }, AUTH_TIMEOUT_MS);
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string; user?: User; token?: string; refreshToken?: string;
+      };
+      if (!res.ok || !data.token || !data.refreshToken || data.user?.role !== 'admin') {
+        return { error: data.error || 'Cloudflare Access admin sign-in failed.' };
+      }
+      setToken(data.token);
+      setRefreshToken(data.refreshToken);
+      set({ user: data.user, initState: 'ready', initError: null });
+      return {};
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Cloudflare Access admin sign-in failed.' };
     }
   },
 

@@ -6,6 +6,8 @@ import { LoginPage } from './auth/LoginPage';
 import { SignupPage } from './auth/SignupPage';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuthStore } from './auth/authStore';
+import { AdminEntry } from './admin/AdminEntry';
+import { AdminRoute } from './admin/AdminRoute';
 
 const AppLayout = lazy(() =>
   import('./components/layout/AppLayout').then((m) => ({ default: m.AppLayout }))
@@ -33,7 +35,9 @@ function App() {
   const { pathname } = useLocation();
   const init = useAuthStore((state) => state.init);
 
-  useEffect(() => { void init(); }, [init]);
+  useEffect(() => {
+    if (pathname !== '/admin') void init();
+  }, [init, pathname]);
 
   if (pathname === '/' || pathname === '') {
     return <HomePage />;
@@ -41,13 +45,13 @@ function App() {
 
   if (pathname === '/login') return <LoginPage />;
   if (pathname === '/signup') return <SignupPage />;
+  if (pathname === '/admin') return <AdminEntry />;
+  if (pathname === '/poster/templates') return <AdminRoute><Suspense fallback={<LoadingFallback />}><TemplateManagementPage /></Suspense></AdminRoute>;
 
   return (
     <ProtectedRoute><Suspense fallback={<LoadingFallback />}>
       {pathname === '/3d' ? (
         <AppLayout />
-      ) : pathname === '/poster/templates' ? (
-        <TemplateManagementPage />
       ) : pathname === '/poster/my' ? (
         <MyStuffPage />
       ) : (

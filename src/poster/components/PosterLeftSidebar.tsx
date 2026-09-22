@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Textbox } from 'fabric';
 import { usePosterStore } from '../store/posterStore';
@@ -10,7 +10,7 @@ import { CustomElementsModal } from './CustomElementsModal';
 import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
 import type { PosterBackgroundLibraryItem } from '../services/posterBackgroundsApi';
 import type { CustomElement } from '../services/customElementsApi';
-import { fetchMyPosterTemplateList } from '../services/posterTemplatesApi';
+import { useAuthStore } from '../../auth/authStore';
 import { compressImageToWebp } from '../utils/compressImageToWebp';
 import type {
   PosterElement,
@@ -116,23 +116,9 @@ export function PosterLeftSidebar({
   const [layerDragOverIndex, setLayerDragOverIndex] = useState<number | null>(null);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [editingLayerName, setEditingLayerName] = useState('');
-  const [canManageTemplates, setCanManageTemplates] = useState(false);
+  const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
   const [imageUploadBusy, setImageUploadBusy] = useState(false);
   const [imageUploadMessage, setImageUploadMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    fetchMyPosterTemplateList()
-      .then(() => {
-        if (active) setCanManageTemplates(true);
-      })
-      .catch(() => {
-        if (active) setCanManageTemplates(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const layersFrontToBack = [...elements].sort((a, b) => b.zIndex - a.zIndex);
 
@@ -285,7 +271,7 @@ export function PosterLeftSidebar({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      {onOpenTemplateCreator && (
+      {isAdmin && onOpenTemplateCreator && (
         <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 dark:border-violet-900 dark:bg-violet-950/30">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">
             Template Creator
@@ -319,7 +305,7 @@ export function PosterLeftSidebar({
           </button>
         </div>
       )}
-      {canManageTemplates && (
+      {isAdmin && (
         <button
           type="button"
           onClick={() => navigate('/poster/templates')}
@@ -588,7 +574,7 @@ export function PosterLeftSidebar({
         </button>
       </div>
       )}
-      <DesignRecorderPanel />
+      {isAdmin && <DesignRecorderPanel />}
     </div>
   );
 }

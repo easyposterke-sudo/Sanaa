@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { findAccount, login, logout, refreshSession, signup } from './auth';
+import { findAccount, login, loginWithAccess, logout, refreshSession, signup } from './auth';
+import { accountWithAccessRole, verifiedAccessEmail } from './adminAccess';
 import {
   POSTER_RECONSTRUCTION_PROMPT_VERSION,
   POSTER_RECONSTRUCTION_SCHEMA_VERSION,
@@ -157,6 +158,17 @@ type CustomElementRow = {
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+function needsAdmin(path: string, method: string): boolean {
+  if (path === '/api/fonts/upload' && method === 'POST') return true;
+  if (/^\/api\/fonts\/[^/]+$/.test(path) && method === 'DELETE') return true;
+  if (path === '/api/poster-templates/mine' && method === 'GET') return true;
+  if (path.startsWith('/api/poster-template-categories') && method !== 'GET') return true;
+  if (path === '/api/poster-templates' && method === 'POST') return true;
+  if (/^\/api\/poster-templates\/[^/]+$/.test(path) && (method === 'PATCH' || method === 'DELETE')) return true;
+  if (/^\/api\/projects\/[^/]+\/recordings(?:\/[^/]+)?$/.test(path)) return true;
+  return false;
+}
+
 app.use('/api/*', async (context, next) => {
   const requestId = crypto.randomUUID();
   context.set('requestId', requestId);
@@ -179,6 +191,12 @@ app.use('/api/*', async (context, next) => {
   }
 
   context.set('ownerId', ownerId);
+  if (needsAdmin(context.req.path, context.req.method)) {
+    const accessAccount = await accountWithAccessRole(context.req.raw, context.env, user);
+    if (accessAccount.role !== 'admin') {
+      return context.json({ error: 'Admin access required.', requestId }, 403);
+    }
+  }
   await next();
 });
 
@@ -209,7 +227,7 @@ app.post('/api/auth/signup', async (context) => {
   if (!body || typeof body.email !== 'string' || typeof body.password !== 'string' || (body.name !== undefined && typeof body.name !== 'string')) return context.json({ error: 'Invalid account details.' }, 400);
   const result = await signup(context.env.DB, body.email, body.password, body.name as string || '');
   if ('error' in result) return context.json({ error: result.error }, result.status);
-  return context.json(result, 201);
+  return context.json({ ...result, user: await accountWithAccessRole(context.req.raw, context.env, result.user) }, 201);
 });
 
 app.post('/api/auth/login', async (context) => {
@@ -217,18 +235,25 @@ app.post('/api/auth/login', async (context) => {
   if (!body || typeof body.email !== 'string' || typeof body.password !== 'string') return context.json({ error: 'Invalid email or password.' }, 400);
   const result = await login(context.env.DB, body.email, body.password, context.req.header('cf-connecting-ip') || 'unknown');
   if ('error' in result) return context.json({ error: result.error }, result.status);
-  return context.json(result);
+  return context.json({ ...result, user: await accountWithAccessRole(context.req.raw, context.env, result.user) });
+});
+
+app.post('/api/auth/access-admin', async (context) => {
+  const email = await verifiedAccessEmail(context.req.raw, context.env);
+  if (!email) return context.json({ error: 'Cloudflare Access admin sign-in is required.' }, 403);
+  const result = await loginWithAccess(context.env.DB, email);
+  return context.json({ ...result, user: { ...result.user, role: 'admin' } });
 });
 
 app.get('/api/auth/me', async (context) => {
   const user = await findAccount(context.env.DB, context.req.header('authorization'));
-  return user ? context.json({ user }) : context.json({ error: 'Authentication required.' }, 401);
+  return user ? context.json({ user: await accountWithAccessRole(context.req.raw, context.env, user) }) : context.json({ error: 'Authentication required.' }, 401);
 });
 
 app.post('/api/auth/refresh', async (context) => {
   const body = await authBody(context);
   const result = body && typeof body.refreshToken === 'string' ? await refreshSession(context.env.DB, body.refreshToken) : null;
-  return result ? context.json(result) : context.json({ error: 'Session expired.' }, 401);
+  return result ? context.json({ ...result, user: await accountWithAccessRole(context.req.raw, context.env, result.user) }) : context.json({ error: 'Session expired.' }, 401);
 });
 
 app.post('/api/auth/logout', async (context) => {

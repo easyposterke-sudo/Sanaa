@@ -4,7 +4,7 @@ const ITERATIONS = 100_000;
 const ACCESS_AGE = 60 * 60 * 24;
 const REFRESH_AGE = 60 * 60 * 24 * 30;
 
-export type Account = { id: string; email: string; name?: string; role: 'user' };
+export type Account = { id: string; email: string; name?: string; role: 'user' | 'admin' };
 type UserRow = { id: string; email: string; name: string | null; password_salt: string; password_hash: string };
 type SessionRow = { id: string; user_id: string; expires_at: number; access_expires_at: number; email: string; name: string | null };
 
@@ -54,6 +54,23 @@ export async function signup(db: D1Database, email: string, password: string, na
       return { error: 'An account with this email already exists.', status: 409 as const };
     }
     throw error;
+  }
+  return issueSession(db, user);
+}
+
+/** Access has already verified this email with its own sign-in flow. */
+export async function loginWithAccess(db: D1Database, email: string) {
+  let user = await db.prepare('SELECT id, email, name FROM users WHERE email = ?').bind(email).first<{ id: string; email: string; name: string | null }>();
+  if (!user) {
+    const created = { id: crypto.randomUUID(), email, name: null };
+    try {
+      await db.prepare('INSERT INTO users (id, email, name, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(created.id, email, null, randomHex(), randomHex(), new Date().toISOString()).run();
+      user = created;
+    } catch {
+      user = await db.prepare('SELECT id, email, name FROM users WHERE email = ?').bind(email).first<{ id: string; email: string; name: string | null }>();
+      if (!user) throw new Error('Access account could not be created.');
+    }
   }
   return issueSession(db, user);
 }

@@ -1102,7 +1102,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                                       className="block truncate"
                                     />
                                   </button>
-                                  {f.canDelete && (
+                                  {isAdmin && f.canDelete && (
                                     <button
                                       type="button"
                                       title={`Delete ${f.label} permanently`}
@@ -1167,7 +1167,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                   step={0.5}
                   onChange={(v) => setText({ letterSpacing: v })}
                 />
-                <div>
+                {isAdmin && <div>
                   <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">
                     Upload
                   </label>
@@ -1178,7 +1178,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                     onChange={handleFontUpload}
                     className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-zinc-200 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-800 dark:file:bg-zinc-700 dark:file:text-zinc-200"
                   />
-                </div>
+                </div>}
                 {isAdmin && (
                   <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50">
                     <p className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">

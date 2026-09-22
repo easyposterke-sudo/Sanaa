@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { Miniflare } from 'miniflare';
-import { findAccount, login, logout, refreshSession, signup } from './auth';
+import { findAccount, login, loginWithAccess, logout, refreshSession, signup } from './auth';
 
 const mf = new Miniflare({
   workers: [{ config: {
@@ -23,6 +23,13 @@ beforeAll(async () => {
 afterAll(async () => { await mf.dispose(); });
 
 describe('email/password accounts', () => {
+  it('creates or resumes an account for a verified Access email', async () => {
+    const first = await loginWithAccess(db, 'access-admin@example.com');
+    const second = await loginWithAccess(db, 'access-admin@example.com');
+    expect(first.user.id).toBe(second.user.id);
+    expect(first.user.role).toBe('user');
+    expect(await findAccount(db, `Bearer ${first.token}`)).toEqual(first.user);
+  });
   it('signs up and logs in within Cloudflare production PBKDF2 limits', async () => {
     const deriveBits = crypto.subtle.deriveBits.bind(crypto.subtle);
     const productionLimit = vi.spyOn(crypto.subtle, 'deriveBits').mockImplementation((algorithm, key, length) => {

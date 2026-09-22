@@ -5,8 +5,10 @@ import { RightSidebar } from '../sidebar/RightSidebar';
 import { Canvas } from '../canvas/Canvas';
 import { useEditorStore } from '../../store/editorStore';
 import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
+import { useAuthStore } from '../../auth/authStore';
 
 export function AppLayout() {
+  const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
 
@@ -135,7 +137,7 @@ export function AppLayout() {
           ].join(' ')}
         >
           <LeftSidebar />
-          <DesignRecorderPanel compact />
+          {isAdmin && <DesignRecorderPanel compact />}
         </aside>
 
         {/* Canvas */}

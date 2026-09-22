@@ -96,21 +96,20 @@ export function UserMenu({ compact = false, compactUntilMd = false }: UserMenuPr
           </div>
           <div className="py-1">
             {isAdmin && (
-              <Link
-                to="/admin"
-                onClick={() => setOpen(false)}
+              <a
+                href="/admin"
                 className="block px-4 py-2 text-sm text-indigo-600 font-medium hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20"
               >
                 Admin Dashboard
-              </Link>
+              </a>
             )}
-            <Link
+            {isAdmin && <Link
               to="/poster/templates"
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700"
             >
               Manage poster templates
-            </Link>
+            </Link>}
             <Link
               to="/poster"
               onClick={() => setOpen(false)}
@@ -125,6 +124,10 @@ export function UserMenu({ compact = false, compactUntilMd = false }: UserMenuPr
               onClick={() => {
                 setOpen(false);
                 logout();
+                if (isAdmin) {
+                  window.location.assign('/cdn-cgi/access/logout');
+                  return;
+                }
                 navigate('/');
               }}
               className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
