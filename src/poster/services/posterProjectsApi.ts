@@ -116,6 +116,16 @@ export async function renameMyPosterProject(id: string, name: string): Promise<S
   return data.item;
 }
 
+/** Private thumbnails need the same bearer token as the My Stuff list. */
+export async function getMyPosterThumbnail(id: string, signal?: AbortSignal): Promise<Blob> {
+  const res = await apiFetch(`/api/my-poster-projects/${encodeURIComponent(id)}/thumbnail`, { signal });
+  if (!res.ok) throw new Error(`Failed to load thumbnail (${res.status})`);
+  if (!res.headers.get('content-type')?.startsWith('image/')) {
+    throw new Error('The thumbnail response is not an image.');
+  }
+  return res.blob();
+}
+
 export async function updateMyPosterProject(params: {
   id: string;
   name?: string;

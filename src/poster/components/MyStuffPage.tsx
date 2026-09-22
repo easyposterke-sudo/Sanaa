@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import {
   deleteMyPosterProject,
+  getMyPosterThumbnail,
   getMySavedPosterProject,
   listMyPosterProjects,
   renameMyPosterProject,
@@ -26,6 +27,7 @@ export function MyStuffPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [previews, setPreviews] = useState<Record<string, string | null>>({});
 
   const load = useCallback(async (targetPage: number) => {
     setLoading(true);
@@ -44,6 +46,31 @@ export function MyStuffPage() {
   }, []);
 
   useEffect(() => { void load(page); }, [load, page]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const objectUrls: string[] = [];
+    let active = true;
+    setPreviews({});
+
+    for (const item of items) {
+      if (!item.thumbnail) continue;
+      void getMyPosterThumbnail(item.id, controller.signal).then((blob) => {
+        if (!active) return;
+        const url = URL.createObjectURL(blob);
+        objectUrls.push(url);
+        setPreviews((current) => ({ ...current, [item.id]: url }));
+      }).catch(() => {
+        if (active) setPreviews((current) => ({ ...current, [item.id]: null }));
+      });
+    }
+
+    return () => {
+      active = false;
+      controller.abort();
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [items]);
 
   const visible = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -140,7 +167,13 @@ export function MyStuffPage() {
             {visible.map((item) => (
               <article key={item.id} className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">
-                  {item.thumbnail ? <img src={item.thumbnail} alt={`Preview of ${item.name}`} loading="lazy" className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center text-5xl text-zinc-300 dark:text-zinc-600">▧</div>}
+                  {item.thumbnail && previews[item.id] ? (
+                    <img src={previews[item.id] || undefined} alt={`Preview of ${item.name}`} loading="lazy" className="h-full w-full object-contain" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-zinc-400 dark:text-zinc-500">
+                      {item.thumbnail ? (previews[item.id] === null ? 'Preview unavailable' : 'Loading preview…') : 'No preview'}
+                    </div>
+                  )}
                 </div>
                 <div className="p-4">
                   <h2 className="truncate font-semibold" title={item.name}>{item.name}</h2>
