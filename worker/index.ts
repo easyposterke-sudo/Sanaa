@@ -779,15 +779,17 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
 
   const imageDigest = await sha256Hex(image.bytes);
   const cacheKey = await buildPosterReconstructionCacheKey(request, imageDigest, model);
-  let cached: AiPosterPlanRow | null;
+  let cached: AiPosterPlanRow | null = null;
   try {
-    cached = await context.env.DB.prepare(
-      `SELECT spec_json, model
-       FROM ai_poster_plans
-       WHERE owner_id = ? AND cache_key = ?`,
-    )
-      .bind(context.get('ownerId'), cacheKey)
-      .first<AiPosterPlanRow>();
+    if (!request.forceFresh) {
+      cached = await context.env.DB.prepare(
+        `SELECT spec_json, model
+         FROM ai_poster_plans
+         WHERE owner_id = ? AND cache_key = ?`,
+      )
+        .bind(context.get('ownerId'), cacheKey)
+        .first<AiPosterPlanRow>();
+    }
   } catch (error) {
     console.error(
       JSON.stringify({

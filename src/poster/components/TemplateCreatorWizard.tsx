@@ -43,6 +43,8 @@ const NEW_LOGO_CROP_KEY = '__new_logo__';
 
 interface TemplateCreatorWizardProps {
   referenceOnly?: boolean;
+  initialReference?: PreparedPosterImage | null;
+  initialCanvasSize?: CanvasSizeSelection | null;
   open: boolean;
   onClose: () => void;
   mode?: 'template' | 'poster';
@@ -52,11 +54,11 @@ interface TemplateCreatorWizardProps {
   ) => void;
 }
 
-export function TemplateCreatorWizard({ open, onClose, mode = 'template', referenceOnly = false, onApply }: TemplateCreatorWizardProps) {
+export function TemplateCreatorWizard({ open, onClose, mode = 'template', referenceOnly = false, initialReference = null, initialCanvasSize = null, onApply }: TemplateCreatorWizardProps) {
   useModalScrollLock(open);
-  const [reference, setReference] = useState<PreparedPosterImage | null>(null);
+  const [reference, setReference] = useState<PreparedPosterImage | null>(initialReference);
   const [importExisting, setImportExisting] = useState(false);
-  const [canvasSize, setCanvasSize] = useState<CanvasSizeSelection | null>(null);
+  const [canvasSize, setCanvasSize] = useState<CanvasSizeSelection | null>(initialCanvasSize);
   const [customWidth, setCustomWidth] = useState('1080');
   const [customHeight, setCustomHeight] = useState('1080');
   const [guideOpacity, setGuideOpacity] = useState(0.22);
@@ -77,6 +79,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
   const [searchQueries, setSearchQueries] = useState<Record<string, string>>({});
   const [cropItemKey, setCropItemKey] = useState<string | null>(null);
   const [preparingReplacement, setPreparingReplacement] = useState<string | null>(null);
+  const [freshGeneration, setFreshGeneration] = useState(Boolean(initialReference));
 
   if (!open) return null;
   if (mode === 'poster' && !referenceOnly && !importExisting) return <PosterPromptCreator onClose={onClose} onImport={() => setImportExisting(true)} onApply={draft => onApply(draft, { source: 'openai', model: null })} />;
@@ -188,7 +191,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
     await Promise.all(searchable.map((item) => searchForItem(item, item.imageSearchQuery)));
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (forceFresh = false) => {
     if (!reference) {
       setError('Upload a flat poster first.');
       return;
@@ -200,9 +203,17 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
     setError(null);
     setSubmitting(true);
     try {
-      if (analysis) {
+      if (analysis && !forceFresh) {
         await compileAndApply(analysis);
         return;
+      }
+      if (forceFresh) {
+        setCandidates({});
+        setReplacementMessages({});
+        setReplacements({});
+        setOmittedImages([]);
+        setSearchQueries({});
+        setCropItemKey(null);
       }
       const fontCatalog = await prepareReconstructionFontCatalog().catch(() => null);
       const response = await requestPosterReconstruction({
@@ -212,6 +223,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
             height: reference.height,
           },
           quality: 'quality',
+          ...(freshGeneration || forceFresh ? { forceFresh: true } : {}),
           ...(fontCatalog ? { fontCatalog: fontCatalog.request } : {}),
         });
       const current = {
@@ -221,6 +233,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
         fontFamilies: fontCatalog?.families ?? {},
       };
       setAnalysis(current);
+      setFreshGeneration(false);
       setSearchQueries(Object.fromEntries(replacementItems(response.plan).map((item) => [item.key, item.imageSearchQuery])));
       void loadStockSuggestions(response.plan);
     } catch (caught) {
@@ -615,6 +628,9 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
 
         {analysis && (
           <section className="border-t border-zinc-200 bg-zinc-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
+            <button type="button" disabled={submitting || Boolean(preparingReplacement)} onClick={() => void handleCreate(true)} className="mb-3 rounded-lg border border-violet-400 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">
+              Recreate again from scratch
+            </button>
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Choose images for the editable draft</h3>
               <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">

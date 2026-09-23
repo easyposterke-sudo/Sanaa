@@ -209,6 +209,7 @@ export const PosterReconstructionRequestSchema = z
       })
       .strict(),
     quality: z.enum(['quality']),
+    forceFresh: z.boolean().optional(),
     creation: z.object({
       prompt: z.string().trim().min(10).max(4000),
       seed: z.string().min(1).max(80),

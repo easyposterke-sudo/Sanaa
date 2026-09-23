@@ -109,6 +109,7 @@ export function PosterLayout() {
     setAutomatic3DRenderIds((ids) => ids.filter((id) => id !== elementId));
   }, []);
   const [templateCreatorOpen, setTemplateCreatorOpen] = useState(false);
+  const [recreateOpen, setRecreateOpen] = useState(false);
   const [templateCreatorMode, setTemplateCreatorMode] = useState<'template' | 'poster'>('template');
   const [showCanvasSizeModal, setShowCanvasSizeModal] = useState(false);
 
@@ -876,6 +877,7 @@ export function PosterLayout() {
             if (aiEditableSelection) setAiEditTargetId(aiEditableSelection.id);
           }}
           canOpenAiEdit={Boolean(aiEditableSelection)}
+          onRecreatePoster={!readOnly && aiReference && !templateAuthoring ? () => setRecreateOpen(true) : undefined}
         />
       </div>
       <div className={`shrink-0 lg:hidden ${mobileTopStackSpacer}`} aria-hidden />
@@ -1069,6 +1071,17 @@ export function PosterLayout() {
           }
         }}
       />
+      {recreateOpen && aiReference && (
+        <TemplateCreatorWizard
+          open
+          mode="poster"
+          referenceOnly
+          initialReference={{ ...aiReference, sourceWidth: aiReference.width, sourceHeight: aiReference.height, fileName: 'Original poster' }}
+          initialCanvasSize={{ id: 'original', width: canvasWidth, height: canvasHeight }}
+          onClose={() => setRecreateOpen(false)}
+          onApply={(compiled) => applyEditablePosterDraft(compiled)}
+        />
+      )}
     </div>
   );
 }

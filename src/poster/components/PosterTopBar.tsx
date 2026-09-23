@@ -29,6 +29,7 @@ interface PosterTopBarProps {
   onToggleRightSidebar?: () => void;
   onOpenAiEdit?: () => void;
   canOpenAiEdit?: boolean;
+  onRecreatePoster?: () => void;
 }
 
 export function PosterTopBar({
@@ -43,6 +44,7 @@ export function PosterTopBar({
   onToggleRightSidebar,
   onOpenAiEdit,
   canOpenAiEdit = false,
+  onRecreatePoster,
 }: PosterTopBarProps = {}) {
   const navigate = useNavigate();
   const undo = usePosterStore((s) => s.undo);
@@ -357,6 +359,12 @@ export function PosterTopBar({
         </button>
       )}
 
+      {onRecreatePoster && (
+        <button type="button" onClick={guard(onRecreatePoster)} className="order-2 hidden whitespace-nowrap rounded border border-violet-400 px-2 py-1 text-xs font-medium text-violet-700 hover:bg-violet-50 lg:block xl:order-none dark:text-violet-300" title="Generate a new editable poster from the original reference without using the previous AI result">
+          Recreate again
+        </button>
+      )}
+
       <div className="order-2 ml-auto hidden lg:block xl:order-none xl:ml-0"><UserMenu compactUntilMd /></div>
 
       {/* Zoom controls */}
@@ -525,6 +533,11 @@ export function PosterTopBar({
                 className="w-full rounded px-2 py-2 text-left text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
                 Edit selected layer with AI
+              </button>
+            )}
+            {onRecreatePoster && (
+              <button type="button" onClick={guard(() => { onRecreatePoster(); setMobileMenuOpen(false); })} className="w-full rounded px-2 py-2 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                Recreate again from scratch
               </button>
             )}
             {exportError && <p role="alert" className="px-2 py-2 text-xs text-red-600 dark:text-red-300">{exportError}</p>}
