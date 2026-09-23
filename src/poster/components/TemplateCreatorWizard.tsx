@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PosterPromptCreator } from './PosterPromptCreator';
 import { PosterAssetCropDialog } from './PosterAssetCropDialog';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
-import { MAX_RECONSTRUCTION_ELEMENTS } from '../../../shared/ai/posterReconstruction';
+import { MAX_RECONSTRUCTION_ELEMENTS, POSTER_REFERENCE_AI_TIMEOUT_MS } from '../../../shared/ai/posterReconstruction';
 import type {
   PosterReconstructionPlan,
   PosterReconstructionSource,
@@ -41,6 +41,7 @@ interface CanvasSizeSelection {
 }
 
 const NEW_LOGO_CROP_KEY = '__new_logo__';
+type ReconstructionPhase = 'preparing' | 'analyzing' | 'building';
 
 interface TemplateCreatorWizardProps {
   referenceOnly?: boolean;
@@ -66,6 +67,9 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
   const [includeReferenceGuide, setIncludeReferenceGuide] = useState(true);
   const [preparing, setPreparing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [processingPhase, setProcessingPhase] = useState<ReconstructionPhase | null>(null);
+  const [phaseStartedAt, setPhaseStartedAt] = useState<number | null>(null);
+  const [phaseElapsedSeconds, setPhaseElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<{
     plan: PosterReconstructionPlan;
@@ -81,6 +85,20 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
   const [cropItemKey, setCropItemKey] = useState<string | null>(null);
   const [preparingReplacement, setPreparingReplacement] = useState<string | null>(null);
   const [freshGeneration, setFreshGeneration] = useState(Boolean(initialReference));
+
+  useEffect(() => {
+    if (!processingPhase || phaseStartedAt === null) return;
+    const interval = window.setInterval(() => {
+      setPhaseElapsedSeconds(Math.floor((Date.now() - phaseStartedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [processingPhase, phaseStartedAt]);
+
+  const beginPhase = (phase: ReconstructionPhase) => {
+    setProcessingPhase(phase);
+    setPhaseStartedAt(Date.now());
+    setPhaseElapsedSeconds(0);
+  };
 
   if (!open) return null;
   if (mode === 'poster' && !referenceOnly && !importExisting) return <PosterPromptCreator onClose={onClose} onImport={() => setImportExisting(true)} onApply={draft => onApply(draft, { source: 'openai', model: null })} />;
@@ -203,6 +221,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
     }
     setError(null);
     setSubmitting(true);
+    beginPhase(analysis && !forceFresh ? 'building' : 'preparing');
     try {
       if (analysis && !forceFresh) {
         await compileAndApply(analysis);
@@ -217,6 +236,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
         setCropItemKey(null);
       }
       const fontCatalog = await prepareReconstructionFontCatalog().catch(() => null);
+      beginPhase('analyzing');
       const response = await requestPosterReconstruction({
           reference: {
             dataUrl: reference.dataUrl,
@@ -241,6 +261,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
       setError(messageFromError(caught));
     } finally {
       setSubmitting(false);
+      setProcessingPhase(null);
     }
   };
 
@@ -760,10 +781,8 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
         </div>
 
         <div className="shrink-0 border-t border-zinc-200 p-3 sm:px-5 sm:py-4 dark:border-zinc-700">
-          {submitting && !analysis && (
-            <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-300" role="status">
-              Analyzing the reference. Detailed posters can take several minutes; keep this window open.
-            </p>
+          {submitting && processingPhase && (
+            <ReconstructionProgress phase={processingPhase} elapsedSeconds={phaseElapsedSeconds} />
           )}
           {error && (
             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
@@ -810,4 +829,54 @@ function messageFromError(error: unknown): string {
 
 function replacementItems(plan: PosterReconstructionPlan) {
   return plan.elements.filter((item) => item.kind === 'image_region' && !(item.imageRole === 'icon' && item.iconName !== 'none'));
+}
+
+function ReconstructionProgress({ phase, elapsedSeconds }: { phase: ReconstructionPhase; elapsedSeconds: number }) {
+  const phases: ReconstructionPhase[] = ['preparing', 'analyzing', 'building'];
+  const labels = ['Prepare fonts', 'Reconstruct layers', 'Review images & build'];
+  const activeIndex = phases.indexOf(phase);
+  const title = phase === 'preparing' ? 'Preparing the reference'
+    : phase === 'analyzing' ? 'Reconstructing editable layers'
+      : 'Building the editable draft';
+  const description = phase === 'preparing'
+    ? 'Checking available fonts for editable text.'
+    : phase === 'analyzing'
+      ? 'The AI is reading wording and identifying separate rows, shapes, and image regions. You can review image choices next.'
+      : 'Placing the detected layers on the canvas.';
+  const remainingSeconds = Math.max(0, Math.ceil(POSTER_REFERENCE_AI_TIMEOUT_MS / 1000) - elapsedSeconds);
+
+  return (
+    <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2" role="status" aria-live="polite">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-sky-500" aria-hidden="true" />
+          <span className="text-sm font-semibold">{title}</span>
+        </div>
+        <span className="text-xs tabular-nums text-sky-700 dark:text-sky-300" aria-live="off">
+          Elapsed {formatElapsed(elapsedSeconds)}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-sky-800 dark:text-sky-200">{description}</p>
+      <ol className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+        {labels.map((label, index) => (
+          <li key={label} aria-current={index === activeIndex ? 'step' : undefined} className={`rounded-md px-2 py-1.5 ${index < activeIndex
+            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+            : index === activeIndex
+              ? 'bg-sky-200 font-semibold text-sky-900 dark:bg-sky-800 dark:text-sky-100'
+              : 'bg-white/70 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400'}`}>
+            {index < activeIndex ? '✓ ' : ''}{label}
+          </li>
+        ))}
+      </ol>
+      {phase === 'analyzing' && (
+        <p className="mt-2 text-[11px] text-sky-700 dark:text-sky-300">
+          Time left in the analysis window: up to {formatElapsed(remainingSeconds)}. The draft may be ready sooner; this is not an ETA.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatElapsed(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
