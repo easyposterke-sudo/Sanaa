@@ -1,4 +1,5 @@
 import {
+  POSTER_REFERENCE_CLIENT_TIMEOUT_MS,
   PosterReconstructionPlanSchema,
   PosterReconstructionRequestSchema,
   type PosterReconstructionRequest,
@@ -24,7 +25,7 @@ export async function requestPosterReconstruction(
   const abort = () => controller.abort();
   if (options.signal?.aborted) abort();
   else options.signal?.addEventListener('abort', abort, { once: true });
-  const timeoutMs = options.timeoutMs ?? 135_000;
+  const timeoutMs = options.timeoutMs ?? POSTER_REFERENCE_CLIENT_TIMEOUT_MS;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([

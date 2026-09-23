@@ -1,9 +1,19 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { apiFetch } from '../../lib/api';
+import { POSTER_REFERENCE_CLIENT_TIMEOUT_MS } from '../../../shared/ai/posterReconstruction';
 import { requestPosterReconstruction } from './posterReconstructionApi';
 
 vi.mock('../../lib/api', () => ({ apiFetch: vi.fn() }));
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); });
+
+it('keeps the browser connected longer than the reference AI deadline', async () => {
+  vi.mocked(apiFetch).mockRejectedValueOnce(new Error('stopped'));
+  await expect(requestPosterReconstruction({
+    reference: { dataUrl: 'data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAA==', width: 1080, height: 1350 },
+    quality: 'quality',
+  })).rejects.toThrow('stopped');
+  expect(vi.mocked(apiFetch).mock.calls[0]?.[1]?.timeoutMs).toBe(POSTER_REFERENCE_CLIENT_TIMEOUT_MS);
+});
 
 it('enforces the request deadline after headers while the response body stalls', async () => {
   vi.useFakeTimers();

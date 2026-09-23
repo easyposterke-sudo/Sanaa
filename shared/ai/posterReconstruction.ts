@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
+// Dense editable references can require tens of thousands of output tokens.
+// Keep the browser connected longer than the server's upstream deadline.
+export const POSTER_REFERENCE_AI_TIMEOUT_MS = 360_000 as const;
+export const POSTER_REFERENCE_CLIENT_TIMEOUT_MS = 390_000 as const;
 export const MAX_RECONSTRUCTION_ELEMENTS = 80 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =

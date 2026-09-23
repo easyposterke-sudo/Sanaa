@@ -1,5 +1,6 @@
 import {
   MAX_RECONSTRUCTION_ELEMENTS,
+  POSTER_REFERENCE_AI_TIMEOUT_MS,
   POSTER_RECONSTRUCTION_JSON_SCHEMA,
   PosterReconstructionPlanSchema,
   type PosterReconstructionPlan,
@@ -10,7 +11,7 @@ import { posterCreationPrompt } from './posterCreationPrompt';
 import { applyPosterCreationPatch, POSTER_CREATION_PATCH_JSON_SCHEMA } from '../../shared/ai/posterCreationPatch';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
-const POSTER_RECONSTRUCTION_TIMEOUT_MS = 110_000;
+const POSTER_CREATION_TIMEOUT_MS = 110_000;
 
 export const POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS = 25_000;
 export const POSTER_RECONSTRUCTION_REASONING_EFFORT = 'none';
@@ -54,9 +55,11 @@ export async function reconstructPosterWithOpenAI(input: {
 }): Promise<OpenAiPosterReconstructionResult> {
   const startedAt = Date.now();
   const controller = new AbortController();
+  const timeoutMs = input.timeoutMs ?? input.request.creation?.timeoutMs ??
+    (input.request.creation ? POSTER_CREATION_TIMEOUT_MS : POSTER_REFERENCE_AI_TIMEOUT_MS);
   const timer = setTimeout(
     () => controller.abort(),
-    input.timeoutMs ?? input.request.creation?.timeoutMs ?? POSTER_RECONSTRUCTION_TIMEOUT_MS,
+    timeoutMs,
   );
   let response: Response;
   const userContent: OpenAiInputContent[] = [
@@ -129,11 +132,12 @@ export async function reconstructPosterWithOpenAI(input: {
     );
   } finally {
     clearTimeout(timer);
-    if (input.request.creation) console.info(JSON.stringify({
+    console.info(JSON.stringify({
       message: 'Poster AI request timing',
-      phase: input.request.creation.phase,
-      responseMode: input.request.creation.responseMode ?? 'plan',
+      phase: input.request.creation?.phase ?? 'reference',
+      responseMode: input.request.creation?.responseMode ?? 'plan',
       elapsedMs: Date.now() - startedAt,
+      timeoutMs,
       imageCount: userContent.filter(item => item.type === 'input_image').length,
       timedOut: controller.signal.aborted,
     }));

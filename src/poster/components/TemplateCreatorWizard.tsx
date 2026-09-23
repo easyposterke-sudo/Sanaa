@@ -760,6 +760,11 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
         </div>
 
         <div className="shrink-0 border-t border-zinc-200 p-3 sm:px-5 sm:py-4 dark:border-zinc-700">
+          {submitting && !analysis && (
+            <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-300" role="status">
+              Analyzing the reference. Detailed posters can take several minutes; keep this window open.
+            </p>
+          )}
           {error && (
             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
               {error}

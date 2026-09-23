@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 import {
   MAX_RECONSTRUCTION_ELEMENTS,
+  POSTER_REFERENCE_AI_TIMEOUT_MS,
   POSTER_RECONSTRUCTION_JSON_SCHEMA,
   POSTER_RECONSTRUCTION_SCHEMA_VERSION,
   PosterReconstructionPlanSchema,
@@ -22,10 +23,26 @@ const request: PosterReconstructionRequest = {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe('reconstructPosterWithOpenAI incomplete responses', () => {
+  it('allows a dense reference request to run past the old 110 second deadline', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_url: string, options?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pending = reconstructPosterWithOpenAI({ apiKey: 'test-key', model: 'test-model', request });
+    const assertion = expect(pending).rejects.toMatchObject({ code: 'AI_TIMEOUT' });
+    await vi.advanceTimersByTimeAsync(110_000);
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(POSTER_REFERENCE_AI_TIMEOUT_MS - 110_000);
+    await assertion;
+  });
+
   it('uses the reconstruction output allowance and reports output-limit details', async () => {
     const fetchMock = vi.fn(async () =>
       new Response(
