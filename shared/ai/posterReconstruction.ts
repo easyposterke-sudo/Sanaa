@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
+export const MAX_RECONSTRUCTION_ELEMENTS = 80 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v16-image-choices-and-separate-logos' as const;
+  'poster-reconstruction-v17-editable-repeated-rows' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -171,7 +172,7 @@ export const PosterReconstructionPlanSchema = z
         gradientAngle: z.number().min(0).max(360),
       })
       .strict(),
-    elements: z.array(ReconstructionElementSchema).max(45),
+    elements: z.array(ReconstructionElementSchema).max(MAX_RECONSTRUCTION_ELEMENTS),
     warnings: z.array(z.string().max(180)).max(12),
     confidence: z.number().min(0).max(1),
   })
@@ -309,7 +310,7 @@ export const POSTER_RECONSTRUCTION_JSON_SCHEMA = {
     }),
     elements: {
       type: 'array',
-      maxItems: 45,
+      maxItems: MAX_RECONSTRUCTION_ELEMENTS,
       items: strictObject({
         key: fieldKeyJsonSchema,
         kind: {

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
-import { POSTER_RECONSTRUCTION_SCHEMA_VERSION } from '../../shared/ai/posterReconstruction';
+import {
+  MAX_RECONSTRUCTION_ELEMENTS,
+  POSTER_RECONSTRUCTION_JSON_SCHEMA,
+  POSTER_RECONSTRUCTION_SCHEMA_VERSION,
+  PosterReconstructionPlanSchema,
+} from '../../shared/ai/posterReconstruction';
 import {
   OpenAiPosterReconstructionError,
   POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS,
@@ -77,6 +82,9 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     expect(payload.input[0]?.content[0]?.text).toContain('“MISSION TIMES”');
     expect(payload.input[0]?.content[0]?.text).toContain('“DAYS TO GO”');
     expect(payload.input[0]?.content[0]?.text).toContain('fillStartOpacity 0');
+    expect(payload.input[0]?.content[0]?.text).toContain('Give each row its own editable text element');
+    expect(payload.input[0]?.content[0]?.text).toContain('never crop a readable list');
+    expect(payload.input[1]?.content[0]?.text).toContain('keep every row\'s wording, number, and backing in separate editable layers');
   });
 
   it('sends small asset analysis images without a blank reference, then merges a patch review', async () => {
@@ -209,6 +217,33 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     expect(userContent.some(({ text }) => text?.includes('c_brand'))).toBe(true);
     expect(userContent.some(({ image_url }) => image_url === 'data:image/webp;base64,AAAA')).toBe(true);
   });
+});
+
+it('accepts enough independent layers for dense editable instruction lists', () => {
+  const elements = Array.from({ length: 46 }, (_, index) => ({
+    ...reconstructionTextElement(null),
+    key: `step_${index + 1}`,
+    text: `Step ${index + 1}`,
+  }));
+  const plan = {
+    schemaVersion: POSTER_RECONSTRUCTION_SCHEMA_VERSION,
+    suggestedTemplateName: 'Instruction poster',
+    category: 'general',
+    summary: 'Rows retain editable text.',
+    canvas: { backgroundType: 'solid', backgroundTop: '#ffffff', backgroundBottom: '#ffffff', gradientAngle: 0 },
+    elements,
+    warnings: [],
+    confidence: 0.9,
+  };
+
+  expect(POSTER_RECONSTRUCTION_JSON_SCHEMA.properties.elements.maxItems).toBe(MAX_RECONSTRUCTION_ELEMENTS);
+  expect(PosterReconstructionPlanSchema.safeParse(plan).success).toBe(true);
+  expect(PosterReconstructionPlanSchema.safeParse({
+    ...plan,
+    elements: Array.from({ length: MAX_RECONSTRUCTION_ELEMENTS + 1 }, (_, index) => ({
+      ...elements[0], key: `row_${index + 1}`,
+    })),
+  }).success).toBe(false);
 });
 
 function reconstructionTextElement(fontCatalogId: string | null) {

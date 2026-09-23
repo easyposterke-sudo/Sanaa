@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PosterPromptCreator } from './PosterPromptCreator';
 import { PosterAssetCropDialog } from './PosterAssetCropDialog';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
+import { MAX_RECONSTRUCTION_ELEMENTS } from '../../../shared/ai/posterReconstruction';
 import type {
   PosterReconstructionPlan,
   PosterReconstructionSource,
@@ -288,7 +289,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
     if (!analysis || !cropItemKey) return;
     if (cropItemKey === NEW_LOGO_CROP_KEY) {
       const base = analysis.plan.elements.find((item) => item.imageRole === 'logo') ?? analysis.plan.elements[0];
-      if (!base || analysis.plan.elements.length >= 45) return;
+      if (!base || analysis.plan.elements.length >= MAX_RECONSTRUCTION_ELEMENTS) return;
       let number = 1;
       while (analysis.plan.elements.some((item) => item.key === `additional_logo_${number}`)) number++;
       const key = `additional_logo_${number}`;
@@ -748,7 +749,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
                   </div>
                 );
               })}
-              {analysis.plan.elements.length < 45 && analysis.plan.elements.length > 0 && (
+              {analysis.plan.elements.length < MAX_RECONSTRUCTION_ELEMENTS && analysis.plan.elements.length > 0 && (
                 <button type="button" onClick={() => setCropItemKey(NEW_LOGO_CROP_KEY)} className="w-full rounded-xl border border-dashed border-violet-400 px-3 py-3 text-left text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/30">
                   Add a missing logo from the poster
                 </button>

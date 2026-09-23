@@ -14,7 +14,7 @@ export const POSTER_CREATION_PATCH_JSON_SCHEMA = {
   required: ['summary', 'upsert', 'removeKeys', 'canvas'],
   properties: {
     summary: { type: 'string', minLength: 1, maxLength: 500 },
-    upsert: POSTER_RECONSTRUCTION_JSON_SCHEMA.properties.elements,
+    upsert: { ...POSTER_RECONSTRUCTION_JSON_SCHEMA.properties.elements, maxItems: 45 },
     removeKeys: { type: 'array', maxItems: 45, items: { type: 'string', pattern: '^[a-z][a-z0-9_]{0,47}$' } },
     canvas: { anyOf: [POSTER_RECONSTRUCTION_JSON_SCHEMA.properties.canvas, { type: 'null' }] },
   },
