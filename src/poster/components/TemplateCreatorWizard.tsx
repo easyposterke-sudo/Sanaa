@@ -343,6 +343,14 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
     } else {
       setReplacements((current) => ({ ...current, [cropItemKey]: replacement }));
       setOmittedImages((current) => current.filter((key) => key !== cropItemKey));
+      const selectedKey = cropItemKey;
+      setAnalysis((current) => current ? {
+        ...current,
+        plan: {
+          ...current.plan,
+          elements: current.plan.elements.map((item) => item.key === selectedKey ? { ...item, box: crop, angle: 0 } : item),
+        },
+      } : current);
     }
     setCropItemKey(null);
   };

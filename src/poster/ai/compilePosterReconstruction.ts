@@ -92,6 +92,8 @@ export interface ReconstructionImageReplacement {
   width: number;
   height: number;
   credit?: string;
+  /** Keep a manually traced transparent outline intact when placing it. */
+  preserveOutline?: boolean;
 }
 
 const FONT_STACKS: Record<PosterReconstructionPlan['elements'][number]['fontFamily'], string> = {
@@ -203,7 +205,7 @@ export async function compilePosterReconstruction(input: {
       zIndex: nextZ++,
     };
 
-    const repairedBadgeWording = item.kind === 'image_region'
+    const repairedBadgeWording = item.kind === 'image_region' && !input.imageReplacements?.[item.key]
       ? extractMisclassifiedBadgeWording(item)
       : null;
     const repairedBadge = repairedBadgeWording
@@ -270,9 +272,10 @@ export async function compilePosterReconstruction(input: {
         layoutMode,
         canvasHeight,
       });
+      const keepSource = item.imageRole === 'logo' || Boolean(replacement?.preserveOutline);
       element = {
         ...base,
-        ...(item.imageRole === 'logo' ? { opacity: 1 } : {}),
+        ...(keepSource ? { opacity: 1 } : {}),
         ...(image.layout ?? {
           left: box.left,
           top: box.top,
@@ -288,24 +291,24 @@ export async function compilePosterReconstruction(input: {
               backgroundLibraryLabel: item.label,
             }
           : {}),
-        mask: item.imageRole === 'logo' ? 'none' : reconstructionImageMask(item.imageMask),
+        mask: keepSource ? 'none' : reconstructionImageMask(item.imageMask),
         ...(item.imageMask === 'rounded_rect'
           ? { maskCornerRadius: resolvedMaskCornerRadius(item.cornerStyle, item.cornerRadiusRatio) }
           : {}),
-        edge: item.imageRole === 'logo' ? 'none' : item.imageEdge,
-        ...(item.imageRole !== 'logo' && item.imageEdge === 'fade'
+        edge: keepSource ? 'none' : item.imageEdge,
+        ...(!keepSource && item.imageEdge === 'fade'
           ? {
               edgeFadeDirection: item.imageFadeDirection,
               edgeFadeAmount: item.imageFadeAmount,
               edgeFadeMinOpacity: item.imageFadeMinOpacity,
             }
           : {}),
-        adjustBrightness: item.imageRole === 'logo' ? 0 : item.imageBrightness,
-        adjustContrast: item.imageRole === 'logo' ? 0 : item.imageContrast,
-        adjustSaturation: item.imageRole === 'logo' ? 0 : item.imageSaturation,
-        adjustBlur: item.imageRole === 'logo' ? 0 : item.imageBlur,
-        adjustTintColor: item.imageRole === 'logo' ? undefined : item.imageTintColor ?? undefined,
-        adjustTintAmount: item.imageRole === 'logo' ? 0 : item.imageTintAmount,
+        adjustBrightness: keepSource ? 0 : item.imageBrightness,
+        adjustContrast: keepSource ? 0 : item.imageContrast,
+        adjustSaturation: keepSource ? 0 : item.imageSaturation,
+        adjustBlur: keepSource ? 0 : item.imageBlur,
+        adjustTintColor: keepSource ? undefined : item.imageTintColor ?? undefined,
+        adjustTintAmount: keepSource ? 0 : item.imageTintAmount,
       } satisfies PosterImageElement;
     } else if (item.kind === 'path') {
       element = compilePathElement(item, box, canvasHeight, base, warnings, layoutMode);
@@ -504,7 +507,7 @@ async function compileImageRegion(input: {
   layout?: Pick<PosterImageElement, 'left' | 'top' | 'scaleX' | 'scaleY'>;
 }> {
   const { item, box, replacement, warnings, layoutMode, canvasHeight } = input;
-  if (item.imageRole === 'icon' && item.iconName !== 'none') {
+  if (!replacement && item.imageRole === 'icon' && item.iconName !== 'none') {
     // The supplied semantic PNG silhouettes are wrapped in a 320px SVG. Older
     // reconstruction code treated every icon as 100px, so Fabric multiplied
     // location/phone/web artwork to 3.2x the detected box.
@@ -535,7 +538,7 @@ async function compileImageRegion(input: {
   }
 
   if (replacement) {
-    if (item.imageRole === 'logo') {
+    if (item.imageRole === 'logo' || replacement.preserveOutline) {
       const scale = Math.min(box.width / Math.max(1, replacement.width), box.height / Math.max(1, replacement.height));
       return {
         dataUrl: replacement.src, width: replacement.width, height: replacement.height,

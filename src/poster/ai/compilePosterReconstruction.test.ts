@@ -278,6 +278,23 @@ describe('compilePosterReconstruction', () => {
     });
     expect(compiled.project.elements[0]).toMatchObject({ type: 'image', opacity: 1, mask: 'none', edge: 'none', adjustTintAmount: 0, adjustBlur: 0 });
   });
+  it('uses a traced icon cutout instead of an AI icon and keeps its outline', async () => {
+    const src = 'data:image/png;base64,traced-icon';
+    const compiled = await compilePosterReconstruction({
+      plan: plan([element({
+        key: 'icon', kind: 'image_region', imageRole: 'icon', iconName: 'location',
+        box: { x: 0.2, y: 0.3, width: 0.1, height: 0.2 }, imageMask: 'circle', imageEdge: 'fade',
+        opacity: 0.5, imageBlur: 4,
+      })]),
+      reference: { dataUrl: 'unused', width: 1000, height: 1000 },
+      referenceGuideOpacity: 0,
+      imageReplacements: { icon: { src, width: 100, height: 200, preserveOutline: true } },
+    });
+    expect(compiled.project.elements[0]).toMatchObject({
+      type: 'image', src, left: 200, top: 300, scaleX: 1, scaleY: 1,
+      mask: 'none', edge: 'none', opacity: 1, adjustBlur: 0,
+    });
+  });
   it('omits only the image regions the user leaves out, including their field bindings', async () => {
     const compiled = await compilePosterReconstruction({
       plan: plan([
