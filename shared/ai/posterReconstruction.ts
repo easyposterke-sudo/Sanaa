@@ -5,10 +5,10 @@ export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
 // Keep the browser connected longer than the server's upstream deadline.
 export const POSTER_REFERENCE_AI_TIMEOUT_MS = 360_000 as const;
 export const POSTER_REFERENCE_CLIENT_TIMEOUT_MS = 390_000 as const;
-export const MAX_RECONSTRUCTION_ELEMENTS = 80 as const;
+export const MAX_RECONSTRUCTION_ELEMENTS = 45 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v17-editable-repeated-rows' as const;
+  'poster-reconstruction-v18-45-layer-limit' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',

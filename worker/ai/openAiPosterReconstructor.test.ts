@@ -236,8 +236,8 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
   });
 });
 
-it('accepts enough independent layers for dense editable instruction lists', () => {
-  const elements = Array.from({ length: 46 }, (_, index) => ({
+it('keeps reconstructed plans within the original 45-layer limit', () => {
+  const elements = Array.from({ length: MAX_RECONSTRUCTION_ELEMENTS }, (_, index) => ({
     ...reconstructionTextElement(null),
     key: `step_${index + 1}`,
     text: `Step ${index + 1}`,
@@ -253,6 +253,7 @@ it('accepts enough independent layers for dense editable instruction lists', () 
     confidence: 0.9,
   };
 
+  expect(MAX_RECONSTRUCTION_ELEMENTS).toBe(45);
   expect(POSTER_RECONSTRUCTION_JSON_SCHEMA.properties.elements.maxItems).toBe(MAX_RECONSTRUCTION_ELEMENTS);
   expect(PosterReconstructionPlanSchema.safeParse(plan).success).toBe(true);
   expect(PosterReconstructionPlanSchema.safeParse({
