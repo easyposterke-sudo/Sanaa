@@ -8,7 +8,6 @@ import {
   PosterTemplateAccessError,
   type MyPosterTemplateListItem,
 } from '../services/posterTemplatesApi';
-import { usePosterStore } from '../store/posterStore';
 import type { PosterTemplateCategory, PosterTemplateDefinition } from '../templateTypes';
 import { usePosterTemplateCategories } from '../hooks/usePosterTemplateCategories';
 import { AdminTemplateEditModal } from './AdminTemplateEditModal';
@@ -25,7 +24,6 @@ function formatUpdatedAt(value: string) {
 }
 
 export function TemplateManagementPage() {
-  const refreshRemotePosterTemplates = usePosterStore((state) => state.refreshRemotePosterTemplates);
   const { categories, error: categoryError, refresh: refreshCategories } = usePosterTemplateCategories();
   const [templates, setTemplates] = useState<MyPosterTemplateListItem[]>([]);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'denied' | 'error'>('loading');
@@ -94,7 +92,6 @@ export function TemplateManagementPage() {
     try {
       await deletePosterTemplateFromCloud(template.id);
       setTemplates((current) => current.filter((item) => item.id !== template.id));
-      void refreshRemotePosterTemplates();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'The template could not be deleted.');
     } finally {

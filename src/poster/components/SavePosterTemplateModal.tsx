@@ -92,7 +92,6 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
         project,
         ...(thumbnail ? { thumbnail } : {}),
       });
-      void usePosterStore.getState().refreshRemotePosterTemplates();
       onSaved();
     } catch (e) {
       setPublishFeedback(`ERROR: ${e instanceof Error ? e.message : 'Update failed'}`);
@@ -140,7 +139,6 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
       if (result.user) {
         await useAuthStore.getState().refreshUser();
       }
-      void usePosterStore.getState().refreshRemotePosterTemplates();
       onSaved();
     } catch (e) {
       setPublishFeedback(`ERROR: ${e instanceof Error ? e.message : 'Publish failed'}`);

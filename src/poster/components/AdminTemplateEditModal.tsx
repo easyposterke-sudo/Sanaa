@@ -62,7 +62,6 @@ export function AdminTemplateEditModal({
   useModalScrollLock(open);
   const { categories } = usePosterTemplateCategories();
   const navigate = useNavigate();
-  const refreshRemotePosterTemplates = usePosterStore((s) => s.refreshRemotePosterTemplates);
   const loadProject = usePosterStore((s) => s.loadProject);
 
   const [name, setName] = useState('');
@@ -116,7 +115,6 @@ export function AdminTemplateEditModal({
         description: description.trim() || undefined,
         fields: validFields,
       });
-      await refreshRemotePosterTemplates();
       onSaved();
       onClose();
     } catch (e) {

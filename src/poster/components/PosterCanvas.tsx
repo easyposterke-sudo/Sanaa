@@ -72,6 +72,7 @@ import { DynamicBackgroundTextbox } from '../DynamicBackgroundTextbox';
 import { needsPosterFabricObjectRecreation } from '../posterFabricObjectType';
 import { setFabricObjectGlassFill } from '../glassShapeFabric';
 import { posterTransformAppearance, sizePosterTransformControls } from '../posterTransformControls';
+import { shouldUsePosterRetinaScaling } from '../posterCanvasResolution';
 
 function posterDisplayScale(canvas: Canvas): number {
   return canvas.upperCanvasEl.getBoundingClientRect().width / canvas.getWidth() || 1;
@@ -215,9 +216,14 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
       canvasEl = document.createElement('canvas');
       host.appendChild(canvasEl);
     }
+    const viewport = viewportRef.current;
+    const availableWidth = viewport?.clientWidth || Math.min(viewportWidth, window.innerWidth);
+    const availableHeight = viewport?.clientHeight || Math.min(viewportHeight, window.innerHeight);
+    const initialScale = Math.min(availableWidth / w, availableHeight / h) * usePosterStore.getState().canvasZoom;
     const canvas = new Canvas(canvasEl, {
       width: w,
       height: h,
+      enableRetinaScaling: shouldUsePosterRetinaScaling(availableWidth, initialScale, window.devicePixelRatio),
       backgroundColor: isSolidBackground(bg) ? (bg.color || '#ffffff') : 'transparent',
       preserveObjectStacking: true,
       /** Ctrl (Windows/Linux) or Cmd (macOS) + click to add/remove objects from the selection */
@@ -700,6 +706,10 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
    * before the async object is back, and selection can never restore.
    */
   const syncingSelectionFromStoreRef = useRef(false);
+  const lastSyncedElementsRef = useRef<Map<string, PosterElement>>(new Map());
+  const lastSyncedReadOnlyRef = useRef(readOnly);
+  const lastSyncedFontSigRef = useRef('');
+  const lastSyncedFontGateRef = useRef(-1);
 
   /** Per-element throttles for filter application while sliders are moving. */
   const adjTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -768,6 +778,11 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
     if (!canvas) return;
     if (!fontsReady) return;
     if (fontSig && fontsLoadedForSigRef.current !== fontSig) return;
+
+    const forceFullSync =
+      lastSyncedReadOnlyRef.current !== readOnly ||
+      lastSyncedFontSigRef.current !== fontSig ||
+      lastSyncedFontGateRef.current !== posterFontsGateNonce;
 
     const invalidateCreation = (id: string) => {
       creatingRef.current.delete(id);
@@ -880,6 +895,13 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
           !needsSrcRecreate &&
           !needsInPlaceImageEffects &&
           (data?.adjustmentsKey ?? '') !== newAdjKey;
+
+        // Store updates preserve references for unchanged layers. Leave those Fabric
+        // objects alone so a slider change does not remeasure every text layer.
+        if (
+          existing && !forceFullSync && lastSyncedElementsRef.current.get(el.id) === el &&
+          !needsSrcRecreate && !needsInPlaceImageEffects && !needsAdjustmentUpdate
+        ) continue;
 
         if (existing && needsInPlaceImageEffects) {
           const img = existing as FabricImage;
@@ -1518,6 +1540,10 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
 
       syncFabricStackOrder(canvas, elements);
       canvas.requestRenderAll();
+      lastSyncedElementsRef.current = new Map(elements.map((element) => [element.id, element]));
+      lastSyncedReadOnlyRef.current = readOnly;
+      lastSyncedFontSigRef.current = fontSig;
+      lastSyncedFontGateRef.current = posterFontsGateNonce;
     } finally {
       syncingSelectionFromStoreRef.current = false;
     }
@@ -1571,14 +1597,6 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
     }
   }, [selectedIds]);
 
-  // Resize canvas
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
-    canvas.renderAll();
-  }, [canvasWidth, canvasHeight]);
-
   // Update background (Fabric + wrapper; wrapper shows gradient, Fabric is transparent for gradients)
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1597,6 +1615,27 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
     viewportHeight / canvasHeight
   );
   const scale = fitScale * canvasZoom;
+
+  // Fabric's default device-pixel-ratio backing can be much larger than the
+  // phone display. Switch it off only while design pixels already cover every
+  // visible device pixel; exports render separately at their requested size.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const viewport = viewportRef.current;
+    const availableWidth = viewport?.clientWidth || viewportWidth;
+    const availableHeight = viewport?.clientHeight || viewportHeight;
+    const displayScale = Math.min(availableWidth / canvasWidth, availableHeight / canvasHeight) * canvasZoom;
+    const retina = shouldUsePosterRetinaScaling(availableWidth, displayScale, window.devicePixelRatio);
+    if (
+      canvas.getWidth() === canvasWidth &&
+      canvas.getHeight() === canvasHeight &&
+      canvas.enableRetinaScaling === retina
+    ) return;
+    canvas.enableRetinaScaling = retina;
+    canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+    canvas.renderAll();
+  }, [canvasWidth, canvasHeight, canvasZoom, viewportWidth, viewportHeight]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

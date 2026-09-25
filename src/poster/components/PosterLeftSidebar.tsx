@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { lazy, Suspense, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Textbox } from 'fabric';
 import { usePosterStore } from '../store/posterStore';
@@ -7,7 +7,6 @@ import { posterShapePresetToElement } from '../posterShapePresets';
 import { PosterShapesModal } from './PosterShapesModal';
 import { PosterBackgroundsModal } from './PosterBackgroundsModal';
 import { CustomElementsModal } from './CustomElementsModal';
-import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
 import type { PosterBackgroundLibraryItem } from '../services/posterBackgroundsApi';
 import type { CustomElement } from '../services/customElementsApi';
 import { useAuthStore } from '../../auth/authStore';
@@ -19,6 +18,10 @@ import type {
   PosterShapeElement,
   PosterElementInput,
 } from '../types';
+
+const DesignRecorderPanel = lazy(() =>
+  import('../../recording/DesignRecorderPanel').then((module) => ({ default: module.DesignRecorderPanel }))
+);
 
 /** Payload for `addElement` when creating an image layer (union `Omit<PosterElement,…>` rejects `src` in literals). */
 type NewPosterImagePayload = Omit<PosterImageElement, 'id' | 'zIndex'>;
@@ -560,7 +563,11 @@ export function PosterLeftSidebar({
         </button>
       </div>
       )}
-      {isAdmin && <DesignRecorderPanel />}
+      {isAdmin && (
+        <Suspense fallback={<div role="status" className="text-xs text-zinc-500">Loading recorder…</div>}>
+          <DesignRecorderPanel />
+        </Suspense>
+      )}
     </div>
   );
 }

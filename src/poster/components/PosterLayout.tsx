@@ -1,12 +1,10 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PosterTopBar } from './PosterTopBar';
 import { PosterLeftSidebar } from './PosterLeftSidebar';
 import { PosterToolbar } from './PosterToolbar';
 import { PosterCanvas } from './PosterCanvas';
 import { PosterRightSidebar } from './PosterRightSidebar';
-import { ThreeTextModal } from './ThreeTextModal';
-import { Poster3DPreviewRenderer } from './Poster3DPreviewRenderer';
 import { posterTextToTwoLayer3D, restorePosterTextFrom3D } from '../convertPosterTextTo3D';
 import { CanvasSizeModal } from './CanvasSizeModal';
 import { MobilePropertyBar } from './MobilePropertyBar';
@@ -15,7 +13,6 @@ import { TemplateAuthoringBanner } from './TemplateAuthoringBanner';
 import { TemplateElementLabelModal } from './TemplateElementLabelModal';
 import { SavePosterTemplateModal } from './SavePosterTemplateModal';
 import { TemplateCreatorWizard } from './TemplateCreatorWizard';
-import { PosterElementAiEditModal } from './PosterElementAiEditModal';
 import type { CompiledPosterReconstruction } from '../ai/compilePosterReconstruction';
 import { usePosterStore } from '../store/posterStore';
 import { apiFetch } from '../../lib/api';
@@ -30,6 +27,16 @@ import { projectHasBlobImageUrls, warnIfPosterHasBlobRefs } from '../userTemplat
 import { removePathAnchorAt } from '../path/penToolMath';
 import type { PosterTemplateCategory, PosterTemplateFieldBinding } from '../templateTypes';
 import type { Poster3DTextElement, PosterElement, PosterImageElement, PosterTextElement, PosterPathElement, PosterProject } from '../types';
+
+const ThreeTextModal = lazy(() =>
+  import('./ThreeTextModal').then((module) => ({ default: module.ThreeTextModal }))
+);
+const Poster3DPreviewRenderer = lazy(() =>
+  import('./Poster3DPreviewRenderer').then((module) => ({ default: module.Poster3DPreviewRenderer }))
+);
+const PosterElementAiEditModal = lazy(() =>
+  import('./PosterElementAiEditModal').then((module) => ({ default: module.PosterElementAiEditModal }))
+);
 
 /** Set on full unload from `#/poster`; same tab refresh keeps sessionStorage → restore cloud/local autosave. New tab has no flag → cold start. */
 const POSTER_RESTORE_AUTOSAVE_AFTER_RELOAD_KEY = 'poster_restore_autosave_after_reload';
@@ -128,13 +135,15 @@ export function PosterLayout() {
   const mainRef = useRef<HTMLElement>(null);
 
   // Sidebar open state — default open only on large screens
-  const [leftOpen, setLeftOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
-  const [rightOpen, setRightOpen] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const [leftOpen, setLeftOpen] = useState(isDesktop);
+  const [rightOpen, setRightOpen] = useState(isDesktop);
 
   // Auto-open/close sidebars on breakpoint changes
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)');
     const handler = (e: MediaQueryListEvent) => {
+      setIsDesktop(e.matches);
       setLeftOpen(e.matches);
       setRightOpen(e.matches);
     };
@@ -194,14 +203,9 @@ export function PosterLayout() {
     return () => ro.disconnect();
   }, []);
   const addElement = usePosterStore((s) => s.addElement);
-  const refreshRemotePosterTemplates = usePosterStore((s) => s.refreshRemotePosterTemplates);
   const setCanvasSize = usePosterStore((s) => s.setCanvasSize);
   const canvasWidth = usePosterStore((s) => s.canvasWidth);
   const canvasHeight = usePosterStore((s) => s.canvasHeight);
-
-  useEffect(() => {
-    void refreshRemotePosterTemplates();
-  }, [refreshRemotePosterTemplates]);
 
   const loadProject = usePosterStore((s) => s.loadProject);
   const [user, setUser] = useState<{ id: string } | null>(null);
@@ -994,14 +998,16 @@ export function PosterLayout() {
 
         {/* Right sidebar — hidden on mobile, inline on desktop */}
         <aside className="hidden overflow-y-auto overscroll-y-contain border-l border-zinc-200 bg-white lg:flex lg:w-64 lg:shrink-0 lg:flex-col dark:border-zinc-800 dark:bg-zinc-900">
-          <PosterRightSidebar
-            readOnly={readOnly}
-            onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
-            onTransformText3D={handleTransformText3D}
-            onRevert3DToText={handleRevert3DToText}
-            onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
-            templateFieldLabel={selectedTemplateFieldLabel}
-          />
+          {isDesktop && (
+            <PosterRightSidebar
+              readOnly={readOnly}
+              onOpenEdit3D={(id) => setThreeTextModal({ editId: id })}
+              onTransformText3D={handleTransformText3D}
+              onRevert3DToText={handleRevert3DToText}
+              onOpenTemplateField={templateAuthoring ? setLabelTargetId : undefined}
+              templateFieldLabel={selectedTemplateFieldLabel}
+            />
+          )}
         </aside>
       </div>
 
@@ -1015,47 +1021,55 @@ export function PosterLayout() {
         templateFieldLabel={selectedTemplateFieldLabel}
       />
       {threeTextModal && (
-        <ThreeTextModal
-          mode={threeTextModal}
-          onClose={() => setThreeTextModal(null)}
-          onSendToPoster={(image, config, dimensions) => {
-            addElement({
-              type: '3d-text',
-              image,
-              config,
-              previewWidth: dimensions.width,
-              previewHeight: dimensions.height,
-              left: 100,
-              top: 100,
-              scaleX: 1,
-              scaleY: 1,
-              angle: 0,
-              opacity: 1,
-            });
-            setThreeTextModal(null);
-          }}
-          onEditComplete={() => setThreeTextModal(null)}
-        />
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/80 text-white">Loading 3D editor…</div>}>
+          <ThreeTextModal
+            mode={threeTextModal}
+            onClose={() => setThreeTextModal(null)}
+            onSendToPoster={(image, config, dimensions) => {
+              addElement({
+                type: '3d-text',
+                image,
+                config,
+                previewWidth: dimensions.width,
+                previewHeight: dimensions.height,
+                left: 100,
+                top: 100,
+                scaleX: 1,
+                scaleY: 1,
+                angle: 0,
+                opacity: 1,
+              });
+              setThreeTextModal(null);
+            }}
+            onEditComplete={() => setThreeTextModal(null)}
+          />
+        </Suspense>
       )}
       {aiEditTargetId && (
-        <PosterElementAiEditModal
-          selectedId={aiEditTargetId}
-          onApplied={(replacementIds) => {
-            const state = usePosterStore.getState();
-            const threeDIds = replacementIds.filter((id) =>
-              state.elements.some((element) => element.id === id && element.type === '3d-text'),
-            );
-            if (threeDIds.length > 0) {
-              setAutomatic3DRenderIds((ids) => [...new Set([...ids, ...threeDIds])]);
-            }
-          }}
-          onClose={() => setAiEditTargetId(null)}
-        />
+        <Suspense fallback={<div role="status" className="fixed inset-0 z-[95] flex items-center justify-center bg-zinc-950/80 text-white">Loading AI editor…</div>}>
+          <PosterElementAiEditModal
+            selectedId={aiEditTargetId}
+            onApplied={(replacementIds) => {
+              const state = usePosterStore.getState();
+              const threeDIds = replacementIds.filter((id) =>
+                state.elements.some((element) => element.id === id && element.type === '3d-text'),
+              );
+              if (threeDIds.length > 0) {
+                setAutomatic3DRenderIds((ids) => [...new Set([...ids, ...threeDIds])]);
+              }
+            }}
+            onClose={() => setAiEditTargetId(null)}
+          />
+        </Suspense>
       )}
-      <Poster3DPreviewRenderer
-        elementIds={automatic3DRenderIds}
-        onRendered={handleAutomatic3DRendered}
-      />
+      {automatic3DRenderIds.length > 0 && (
+        <Suspense fallback={null}>
+          <Poster3DPreviewRenderer
+            elementIds={automatic3DRenderIds}
+            onRendered={handleAutomatic3DRendered}
+          />
+        </Suspense>
+      )}
       <TemplateCreatorWizard
         open={templateCreatorOpen}
         mode={templateCreatorMode}

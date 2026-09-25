@@ -10,7 +10,7 @@ import type { EditorState, TextLayer3D } from '../core/types';
 import { isShapeLayer } from '../core/types';
 import type { PosterProject } from '../poster/types';
 import { getCustomFont } from '../core/font/customFontCache';
-import { getTypefaceUrl } from '../core/renderer/threeTextMeshCore';
+import { getTypefaceUrl } from '../core/renderer/typefaceUrl';
 
 const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_DECODED_PIXELS = 100_000_000;
