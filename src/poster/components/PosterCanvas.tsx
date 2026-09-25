@@ -2678,7 +2678,7 @@ async function createFabricObject(
   // When locked or readOnly: prevent move/scale/rotate but keep selectable so user can select
   const lockAll = locked || readOnly;
   const common: Record<string, unknown> = {
-    ...posterTransformAppearance(),
+    ...posterTransformAppearance(el.type === 'text'),
     left: el.left,
     top: el.top,
     scaleX: el.scaleX,
