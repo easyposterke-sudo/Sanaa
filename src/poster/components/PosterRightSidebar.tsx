@@ -160,9 +160,6 @@ function LineCurveControls({
       </label>
       {shape.curveControl ? (
         <>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-            Adjust X/Y to bend the line. Drag on canvas to move the whole shape.
-          </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-[10px] text-zinc-500">X</label>
@@ -349,9 +346,6 @@ function PathEditingControls({
       </div>
       {pathEditActive && (
         <>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-            Drag anchors/handles on canvas. Direct (A): click a segment to add a point. Press Esc to exit.
-          </p>
           <div className="flex flex-col gap-1 border-y border-zinc-100 py-2 dark:border-zinc-800">
             <PosterSlider
               label={`Anchor size (${pathPointSize}px)`}
@@ -609,9 +603,6 @@ function PathStyleControls({
               updateElement(path.id, { fill: { ...fillNorm, blur } })
             }
           />
-          <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-            The blur is clipped to the editable path, including holes.
-          </p>
         </>
       )}
       <div className="flex items-center gap-2">
@@ -668,9 +659,6 @@ function PathStyleControls({
         >
           Copy SVG snippet
         </button>
-        <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-          For the 3D app: paste into an SVG-friendly tool or use as a decal bitmap source.
-        </p>
       </div>
     </div>
   );
@@ -712,13 +700,6 @@ function ShapeFillAndRoundnessControls({
 
   return (
     <div className="flex flex-col gap-3">
-      {shape.type === 'rect' && rectHasPerCornerRadii(shape) && (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          This rectangle uses a fixed mixed corner style (top rounded, bottom square). Change fill and
-          shadow below; resize and rotate on the canvas.
-        </p>
-      )}
-
       {shape.type === 'rect' && !rectHasPerCornerRadii(shape) && (
         <PosterSlider
           label={`Corner roundness (${rx}px)`}
@@ -780,9 +761,6 @@ function ShapeFillAndRoundnessControls({
               />
             </div>
           </div>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-            Set width to 0 to hide outline.
-          </p>
         </div>
       )}
 
@@ -913,9 +891,6 @@ function ShapeFillAndRoundnessControls({
               value={fillNorm.blur}
               onChange={(blur) => setFill({ ...fillNorm, blur })}
             />
-            <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-              Blurs the poster layers behind this shape. Use fill opacity above to control the tint.
-            </p>
           </>
         )}
 
@@ -1246,9 +1221,6 @@ function PosterImageAppearanceControls({
       {raster.type === 'image' && (
         <div className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900 dark:bg-amber-950/20">
           <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">Replace image</p>
-          <p className="text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Swap the photo without losing its position, displayed size, crop, mask, or effects.
-          </p>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -1324,10 +1296,6 @@ function PosterImageAppearanceControls({
           >
             {removingBackground ? 'Removing background…' : 'Remove background'}
           </button>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-            Runs free on this device using the objects-and-products model. The first use
-            downloads and caches the model.
-          </p>
           {backgroundRemovalMessage && (
             <p
               className="text-[11px] text-zinc-600 dark:text-zinc-300"
@@ -1340,9 +1308,6 @@ function PosterImageAppearanceControls({
       )}
 
       <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-600 dark:bg-zinc-800/50">
-        <p className="text-xs text-zinc-600 dark:text-zinc-400">
-          Shape, position, and size are edited in the mask editor.
-        </p>
         <button
           type="button"
           onClick={() => setMaskEditorOpen(true)}
@@ -1477,11 +1442,6 @@ function PosterImageAppearanceControls({
             Paper tear + soft fade
           </option>
         </select>
-        {tearDisabled && (
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-            Turn off shape mask to use paper tear (or tear + fade).
-          </p>
-        )}
         {edgeUsesFade && (
           <div className="mt-1 flex flex-col gap-1">
             <label className="text-xs text-zinc-600 dark:text-zinc-400">Fade area</label>
@@ -1497,9 +1457,6 @@ function PosterImageAppearanceControls({
               <option value="radial">All around (vignette)</option>
               <option value="bottom">Bottom only</option>
             </select>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-              Bottom only fades upward from the lower edge; all around uses a circular vignette.
-            </p>
           </div>
         )}
       </div>
@@ -1517,9 +1474,6 @@ function PosterImageAppearanceControls({
                 updateElement(raster.id, { edgeFadeAmount: v })
               }
             />
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-              Higher = fade reaches further inward from the edge or bottom band.
-            </p>
           </div>
           <div className="flex flex-col gap-1">
             <PosterSlider
@@ -1532,10 +1486,6 @@ function PosterImageAppearanceControls({
                 updateElement(raster.id, { edgeFadeMinOpacity: v })
               }
             />
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-              How opaque the outer faded region stays. Raise this to avoid harsh, fully transparent
-              rims; lower keeps a stronger soft-edge cutout.
-            </p>
           </div>
         </div>
       )}
@@ -1588,12 +1538,7 @@ function TextBackgroundControls({
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Text background</p>
-          <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-            Resizes automatically with the rendered words and lines.
-          </p>
-        </div>
+        <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Text background</p>
         <button
           type="button"
           onClick={() => updateBackground({ enabled: !background.enabled })}
@@ -1877,7 +1822,6 @@ function PosterTextControls({
           </button>
           {show3DColors && (
             <div className="mt-3 flex flex-col gap-3">
-              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">Two-layer face and shell style</p>
               <label className="flex items-center justify-between gap-2 text-xs text-zinc-700 dark:text-zinc-300">
                 Front color
                 <ColorPickerPopover color={faceColor} onChange={setFaceColor} aria-label="3D front color" />
@@ -2149,9 +2093,6 @@ function PosterTextControls({
           value={text.charSpacing ?? 0}
           onChange={(v) => updateElement(text.id, { charSpacing: v })}
         />
-        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-          Tighter ← → wider. Scales with font size (same as CSS letter-spacing in em).
-        </p>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -2170,9 +2111,6 @@ function PosterTextControls({
           value={text.lineHeight ?? 1.16}
           onChange={(v) => updateElement(text.id, { lineHeight: v })}
         />
-        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-          Controls spacing between lines in multi-line text.
-        </p>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -2461,9 +2399,6 @@ function PosterTextControls({
               })
             }
           />
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-            0% = outline only.
-          </p>
         </div>
 
         <div className="flex flex-col gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
@@ -2804,9 +2739,6 @@ export function PosterRightSidebar({
             </>
           )}
         </div>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Select an element to edit its properties
-        </p>
       </div>
     );
   }
@@ -2832,11 +2764,6 @@ export function PosterRightSidebar({
               <div className="rounded-lg border border-accent-200 bg-accent-50/70 p-3 dark:border-accent-900 dark:bg-accent-950/30">
                 <p className="text-xs font-semibold text-accent-800 dark:text-accent-200">
                   Template field
-                </p>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-600 dark:text-zinc-400">
-                  {templateFieldLabel
-                    ? `This layer is saved as “${templateFieldLabel}”.`
-                    : 'Choose what users should enter when they reuse this template.'}
                 </p>
                 <button
                   type="button"

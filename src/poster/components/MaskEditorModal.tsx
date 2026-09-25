@@ -149,9 +149,6 @@ export function MaskEditorModal({ open, target, onClose, onApply }: MaskEditorMo
       <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-zinc-900 sm:max-h-[calc(100dvh-2rem)]">
         <div className="shrink-0 border-b border-zinc-200 px-3 py-3 sm:px-6 sm:py-4 dark:border-zinc-700">
           <h2 className="text-lg font-semibold">Mask editor</h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Resize the picture, then drag the mask to pick the visible area.
-          </p>
         </div>
 
         <div className="grid min-h-0 min-w-0 flex-1 gap-2 overflow-y-auto overflow-x-hidden overscroll-y-contain p-3 sm:p-6 md:grid-cols-[auto,220px] md:justify-items-start md:justify-center">
@@ -316,11 +313,6 @@ export function MaskEditorModal({ open, target, onClose, onApply }: MaskEditorMo
                 />
               </div>
             )}
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              {hasMask
-                ? 'Drag the white mask shape on top of the picture to choose the kept area.'
-                : 'Select a shape to apply a mask, or click Apply to keep the full image.'}
-            </p>
           </div>
         </div>
 

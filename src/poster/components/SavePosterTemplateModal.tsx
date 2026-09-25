@@ -162,13 +162,6 @@ export function SavePosterTemplateModal({ open, onClose, onSaved, template, isCl
                   : 'Saving to cloud…'
                 : 'Save template'}
           </h2>
-          <p className="mt-1 text-xs text-zinc-500">
-            {publishBusy
-              ? 'Please wait — do not close or click again.'
-              : isEditingCloudTemplate
-                ? 'Update this template, or save the edited version as a separate new template.'
-                : 'Save to the cloud library for the Poster templates page.'}
-          </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">

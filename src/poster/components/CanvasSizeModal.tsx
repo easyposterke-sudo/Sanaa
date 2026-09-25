@@ -45,9 +45,6 @@ export function CanvasSizeModal({
           <h2 className="text-lg font-semibold">
             {isNewProject ? 'Choose your canvas size' : 'Change canvas size'}
           </h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Select a preset or enter custom dimensions (pixels)
-          </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-6">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { PosterPromptCreator } from './PosterPromptCreator';
 import { PosterAssetCropDialog } from './PosterAssetCropDialog';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
-import { MAX_RECONSTRUCTION_ELEMENTS, POSTER_REFERENCE_AI_TIMEOUT_MS } from '../../../shared/ai/posterReconstruction';
+import { MAX_RECONSTRUCTION_ELEMENTS } from '../../../shared/ai/posterReconstruction';
 import type {
   PosterReconstructionPlan,
   PosterReconstructionSource,
@@ -31,7 +31,6 @@ import {
   normalizeTemplateCanvasDimension,
   recommendTemplateCanvasSize,
   TEMPLATE_CANVAS_SIZE_PRESETS,
-  templateCanvasOrientation,
 } from '../templateCanvasSize';
 
 interface CanvasSizeSelection {
@@ -369,11 +368,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
             <h2 id="poster-reconstruction-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
               {creatingPoster ? 'Create an editable poster' : 'Create a template from a flat poster'}
             </h2>
-            <p className="mt-1 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
-              {creatingPoster
-                ? 'AI reconstructs editable text, basic shapes, and image regions, then opens the result directly in the editor.'
-                : 'AI reconstructs editable text, basic shapes, and image regions. You polish the draft, confirm the fillable fields, then save it to your template library.'}
-            </p>
           </div>
           <button
             type="button"
@@ -424,10 +418,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
                   2. Choose the final poster size
                 </h3>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Upload the reference first. Its shape will be detected and the closest standard
-                  high-resolution size will be recommended.
-                </p>
               </div>
             )}
             {reference && recommendedPreset && originalCanvasSize && (
@@ -435,15 +425,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
                   2. Choose the final poster size
                 </h3>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                  Detected {reference.sourceWidth}×{reference.sourceHeight} ({templateCanvasOrientation(
-                    reference.sourceWidth,
-                    reference.sourceHeight,
-                  ).toLowerCase()}). The closest standard size is{' '}
-                  <strong className="text-zinc-700 dark:text-zinc-200">
-                    {recommendedPreset.width}×{recommendedPreset.height}
-                  </strong>.
-                </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   {canvasSizePresets.map((preset) => {
                     const selected = canvasSize?.id === preset.id;
@@ -477,9 +458,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
                         </span>
                         <span className="mt-1 block text-xs font-medium text-violet-700 dark:text-violet-300">
                           {preset.width}×{preset.height}
-                        </span>
-                        <span className="mt-0.5 block text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-                          {preset.description}
                         </span>
                       </button>
                     );
@@ -608,10 +586,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
                 </>
               ) : (
                 <>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                    The original poster is placed behind the reconstructed layers as a locked guide.
-                    Replace or delete it before publishing so old names and photographs do not remain.
-                  </p>
                   <label className="mt-3 block text-xs font-medium text-zinc-600 dark:text-zinc-300">
                     Guide opacity: {Math.round(guideOpacity * 100)}%
                     <input
@@ -629,30 +603,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
               )}
             </div>
 
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300">
-              <p className="font-semibold text-zinc-800 dark:text-zinc-100">What happens next</p>
-              {creatingPoster ? (
-                <ol className="mt-2 list-decimal space-y-1 pl-4">
-                  <li>The reconstructed poster opens directly in the editor.</li>
-                  <li>Every detected part is available as an editable layer.</li>
-                  <li>Correct fonts, crops, backgrounds, and any missed decoration.</li>
-                  <li>Save or export the poster normally when you are finished.</li>
-                </ol>
-              ) : (
-                <ol className="mt-2 list-decimal space-y-1 pl-4">
-                  <li>The editable draft opens in the canvas.</li>
-                  <li>Likely titles, dates, names, and photos are labeled automatically.</li>
-                  <li>Correct fonts, crops, backgrounds, and any missed decoration.</li>
-                  <li>Click text or image layers to add or correct template fields.</li>
-                  <li>Save the finished template to the cloud library.</li>
-                </ol>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              This first version makes a strong starting draft, not a pixel-perfect layered source.
-              Complex backgrounds and overlapping artwork still need manual correction.
-            </div>
           </section>
         </div>
 
@@ -663,9 +613,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
             </button>
             <div className="mb-3">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">4. Choose images for the editable draft</h3>
-              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                Choose each image separately. Upload your own, crop a logo or illustration from the poster, pick a Pexels result, or leave an image out. Pexels may not have an exact match.
-              </p>
             </div>
             <div className="space-y-4">
               {replacementItems(analysis.plan).map((item) => {
@@ -677,12 +624,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-zinc-900 dark:text-white">{item.label}</p>
-                        <p className="mt-1 max-w-2xl text-xs text-zinc-500 dark:text-zinc-400">
-                          {item.replacementReason || 'Choose what to use for this image region.'}
-                        </p>
-                        {item.imageRole === 'logo' && (
-                          <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">Brand marks are not searched on Pexels. Upload an original, crop this logo, or leave it out.</p>
-                        )}
                       </div>
                       <label className="cursor-pointer rounded-lg border border-violet-300 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-950/30">
                         {preparingReplacement === item.key ? 'Preparing…' : item.imageRole === 'logo' ? 'Upload logo' : 'Upload image'}
@@ -718,7 +659,6 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
                       </form>
                     )}
 
-                    {omitted && <p className="mt-2 text-xs text-violet-700 dark:text-violet-300">This image will not be added to the draft.</p>}
 
                     {selected && !omitted && (
                       <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-2 dark:border-emerald-800 dark:bg-emerald-950/20">
@@ -846,12 +786,6 @@ function ReconstructionProgress({ phase, elapsedSeconds }: { phase: Reconstructi
   const title = phase === 'preparing' ? 'Preparing the reference'
     : phase === 'analyzing' ? 'Reconstructing editable layers'
       : 'Building the editable draft';
-  const description = phase === 'preparing'
-    ? 'Checking available fonts for editable text.'
-    : phase === 'analyzing'
-      ? 'The AI is reading wording and identifying separate rows, shapes, and image regions. You can review image choices next.'
-      : 'Placing the detected layers on the canvas.';
-  const remainingSeconds = Math.max(0, Math.ceil(POSTER_REFERENCE_AI_TIMEOUT_MS / 1000) - elapsedSeconds);
 
   return (
     <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
@@ -864,7 +798,6 @@ function ReconstructionProgress({ phase, elapsedSeconds }: { phase: Reconstructi
           Elapsed {formatElapsed(elapsedSeconds)}
         </span>
       </div>
-      <p className="mt-1 text-xs text-sky-800 dark:text-sky-200">{description}</p>
       <ol className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
         {labels.map((label, index) => (
           <li key={label} aria-current={index === activeIndex ? 'step' : undefined} className={`rounded-md px-2 py-1.5 ${index < activeIndex
@@ -876,11 +809,6 @@ function ReconstructionProgress({ phase, elapsedSeconds }: { phase: Reconstructi
           </li>
         ))}
       </ol>
-      {phase === 'analyzing' && (
-        <p className="mt-2 text-[11px] text-sky-700 dark:text-sky-300">
-          Time left in the analysis window: up to {formatElapsed(remainingSeconds)}. The draft may be ready sooner; this is not an ETA.
-        </p>
-      )}
     </div>
   );
 }

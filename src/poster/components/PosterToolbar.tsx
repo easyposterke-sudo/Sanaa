@@ -262,9 +262,6 @@ export const PosterToolbar = memo(function PosterToolbar() {
                     >
                       Finish open line
                     </button>
-                    <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-                      Click to add points. Press Enter or use Finish open line when done.
-                    </p>
                   </>
                 )}
               </div>
@@ -298,9 +295,6 @@ export const PosterToolbar = memo(function PosterToolbar() {
                     }
                   />
                 </label>
-                <p className="text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
-                  Paint over the area to blur. Each stroke can be undone.
-                </p>
               </div>
             )}
           </div>

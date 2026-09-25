@@ -127,9 +127,6 @@ export function CustomElementsModal({
               <h2 id="custom-elements-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 My Custom Elements
               </h2>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Keep logos, portraits, photos, and graphics ready for every poster.
-              </p>
             </div>
             <button
               type="button"
@@ -221,7 +218,6 @@ export function CustomElementsModal({
               <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 {elements.length === 0 ? 'Your custom element library is empty.' : 'No elements match your search.'}
               </p>
-              {elements.length === 0 && <p className="mt-1 text-xs text-zinc-500">Upload a logo or frequently used photo to get started.</p>}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">

@@ -19,8 +19,6 @@ interface TemplateElementLabelModalProps {
   fieldKind: PosterTemplateFieldKind;
   /** Text layer content (when kind === 'text'). */
   textPreview?: string;
-  /** Image src hint when kind === 'image'. */
-  imageSrcPreview?: string;
   existing: PosterTemplateFieldBinding | undefined;
   reservedKeys: Set<string>;
   onClose: () => void;
@@ -33,7 +31,6 @@ export function TemplateElementLabelModal({
   elementId,
   fieldKind,
   textPreview = '',
-  imageSrcPreview = '',
   existing,
   reservedKeys,
   onClose,
@@ -114,22 +111,9 @@ export function TemplateElementLabelModal({
         <h2 id="tpl-label-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           {title}
         </h2>
-        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-          Layer <span className="font-mono text-zinc-700 dark:text-zinc-300">{elementId}</span>
-        </p>
         {fieldKind === 'text' && (
           <p className="mt-2 rounded-md bg-zinc-50 px-2 py-1.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
             {snippet(textPreview)}
-          </p>
-        )}
-        {fieldKind === 'image' && (
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-            Template users will upload a replacement image for this slot.
-            {imageSrcPreview ? (
-              <span className="mt-1 block truncate font-mono text-[10px] text-zinc-400">
-                {snippet(imageSrcPreview, 64)}
-              </span>
-            ) : null}
           </p>
         )}
 
@@ -146,9 +130,6 @@ export function TemplateElementLabelModal({
               }
               className="rounded border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
             />
-            <p className="text-[11px] text-zinc-500">
-              The field key is automatically generated in <strong>snake_case</strong> from this label.
-            </p>
           </div>
 
           <div className="flex flex-col gap-1">

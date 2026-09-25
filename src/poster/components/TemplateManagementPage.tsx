@@ -123,9 +123,6 @@ export function TemplateManagementPage() {
                 Private
               </span>
             </div>
-            <p className="hidden text-xs text-zinc-500 sm:block dark:text-zinc-400">
-              Only templates saved under your account appear here.
-            </p>
           </div>
           <ThemeToggle />
         </div>
@@ -188,9 +185,6 @@ export function TemplateManagementPage() {
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-100 text-2xl dark:bg-violet-950">▧</div>
             <h2 className="mt-4 text-lg font-semibold">No cloud templates yet</h2>
-            <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500 dark:text-zinc-400">
-              Create a poster, label its editable fields, and save it to the cloud. It will appear here for you to manage.
-            </p>
             <Link to="/poster" className="mt-6 inline-flex rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
               Open the template creator
             </Link>

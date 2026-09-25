@@ -143,11 +143,6 @@ export function AdminTemplateEditModal({
           <h2 id="admin-edit-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {saving ? 'Updating template…' : 'Edit template'}
           </h2>
-          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {saving
-              ? 'Please wait — do not close or click again.'
-              : 'Review and fix placeholder labels. Orphaned fields point to missing elements.'}
-          </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
@@ -207,7 +202,7 @@ export function AdminTemplateEditModal({
               </h3>
               {validations.length === 0 ? (
                 <p className="px-3 py-4 text-sm text-zinc-500 dark:text-zinc-400">
-                  No fields defined. Open in editor to add labels to text/image layers.
+                  No fields defined
                 </p>
               ) : (
                 <div className="max-h-48 overflow-auto overscroll-contain">

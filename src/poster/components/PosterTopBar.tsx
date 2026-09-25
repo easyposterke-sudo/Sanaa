@@ -147,9 +147,9 @@ export function PosterTopBar({
   }, [canvasWidth, canvasHeight, canvasBackground, getProject]);
 
   const exportOptions = [
-    { scale: 2, label: 'Standard', description: 'Good for web and social media' },
-    { scale: 4, label: 'High resolution', description: 'Good for most printing' },
-    { scale: 8, label: 'Maximum detail', description: 'Available when the output fits safely in memory' },
+    { scale: 2, label: 'Standard' },
+    { scale: 4, label: 'High resolution' },
+    { scale: 8, label: 'Maximum detail' },
   ].map((option) => ({
     ...option,
     plan: getPosterExportPlan(canvasWidth, canvasHeight, option.scale),
@@ -427,7 +427,7 @@ export function PosterTopBar({
             <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Export Resolution
             </div>
-            {exportOptions.map(({ scale, label, description, plan }) => (
+            {exportOptions.map(({ scale, label, plan }) => (
               <button
                 key={scale}
                 type="button"
@@ -440,11 +440,9 @@ export function PosterTopBar({
                   {label} · {scale}×
                 </span>
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {plan.width.toLocaleString()}×{plan.height.toLocaleString()} px · {Math.round(plan.rawMemoryMiB)} MiB/buffer
+                  {plan.width.toLocaleString()}×{plan.height.toLocaleString()} px
                 </span>
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {plan.safe ? description : plan.reason}
-                </span>
+                {!plan.safe && <span className="text-xs text-zinc-500 dark:text-zinc-400">{plan.reason}</span>}
               </button>
             ))}
           </div>

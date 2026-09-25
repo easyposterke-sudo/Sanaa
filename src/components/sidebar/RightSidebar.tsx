@@ -853,11 +853,6 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                       <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                         Layer colors
                       </span>
-                      <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-500">
-                        {extrusionOnly
-                          ? 'One continuous material covers the closed front, rounded edges, sides, and back.'
-                          : 'Front face and extrusion for the selected layer.'}
-                      </p>
                       {layerColorFields.map(([label, key, draftKey]) => {
                         const fallback = key === 'frontColor' ? '#ffffff' : '#d4af37';
                         const pickerHex = hex6OrDefault(activeLayer[key], fallback);
@@ -989,11 +984,8 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                           onChange={(e) => updateActiveShape({ svgPathD: e.target.value })}
                           rows={5}
                           className="w-full rounded border border-zinc-200 bg-white px-2 py-1.5 font-mono text-xs dark:border-zinc-600 dark:bg-zinc-800"
-                          placeholder={'Paste the SVG path d attribute value here...\ne.g. M10 10 L50 10 L50 50 Z'}
+                          placeholder="SVG path data"
                         />
-                        <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                          Paste the <code className="text-zinc-600 dark:text-zinc-300">d</code> attribute value from an SVG <code className="text-zinc-600 dark:text-zinc-300">{'<path>'}</code> element. The path is scaled to fit the width and height above.
-                        </p>
                       </div>
                     )}
                   </div>
@@ -1184,9 +1176,6 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                     <p className="mb-2 text-xs font-semibold text-zinc-600 dark:text-zinc-400">
                       Font library (admin)
                     </p>
-                    <p className="mb-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                      Save a font to the cloud to reuse it here and in the list above.
-                    </p>
                     <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">Name</label>
                     <input
                       type="text"
@@ -1271,7 +1260,7 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                   ) : (
                     <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
                       {renderEngine === 'webgl'
-                        ? 'Start the HDR server (npm run server) to load environments.'
+                        ? 'HDR environments unavailable.'
                         : 'Switch to WebGL preset to use HDR environments.'}
                     </p>
                   )}
@@ -1349,10 +1338,6 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                       step={0.05}
                       onChange={(v) => setState({ frontEnvMapIntensity: v })}
                     />
-                    <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                      Dials down environment reflections, surface gloss (roughness), and clearcoat on the front cap
-                      only — not the extrusion sides.
-                    </p>
                   </>
                 )}
               </div>
@@ -1688,10 +1673,6 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                   label: 'Front decal',
                   children: (
                     <div className="flex flex-col gap-3 py-3">
-                      <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                        Independent logo layer on the front face (own diffuse / normal). Uses a flat plane; best on flat
-                        shapes.
-                      </p>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-zinc-600 dark:text-zinc-400">Enable</span>
                         <button
@@ -1813,9 +1794,6 @@ export const RightSidebar = memo(function RightSidebar({ force3dLayerUI = false 
                                 />
                               </button>
                             </div>
-                            <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-                              Uses alpha from the diffuse; pick any color (e.g. white) while keeping the normal map.
-                            </p>
                             {frontDecalTintEnabled && (
                               <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
                                 Tint color

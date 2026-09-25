@@ -836,7 +836,6 @@ export function PosterLayout() {
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
           <form className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl dark:bg-zinc-900" onSubmit={(event) => { event.preventDefault(); if (saveName.trim()) void handleSaveToCloud(saveName); }}>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Save poster</h2>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">It will appear in My Stuff with a preview.</p>
             <label className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300" htmlFor="poster-save-name">Name</label>
             <input id="poster-save-name" autoFocus maxLength={120} value={saveName} onChange={(event) => setSaveName(event.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />
             <div className="mt-5 flex justify-end gap-2">
@@ -917,7 +916,6 @@ export function PosterLayout() {
           elementId={labelTargetId}
           fieldKind={labelFieldKind}
           textPreview={labelTextEl?.text ?? labelThreeDTextEl?.config.text?.content ?? ''}
-          imageSrcPreview={labelImageEl?.src ?? ''}
           existing={existingBindingForLabel}
           reservedKeys={reservedKeysForLabel}
           onClose={closeLabelModal}

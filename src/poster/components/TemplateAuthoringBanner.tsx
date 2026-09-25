@@ -10,14 +10,9 @@ export function TemplateAuthoringBanner({ fieldCount, notice, onCancel, onSaveTe
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/40">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-amber-950 dark:text-amber-100">Template labeling mode</p>
-        <p className="text-xs text-amber-900/80 dark:text-amber-200/90">
-          Click a <strong>text</strong>, <strong>3D text</strong>, or <strong>image</strong> layer to set its label; the field key is
-          generated in <strong>snake_case</strong> from the label (you can edit it if needed). Only labeled
-          layers become fillable fields. When done, save the template to the library.
-        </p>
         <p className="mt-1 text-xs font-medium text-amber-950 dark:text-amber-100">
           {fieldCount === 0
-            ? 'No fields yet — select a text, 3D text, or image layer to add one.'
+            ? 'No fields yet'
             : `${fieldCount} field${fieldCount === 1 ? '' : 's'} defined.`}
         </p>
         {notice && (

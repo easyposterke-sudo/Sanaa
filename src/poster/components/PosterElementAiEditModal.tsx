@@ -123,9 +123,6 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
           {selected ? `Selected: ${selectedLayerLabel(selected)}` : 'The selected layer is unavailable.'}
         </p>
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
-          The AI compares this layer with the original reference. Everything else on the poster remains unchanged. It may split this layer when the original uses distinct sizes or styles.
-        </p>
         {!reference && (
           <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
             The original reference is unavailable in this editor session. Recreate the poster from its reference to enable this tool.

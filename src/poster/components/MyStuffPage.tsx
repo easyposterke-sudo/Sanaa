@@ -138,7 +138,6 @@ export function MyStuffPage() {
           <Link to="/poster" className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800">← Editor</Link>
           <div className="min-w-0 flex-1">
             <h1 className="text-lg font-semibold">My Stuff</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Your private, editable posters</p>
           </div>
           <ThemeToggle />
         </div>
@@ -157,7 +156,6 @@ export function MyStuffPage() {
         ) : items.length === 0 && !error ? (
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center dark:border-zinc-700 dark:bg-zinc-900">
             <h2 className="text-lg font-semibold">No saved posters yet</h2>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Create a poster in the editor, then press Save. It will appear here.</p>
             <Link to="/poster" className="mt-6 inline-flex rounded-lg bg-accent-600 px-4 py-2 text-sm font-semibold text-white">Go to editor</Link>
           </div>
         ) : visible.length === 0 ? (

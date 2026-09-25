@@ -161,10 +161,6 @@ export const LeftSidebar = memo(function LeftSidebar({
           >
             Learned 3D style
           </h2>
-          <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-            Build one title from an aligned face layer and a deep contrasting shell. Applying
-            replaces the current 3D scene with the linked two-layer recipe.
-          </p>
           <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-200">
               Text
@@ -254,9 +250,6 @@ export const LeftSidebar = memo(function LeftSidebar({
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             3D layers
           </h2>
-          <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-            Stack text and extruded shapes in one scene (position in the right sidebar).
-          </p>
           <ul className="mb-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2 dark:border-zinc-700 dark:bg-zinc-900/50">
             {textLayers.map((layer) => (
               <li key={layer.id}>
@@ -317,9 +310,6 @@ export const LeftSidebar = memo(function LeftSidebar({
               Remove
             </button>
           </div>
-          <p className="mt-1 text-[10px] text-zinc-400">
-            Max {MAX_TEXT_LAYERS} layers
-          </p>
         </section>
       )}
 

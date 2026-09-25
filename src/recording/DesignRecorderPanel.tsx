@@ -491,9 +491,6 @@ export function DesignRecorderPanel({ compact = false }: { compact?: boolean }) 
                   placeholder="gold, beveled, headline"
                   className={inputClass}
                 />
-                <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Separate up to 20 tags with commas.
-                </p>
               </div>
 
               <div>
@@ -568,9 +565,6 @@ export function DesignRecorderPanel({ compact = false }: { compact?: boolean }) 
                   aria-label="Choose a PNG, JPEG, or WebP training reference"
                   onChange={(event) => void handleReference(event)}
                 />
-                <p className="mt-1 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-                  The browser strips image metadata and embeds a bounded WebP preview, not the original file.
-                </p>
               </div>
 
               {!activeSession && !contextLocked && contextSummary.length > 0 && (
@@ -755,9 +749,6 @@ export function DesignRecorderPanel({ compact = false }: { compact?: boolean }) 
         </div>
       )}
 
-      <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-        Records meaningful poster and 3D changes. Pointer movement and slider noise are consolidated into replayable commands.
-      </p>
     </section>
   );
 }

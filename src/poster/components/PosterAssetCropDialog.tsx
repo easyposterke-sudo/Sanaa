@@ -68,7 +68,6 @@ export function PosterAssetCropDialog({ reference, item, onCancel, onApply }: {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3" role="dialog" aria-modal="true" aria-label={`Crop ${item.label} from poster`}>
       <div className="flex max-h-[95dvh] w-full max-w-2xl flex-col rounded-xl bg-white p-4 shadow-2xl dark:bg-zinc-900">
         <h3 className="text-base font-semibold">Crop “{item.label}” from the poster</h3>
-        <p className="mt-1 text-xs text-zinc-500">Choose a shape, then select only the image you want. Circle and Pen make the area outside the shape transparent.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Crop shape">
           {(['rectangle', 'circle', 'pen'] as const).map((shape) => (
             <button key={shape} type="button" onClick={() => { setTool(shape); setStart(null); setPenPoints([]); setError(null); }}
@@ -79,7 +78,6 @@ export function PosterAssetCropDialog({ reference, item, onCancel, onApply }: {
           ))}
           {tool === 'pen' && <button type="button" onClick={() => setPenPoints((points) => points.slice(0, -1))} disabled={!penPoints.length} className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50">Undo point</button>}
         </div>
-        <p className="mt-2 text-xs text-zinc-500">{tool === 'pen' ? 'Click points or drag along the edge of the object. The last point joins the first; use Undo point to correct the outline.' : tool === 'circle' ? 'Drag over the object. Hold Shift for a perfect circle.' : 'Drag across the poster to adjust the selection.'}</p>
         <div className="mt-3 min-h-0 overflow-y-auto">
           <div
             className="relative mx-auto w-fit max-w-full cursor-crosshair touch-none select-none"

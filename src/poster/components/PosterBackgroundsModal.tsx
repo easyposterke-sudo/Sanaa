@@ -123,9 +123,6 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
           <h2 id="poster-backgrounds-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Backgrounds
           </h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Upload once, then reuse it in posters and templates. Images are stored as compressed WebP.
-          </p>
 
           <div className="mt-4 grid gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800/50 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-300">
@@ -212,9 +209,9 @@ export function PosterBackgroundsModal({ open, onClose, onPick }: PosterBackgrou
                       <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                         {background.label}
                       </p>
-                      <p className="mt-0.5 text-[11px] text-zinc-500">
-                        {applyingId === background.id ? 'Adding to poster…' : 'Click to use'}
-                      </p>
+                      {applyingId === background.id && (
+                        <p className="mt-0.5 text-[11px] text-zinc-500">Adding to poster…</p>
+                      )}
                     </div>
                   </button>
                   <button

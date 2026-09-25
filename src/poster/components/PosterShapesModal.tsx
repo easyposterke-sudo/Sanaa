@@ -7,23 +7,19 @@ interface PosterShapesModalProps {
   onPick: (id: PosterShapePresetId) => void;
 }
 
-const SHAPES: { id: PosterShapePresetId; label: string; description: string }[] = [
-  { id: 'rect', label: 'Rectangle', description: 'Sharp corners' },
-  { id: 'rounded-rect', label: 'Rounded rectangle', description: 'All corners rounded' },
-  {
-    id: 'rect-two-round',
-    label: 'Rectangle (2 round)',
-    description: 'Top corners round, bottom sharp',
-  },
-  { id: 'circle', label: 'Circle', description: 'Perfect circle' },
-  { id: 'triangle', label: 'Triangle', description: 'Equilateral-style' },
-  { id: 'ellipse', label: 'Ellipse', description: 'Oval' },
-  { id: 'line', label: 'Line', description: 'Stroke' },
-  { id: 'star', label: 'Star', description: '5 points' },
-  { id: 'pentagon', label: 'Pentagon', description: '5 sides' },
-  { id: 'hexagon', label: 'Hexagon', description: '6 sides' },
-  { id: 'diamond', label: 'Diamond', description: 'Rhombus' },
-  { id: 'bezier-path', label: 'Bezier Path', description: 'Editable anchors + handles' },
+const SHAPES: { id: PosterShapePresetId; label: string }[] = [
+  { id: 'rect', label: 'Rectangle' },
+  { id: 'rounded-rect', label: 'Rounded rectangle' },
+  { id: 'rect-two-round', label: 'Rectangle (2 round)' },
+  { id: 'circle', label: 'Circle' },
+  { id: 'triangle', label: 'Triangle' },
+  { id: 'ellipse', label: 'Ellipse' },
+  { id: 'line', label: 'Line' },
+  { id: 'star', label: 'Star' },
+  { id: 'pentagon', label: 'Pentagon' },
+  { id: 'hexagon', label: 'Hexagon' },
+  { id: 'diamond', label: 'Diamond' },
+  { id: 'bezier-path', label: 'Bezier Path' },
 ];
 
 export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalProps) {
@@ -45,9 +41,6 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
           <h2 id="poster-shapes-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             Shapes
           </h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Choose a shape to add to your poster
-          </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4">
@@ -63,7 +56,6 @@ export function PosterShapesModal({ open, onClose, onPick }: PosterShapesModalPr
                 className="flex flex-col items-start rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-left transition hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
               >
                 <span className="font-medium text-zinc-900 dark:text-zinc-100">{s.label}</span>
-                <span className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{s.description}</span>
               </button>
             ))}
           </div>

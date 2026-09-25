@@ -276,9 +276,6 @@ export function PosterLeftSidebar({
           <h3 className="text-xs font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">
             Template Creator
           </h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-violet-700 dark:text-violet-400">
-            Turn a flat poster into an editable draft, polish it once, then save reusable fields.
-          </p>
           <button
             type="button"
             onClick={guard(onOpenTemplateCreator)}
@@ -293,9 +290,6 @@ export function PosterLeftSidebar({
           <h3 className="text-xs font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-300">
             Editable Poster
           </h3>
-          <p className="mt-1 text-[11px] leading-relaxed text-sky-700 dark:text-sky-400">
-            Turn a flat poster into editable layers and open the result directly in the editor.
-          </p>
           <button
             type="button"
             onClick={guard(onOpenEditablePosterCreator)}
@@ -373,15 +367,10 @@ export function PosterLeftSidebar({
         </h3>
         {layersFrontToBack.length === 0 ? (
           <p className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-3 py-3 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">
-            Add an element to see it here. Click a layer to select it—even when it is hidden behind
-            others on the canvas. Hold Ctrl (or ⌘ on Mac) to add or remove layers from the selection.
-            Double-click a layer name to rename it.
+            No layers yet
           </p>
         ) : (
           <ul className="max-h-[min(40vh,280px)] space-y-1 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50/80 p-1 dark:border-zinc-700 dark:bg-zinc-800/40">
-            <p className="px-2 pb-1 text-[10px] text-zinc-500 dark:text-zinc-400">
-              Drag the grip to reorder: up = forward, down = backward.
-            </p>
             {layersFrontToBack.map((el, index) => {
               const selected = selectedIds.includes(el.id);
               const locked = !!el.locked;
@@ -551,9 +540,6 @@ export function PosterLeftSidebar({
           disabled={imageUploadBusy}
           onChange={(event) => void handleLocalImageUpload(event)}
         />
-        <p className="mt-2 text-[11px] text-zinc-400 dark:text-zinc-500">
-          PNG and JPEG uploads are compressed to WebP before being added to the poster.
-        </p>
         {imageUploadMessage && (
           <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400" role="status">
             {imageUploadMessage}
