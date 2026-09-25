@@ -73,7 +73,9 @@ export async function cropPosterAsset(
     }
     context.fill();
   }
-  return { src: canvas.toDataURL('image/png'), width, height, preserveOutline: Boolean(cutout) };
+  // Small manually selected artwork benefits from lossless final compilation.
+  // Keep large photo crops on the existing compressed path to bound project size.
+  return { src: canvas.toDataURL('image/png'), width, height, preserveOutline: Boolean(cutout), lossless: width * height <= 2_000_000 };
 }
 
 function removeEdgeConnectedWhite(image: ImageData): void {

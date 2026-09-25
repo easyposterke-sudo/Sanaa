@@ -58,6 +58,7 @@ interface TemplateCreatorWizardProps {
 export function TemplateCreatorWizard({ open, onClose, mode = 'template', referenceOnly = false, initialReference = null, initialCanvasSize = null, onApply }: TemplateCreatorWizardProps) {
   useModalScrollLock(open);
   const [reference, setReference] = useState<PreparedPosterImage | null>(initialReference);
+  const [referenceFile, setReferenceFile] = useState<File | null>(null);
   const [importExisting, setImportExisting] = useState(false);
   const [canvasSize, setCanvasSize] = useState<CanvasSizeSelection | null>(initialCanvasSize);
   const [customWidth, setCustomWidth] = useState('1080');
@@ -138,6 +139,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
         canvasSizePresets,
       );
       setReference(prepared);
+      setReferenceFile(file);
       setCanvasSize({
         id: recommended.id,
         width: recommended.width,
@@ -762,7 +764,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
           const item = cropItemKey === NEW_LOGO_CROP_KEY
             ? { ...analysis.plan.elements[0], label: 'Missing logo', imageRole: 'logo' as const, box: { x: 0.05, y: 0.8, width: 0.25, height: 0.15 } }
             : analysis.plan.elements.find((element) => element.key === cropItemKey);
-          return item ? <PosterAssetCropDialog key={cropItemKey} reference={reference} item={item} onCancel={() => setCropItemKey(null)} onApply={handleCropApplied} /> : null;
+          return item ? <PosterAssetCropDialog key={cropItemKey} reference={reference} sourceFile={referenceFile} item={item} onCancel={() => setCropItemKey(null)} onApply={handleCropApplied} /> : null;
         })()}
       </div>
     </div>

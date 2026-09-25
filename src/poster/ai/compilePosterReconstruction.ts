@@ -94,6 +94,8 @@ export interface ReconstructionImageReplacement {
   credit?: string;
   /** Keep a manually traced transparent outline intact when placing it. */
   preserveOutline?: boolean;
+  /** Manually cropped pixels should not be recompressed when matching the final box aspect. */
+  lossless?: boolean;
 }
 
 const FONT_STACKS: Record<PosterReconstructionPlan['elements'][number]['fontFamily'], string> = {
@@ -559,7 +561,7 @@ async function compileImageRegion(input: {
           : fitPersonReplacementIntoBox(replacement, box),
       };
     }
-    const crop = await cropImageToAspect(replacement, box.width / box.height);
+    const crop = await cropImageToAspect(replacement, box.width / box.height, replacement.lossless);
     if (replacement.credit?.trim()) {
       warnings.push(`Replacement for “${item.label}”: ${replacement.credit.trim()}.`);
     }
@@ -1669,6 +1671,7 @@ async function cropReferenceRegion(
 async function cropImageToAspect(
   source: { src: string; width: number; height: number },
   targetAspect: number,
+  lossless = false,
 ): Promise<{ dataUrl: string; width: number; height: number }> {
   const image = await loadImage(source.src);
   const naturalWidth = Math.max(1, image.naturalWidth || image.width || source.width);
@@ -1691,7 +1694,7 @@ async function cropImageToAspect(
   const context = canvas.getContext('2d');
   if (!context) throw new Error('This browser could not prepare the replacement image.');
   context.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
-  return { dataUrl: canvas.toDataURL('image/webp', 0.9), width: sw, height: sh };
+  return { dataUrl: lossless ? canvas.toDataURL('image/png') : canvas.toDataURL('image/webp', 0.9), width: sw, height: sh };
 }
 
 function imagePlaceholderDataUrl(input: {
