@@ -71,7 +71,11 @@ import { buildPosterTextEffectStyles, posterTextEffectPadding } from '../textEff
 import { DynamicBackgroundTextbox } from '../DynamicBackgroundTextbox';
 import { needsPosterFabricObjectRecreation } from '../posterFabricObjectType';
 import { setFabricObjectGlassFill } from '../glassShapeFabric';
-import { posterTransformAppearance } from '../posterTransformControls';
+import { posterTransformAppearance, sizePosterTransformControls } from '../posterTransformControls';
+
+function posterDisplayScale(canvas: Canvas): number {
+  return canvas.upperCanvasEl.getBoundingClientRect().width / canvas.getWidth() || 1;
+}
 
 /** Stable signature of text font stacks for poster font preload + Fabric sync gating. */
 function posterFontSignature(elements: PosterElement[]): string {
@@ -121,6 +125,7 @@ function syncFabricSelectionFromStore(
       canvas.setActiveObject(toSelect[0]);
     } else {
       const sel = new ActiveSelection(toSelect, { canvas, ...posterTransformAppearance() });
+      sizePosterTransformControls(sel, posterDisplayScale(canvas));
       canvas.setActiveObject(sel);
     }
     canvas.requestRenderAll();
@@ -258,6 +263,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
       const active = canvas.getActiveObject();
       if (active instanceof ActiveSelection) {
         active.set(posterTransformAppearance());
+        sizePosterTransformControls(active, posterDisplayScale(canvas));
         active.setCoords();
         canvas.requestRenderAll();
       }
@@ -430,6 +436,75 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
   useEffect(() => {
     return initCanvas();
   }, [initCanvas]);
+
+  // On a phone, the first touch selects an object. A swipe that starts on an
+  // unselected object (or empty canvas) pans the poster; the next touch on the
+  // selected object still uses Fabric's existing move and transform behavior.
+  useEffect(() => {
+    if (viewportWidth >= 768 || readOnly) return;
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    let panGesture: { touchId: number; x: number; y: number; panX: number; panY: number } | null = null;
+
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        panGesture = null;
+        return;
+      }
+      const state = usePosterStore.getState();
+      if (state.activeTool !== 'select' || state.imageCropTargetId || state.isSpacePanning) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const onFabricCanvas = event.target === canvas.upperCanvasEl;
+      const target = onFabricCanvas ? canvas.findTarget(event).target : undefined;
+      if (target && target === canvas.getActiveObject()) return;
+
+      // Intercept before Fabric starts a transform on the first touch.
+      event.preventDefault();
+      event.stopPropagation();
+      if (target?.selectable) canvas.setActiveObject(target, event);
+      else canvas.discardActiveObject(event);
+      canvas.requestRenderAll();
+
+      const touch = event.touches[0];
+      panGesture = {
+        touchId: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+        panX: state.canvasPan.x,
+        panY: state.canvasPan.y,
+      };
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!panGesture || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      if (touch.identifier !== panGesture.touchId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      usePosterStore.getState().setCanvasPan({
+        x: panGesture.panX + touch.clientX - panGesture.x,
+        y: panGesture.panY + touch.clientY - panGesture.y,
+      });
+    };
+
+    const onTouchEnd = (event: TouchEvent) => {
+      if (!panGesture || [...event.changedTouches].some((touch) => touch.identifier === panGesture?.touchId)) {
+        panGesture = null;
+      }
+    };
+
+    viewport.addEventListener('touchstart', onTouchStart, { capture: true, passive: false });
+    viewport.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+    viewport.addEventListener('touchend', onTouchEnd, true);
+    viewport.addEventListener('touchcancel', onTouchEnd, true);
+    return () => {
+      viewport.removeEventListener('touchstart', onTouchStart, true);
+      viewport.removeEventListener('touchmove', onTouchMove, true);
+      viewport.removeEventListener('touchend', onTouchEnd, true);
+      viewport.removeEventListener('touchcancel', onTouchEnd, true);
+    };
+  }, [viewportWidth, readOnly]);
 
   // When readOnly: allow selection (viewing) but lock movement/scale/rotation so guests can't modify
   useEffect(() => {
@@ -1424,6 +1499,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
                   updateElement(live.id, updates as Partial<PosterElement>);
                 });
                 canvasRef.current.add(obj);
+                sizePosterTransformControls(obj, posterDisplayScale(canvasRef.current));
                 obj.setCoords();
                 syncFabricStackOrder(canvasRef.current, usePosterStore.getState().elements);
                 syncFabricSelectionFromStore(
@@ -1483,6 +1559,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
           canvas.setActiveObject(toSelect[0]);
         } else {
           const sel = new ActiveSelection(toSelect, { canvas, ...posterTransformAppearance() });
+          sizePosterTransformControls(sel, posterDisplayScale(canvas));
           canvas.setActiveObject(sel);
         }
       } else {
@@ -1520,6 +1597,15 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
     viewportHeight / canvasHeight
   );
   const scale = fitScale * canvasZoom;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    for (const object of canvas.getObjects()) sizePosterTransformControls(object, scale);
+    const active = canvas.getActiveObject();
+    if (active instanceof ActiveSelection) sizePosterTransformControls(active, scale);
+    canvas.requestRenderAll();
+  }, [scale]);
 
   usePosterZoom({
     viewportRef,

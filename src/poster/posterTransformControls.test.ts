@@ -1,6 +1,6 @@
 import { Rect, controlsUtils } from 'fabric';
 import { describe, expect, it } from 'vitest';
-import { createPosterTransformControls, posterTransformAppearance } from './posterTransformControls';
+import { createPosterTransformControls, posterTransformAppearance, sizePosterTransformControls } from './posterTransformControls';
 import { DynamicBackgroundTextbox } from './DynamicBackgroundTextbox';
 
 describe('poster transform controls', () => {
@@ -17,8 +17,8 @@ describe('poster transform controls', () => {
     }
     expect(text.controls.mr.actionHandler).toBe(controlsUtils.changeWidth);
     expect(text.controls.ml.actionHandler).toBe(controlsUtils.changeWidth);
-    expect(text.controls.mr.touchSizeX).toBe(36);
-    expect(text.controls.br.touchSizeY).toBe(40);
+    expect(text.controls.mr.touchSizeX).toBe(34);
+    expect(text.controls.br.touchSizeY).toBe(38);
   });
 
   it('keeps rotation above the selection and draws only three resize handles', () => {
@@ -29,8 +29,20 @@ describe('poster transform controls', () => {
     expect(controls.mtr.offsetY).toBe(-40);
     expect(controls.mtr.touchSizeX).toBe(40);
     expect(controls.tl.sizeX).toBe(0);
-    expect(controls.br.sizeX).toBe(18);
-    expect(controls.mr.sizeX).toBe(16);
-    expect(controls.mb.sizeX).toBe(16);
+    expect(controls.br.sizeX).toBe(22);
+    expect(controls.mr.sizeX).toBe(20);
+    expect(controls.mb.sizeX).toBe(20);
+  });
+
+  it('enlarges controls at reduced display scale without changing their actions', () => {
+    const text = new DynamicBackgroundTextbox('Title', { ...posterTransformAppearance(true), width: 200 });
+    const originalWidthAction = text.controls.mr.actionHandler;
+    sizePosterTransformControls(text, 0.5);
+    expect(text.controls.br.sizeX).toBe(44);
+    expect(text.controls.mr.sizeX).toBe(40);
+    expect(text.controls.mb.sizeY).toBe(40);
+    expect(text.controls.mr.touchSizeX).toBe(68);
+    expect(text.controls.mr.actionHandler).toBe(originalWidthAction);
+    expect(text.controls.mtr.offsetY).toBe(-40);
   });
 });
