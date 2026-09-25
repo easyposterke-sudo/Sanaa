@@ -71,6 +71,7 @@ import { buildPosterTextEffectStyles, posterTextEffectPadding } from '../textEff
 import { DynamicBackgroundTextbox } from '../DynamicBackgroundTextbox';
 import { needsPosterFabricObjectRecreation } from '../posterFabricObjectType';
 import { setFabricObjectGlassFill } from '../glassShapeFabric';
+import { posterTransformAppearance } from '../posterTransformControls';
 
 /** Stable signature of text font stacks for poster font preload + Fabric sync gating. */
 function posterFontSignature(elements: PosterElement[]): string {
@@ -119,7 +120,7 @@ function syncFabricSelectionFromStore(
     if (toSelect.length === 1) {
       canvas.setActiveObject(toSelect[0]);
     } else {
-      const sel = new ActiveSelection(toSelect, { canvas });
+      const sel = new ActiveSelection(toSelect, { canvas, ...posterTransformAppearance() });
       canvas.setActiveObject(sel);
     }
     canvas.requestRenderAll();
@@ -254,6 +255,12 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
     // Reading `getActiveObject()` keeps Ctrl/Cmd multi-select in sync with Zustand and avoids collapsing the group.
     const onFabricSelectionChange = () => {
       if (syncingSelectionFromStoreRef.current) return;
+      const active = canvas.getActiveObject();
+      if (active instanceof ActiveSelection) {
+        active.set(posterTransformAppearance());
+        active.setCoords();
+        canvas.requestRenderAll();
+      }
       setSelected(getPosterIdsFromFabricActive(canvas));
     };
 
@@ -1475,7 +1482,7 @@ export function PosterCanvas({ readOnly = false, viewportWidth, viewportHeight }
         if (toSelect.length === 1) {
           canvas.setActiveObject(toSelect[0]);
         } else {
-          const sel = new ActiveSelection(toSelect, { canvas });
+          const sel = new ActiveSelection(toSelect, { canvas, ...posterTransformAppearance() });
           canvas.setActiveObject(sel);
         }
       } else {
@@ -2671,6 +2678,7 @@ async function createFabricObject(
   // When locked or readOnly: prevent move/scale/rotate but keep selectable so user can select
   const lockAll = locked || readOnly;
   const common: Record<string, unknown> = {
+    ...posterTransformAppearance(),
     left: el.left,
     top: el.top,
     scaleX: el.scaleX,
