@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PosterReconstructionRequest } from '../../shared/ai/posterReconstruction';
 import {
   MAX_RECONSTRUCTION_ELEMENTS,
+  MAX_REFERENCE_ELEMENTS,
   POSTER_REFERENCE_AI_TIMEOUT_MS,
   POSTER_RECONSTRUCTION_JSON_SCHEMA,
   POSTER_RECONSTRUCTION_SCHEMA_VERSION,
@@ -236,7 +237,7 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
   });
 });
 
-it('keeps reconstructed plans within the original 45-layer limit', () => {
+it('keeps creation at 45 layers and bounds dense references separately', () => {
   const elements = Array.from({ length: MAX_RECONSTRUCTION_ELEMENTS }, (_, index) => ({
     ...reconstructionTextElement(null),
     key: `step_${index + 1}`,
@@ -258,7 +259,7 @@ it('keeps reconstructed plans within the original 45-layer limit', () => {
   expect(PosterReconstructionPlanSchema.safeParse(plan).success).toBe(true);
   expect(PosterReconstructionPlanSchema.safeParse({
     ...plan,
-    elements: Array.from({ length: MAX_RECONSTRUCTION_ELEMENTS + 1 }, (_, index) => ({
+    elements: Array.from({ length: MAX_REFERENCE_ELEMENTS + 1 }, (_, index) => ({
       ...elements[0], key: `row_${index + 1}`,
     })),
   }).success).toBe(false);

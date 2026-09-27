@@ -1,4 +1,6 @@
+import { FONT_STACKS } from './referenceFonts';
 import { alignCreatedTypography, type InkRect } from './createdTypography';
+import { applyReferenceFidelity, referenceGradientFill } from './applyReferenceFidelity';
 import {
   PosterReconstructionPlanSchema,
   type PosterReconstructionPlan,
@@ -98,47 +100,11 @@ export interface ReconstructionImageReplacement {
   lossless?: boolean;
 }
 
-const FONT_STACKS: Record<PosterReconstructionPlan['elements'][number]['fontFamily'], string> = {
-  arial: 'Arial, Helvetica, sans-serif',
-  arial_black: 'Arial Black, sans-serif',
-  allura: '"Allura", cursive',
-  anton: '"Anton", sans-serif',
-  bebas_neue: '"Bebas Neue", sans-serif',
-  chewy: '"Chewy", cursive',
-  courier_new: 'Courier New, Courier, monospace',
-  crimson_pro: '"Crimson Pro", Georgia, serif',
-  dancing_script: '"Dancing Script", cursive',
-  fredoka: '"Fredoka", sans-serif',
-  georgia: 'Georgia, serif',
-  great_vibes: '"Great Vibes", cursive',
-  impact: 'Impact, sans-serif',
-  inter: '"Inter", sans-serif',
-  lato: '"Lato", Arial, sans-serif',
-  lilita_one: '"Lilita One", sans-serif',
-  luckiest_guy: '"Luckiest Guy", cursive',
-  merriweather: '"Merriweather", Georgia, serif',
-  modak: '"Modak", cursive',
-  montserrat: '"Montserrat", sans-serif',
-  nunito: '"Nunito", Arial, sans-serif',
-  open_sans: '"Open Sans", sans-serif',
-  oswald: '"Oswald", sans-serif',
-  pacifico: '"Pacifico", cursive',
-  playfair_display: '"Playfair Display", serif',
-  poppins: '"Poppins", sans-serif',
-  raleway: '"Raleway", Arial, sans-serif',
-  roboto: '"Roboto", sans-serif',
-  sacramento: '"Sacramento", cursive',
-  satisfy: '"Satisfy", cursive',
-  source_sans_3: '"Source Sans 3", Arial, sans-serif',
-  tangerine: '"Tangerine", cursive',
-  times_new_roman: 'Times New Roman, serif',
-  trebuchet_ms: '"Trebuchet MS", sans-serif',
-  verdana: 'Verdana, sans-serif',
-};
+
 
 export async function compilePosterReconstruction(input: {
   plan: PosterReconstructionPlan;
-  reference: { dataUrl: string; width: number; height: number };
+  reference: { dataUrl: string; width: number; height: number; originalDataUrl?: string };
   canvasSize?: { width: number; height: number };
   referenceGuideOpacity?: number;
   imageReplacements?: Readonly<Record<string, ReconstructionImageReplacement>>;
@@ -317,7 +283,9 @@ export async function compilePosterReconstruction(input: {
     } else {
       element = compileShapeElement(item, box, canvasHeight, base, layoutMode);
     }
-    elements.push(element);
+    elements.push(layoutMode === 'reference'
+      ? applyReferenceFidelity(element, item, box.width, box.height, canvasHeight, input.reference.height)
+      : element);
 
     const fieldKey = item.suggestedFieldKey;
     if (
@@ -337,6 +305,9 @@ export async function compilePosterReconstruction(input: {
 
     if (item.confidence < 0.55) {
       warnings.push(`Review “${item.label}”; the AI reported low confidence.`);
+    }
+    if (layoutMode === 'reference' && item.fidelity?.uncertainText) {
+      warnings.push(`Check wording in “${item.label}”: ${item.fidelity.uncertainText}`);
     }
   }
 
@@ -419,15 +390,18 @@ function compilePathElement(
     : item.pathUsage;
   const pathClosed = pathUsage === 'closed_fill';
   const minimumPoints = pathClosed ? 3 : 2;
-  const sourcePoints = item.pathPoints.length >= minimumPoints
-    ? item.pathPoints
+  const suppliedPoints = layoutMode === 'reference' && item.fidelity?.path
+    ? item.fidelity.path.nodes.map(point => ({ x: point.x, y: point.y, smooth: false }))
+    : item.pathPoints;
+  const sourcePoints = suppliedPoints.length >= minimumPoints
+    ? suppliedPoints
     : [
         { x: 0, y: 0, smooth: false },
         { x: 1, y: 0, smooth: false },
         { x: 1, y: 1, smooth: false },
         { x: 0, y: 1, smooth: false },
       ];
-  if (item.pathPoints.length < minimumPoints) {
+  if (suppliedPoints.length < minimumPoints) {
     warnings.push(`“${item.label}” did not contain enough path anchors, so a rectangular path was used.`);
   }
   if (repairsInvisibleFilledPath) {
@@ -496,7 +470,7 @@ function compilePathElement(
 async function compileImageRegion(input: {
   item: ReconstructionElement;
   box: PixelBox;
-  reference: { dataUrl: string; width: number; height: number };
+  reference: { dataUrl: string; width: number; height: number; originalDataUrl?: string };
   replacement?: ReconstructionImageReplacement;
   warnings: string[];
   layoutMode: 'reference' | 'creation';
@@ -599,7 +573,8 @@ async function compileImageRegion(input: {
     };
   }
 
-  return cropReferenceRegion(input.reference, box);
+  // Destination placement and source extraction use different coordinate spaces.
+  return cropReferenceRegion(input.reference, pixelBox(item.box, input.reference.width, input.reference.height));
 }
 
 function reconstructionImageMask(
@@ -707,6 +682,7 @@ function compileThreeDTextElement(
 }
 
 function compileCanvasBackground(plan: PosterReconstructionPlan): CanvasBackground {
+  if (plan.canvas.gradient) return referenceGradientFill(plan.canvas.gradient);
   if (plan.canvas.backgroundType === 'solid') {
     return { type: 'solid', color: plan.canvas.backgroundTop };
   }
@@ -796,8 +772,8 @@ function compileTextElement(
             type: 'linear' as const,
             angle: item.textFillAngle,
             stops: [
-              { offset: 0, color: item.textFillStart },
-              { offset: 1, color: item.textFillEnd },
+              { offset: 0, color: layoutMode === 'reference' ? gradientStopColor(item.textFillStart, item.fillStartOpacity) : item.textFillStart },
+              { offset: 1, color: layoutMode === 'reference' ? gradientStopColor(item.textFillEnd, item.fillEndOpacity) : item.textFillEnd },
             ],
           },
         }
@@ -1389,7 +1365,7 @@ export function resolveReconstructionFontFamily(
   catalog?: Readonly<Record<string, string>>,
 ): string {
   const custom = item.fontCatalogId ? catalog?.[item.fontCatalogId] : undefined;
-  return typeof custom === 'string' && /^Editor3DCustom_[a-zA-Z0-9_-]+$/.test(custom)
+  return typeof custom === 'string' && (/^Editor3DCustom_[a-zA-Z0-9_-]+$/.test(custom) || Object.values(FONT_STACKS).includes(custom))
     ? custom
     : FONT_STACKS[item.fontFamily];
 }
@@ -1491,7 +1467,9 @@ function compileShapeElement(
     type: 'rect',
     width: box.width,
     height: box.height,
-    rx: resolvedDetectedCornerRadius(item.cornerStyle, item.cornerRadiusRatio, box),
+    rx: layoutMode === 'reference' && item.fidelity?.geometry === 'measured'
+      ? item.cornerRadiusRatio * Math.min(box.width, box.height)
+      : resolvedDetectedCornerRadius(item.cornerStyle, item.cornerRadiusRatio, box),
   };
 }
 
@@ -1649,10 +1627,10 @@ function resolvedLineGeometry(
 }
 
 async function cropReferenceRegion(
-  reference: { dataUrl: string; width: number; height: number },
+  reference: { dataUrl: string; width: number; height: number; originalDataUrl?: string },
   box: PixelBox,
 ): Promise<{ dataUrl: string; width: number; height: number }> {
-  const image = await loadImage(reference.dataUrl);
+  const image = await loadImage(reference.originalDataUrl ?? reference.dataUrl);
   const sourceScaleX = (image.naturalWidth || image.width || reference.width) / reference.width;
   const sourceScaleY = (image.naturalHeight || image.height || reference.height) / reference.height;
   const sx = Math.max(0, Math.round(box.left * sourceScaleX));

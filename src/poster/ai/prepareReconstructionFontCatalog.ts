@@ -1,3 +1,4 @@
+import { FONT_STACKS } from './referenceFonts';
 import type { ReconstructionFontCatalog } from '../../../shared/ai/posterReconstruction';
 import {
   ensureFontPreviewFromUrl,
@@ -32,13 +33,22 @@ export interface PreparedReconstructionFontCatalog {
  * Builds visual samples for the custom fonts already available in the editor.
  * Font files stay in the browser; only compact raster specimen sheets are sent to the AI.
  */
-export async function prepareReconstructionFontCatalog(): Promise<PreparedReconstructionFontCatalog | null> {
+export async function prepareReconstructionFontCatalog(sampleText?: string): Promise<PreparedReconstructionFontCatalog | null> {
   if (typeof document === 'undefined' || !('fonts' in document)) return null;
 
   const candidates = await collectCandidates();
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0 && !sampleText) return null;
 
   const loaded: LoadedFontCandidate[] = [];
+  const builtins: LoadedFontCandidate[] = [];
+  if (sampleText) {
+    for (const [token, family] of Object.entries(FONT_STACKS)) {
+      try {
+        await document.fonts.load(`36px ${family}`, sampleText);
+        builtins.push({ key: token, id: token, family, label: token.replaceAll('_', ' '), url: '' });
+      } catch { /* A missing face must not block reconstruction. */ }
+    }
+  }
   for (let start = 0; start < candidates.length; start += 6) {
     const batch = candidates.slice(start, start + 6);
     const results = await Promise.all(batch.map(async (candidate) => {
@@ -56,13 +66,15 @@ export async function prepareReconstructionFontCatalog(): Promise<PreparedRecons
     }));
     loaded.push(...results.filter((item): item is LoadedFontCandidate => item !== null));
   }
-  if (loaded.length === 0) return null;
+  if (loaded.length === 0 && builtins.length === 0) return null;
+  loaded.splice(MAX_CATALOG_FONTS);
 
   const previewDataUrls: string[] = [];
   const fontsPerSheet = SHEET_COLUMNS * SHEET_ROWS;
   for (let start = 0; start < loaded.length; start += fontsPerSheet) {
-    previewDataUrls.push(await renderSpecimenSheet(loaded.slice(start, start + fontsPerSheet)));
+    previewDataUrls.push(await renderSpecimenSheet(loaded.slice(start, start + fontsPerSheet), sampleText));
   }
+  if (builtins.length) previewDataUrls.push(await renderSpecimenSheet(builtins, sampleText));
 
   return {
     request: {
@@ -106,7 +118,7 @@ async function collectCandidates(): Promise<FontCandidate[]> {
   return [...candidates.values()].slice(0, MAX_CATALOG_FONTS);
 }
 
-async function renderSpecimenSheet(fonts: LoadedFontCandidate[]): Promise<string> {
+async function renderSpecimenSheet(fonts: LoadedFontCandidate[], sampleText?: string): Promise<string> {
   const rows = Math.ceil(fonts.length / SHEET_COLUMNS);
   const canvas = document.createElement('canvas');
   canvas.width = SHEET_WIDTH;
@@ -133,8 +145,14 @@ async function renderSpecimenSheet(fonts: LoadedFontCandidate[]): Promise<string
     context.rect(x, y + 22, COLUMN_WIDTH - 36, ROW_HEIGHT - 24);
     context.clip();
     context.fillStyle = '#111827';
-    context.font = `36px "${font.family}"`;
-    context.fillText('Aa Bb 123  WE ARE OPEN', x, y + 61);
+    context.font = `36px ${font.family}`;
+    const specimen = sampleText?.replace(/\s+/g, ' ').slice(0, 60) || 'Aa Bb 123  WE ARE OPEN';
+    if (sampleText) {
+      const measuredWidth = context.measureText(specimen).width;
+      const size = Math.max(14, Math.min(36, 36 * (COLUMN_WIDTH - 40) / Math.max(1, measuredWidth)));
+      context.font = `${size}px ${font.family}`;
+    }
+    context.fillText(specimen, x, y + 61);
     context.restore();
 
     context.strokeStyle = '#e2e8f0';

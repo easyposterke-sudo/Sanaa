@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { POSTER_RECONSTRUCTION_SCHEMA_VERSION, type PosterReconstructionPlan } from '../../../shared/ai/posterReconstruction';
 import type { PosterElement, PosterTextElement } from '../types';
 import { applyPosterElementEdit, sanitizedPosterElementProperties } from './applyPosterElementEdit';
+import { EMPTY_REFERENCE_FIDELITY } from '../../../shared/ai/referenceFidelity';
 
 describe('applyPosterElementEdit', () => {
   it('atomically replaces only the selected layer and can split it into independent text', async () => {
@@ -40,6 +41,20 @@ describe('applyPosterElementEdit', () => {
     });
     expect(properties).not.toContain('SECRET');
     expect(properties).not.toContain('ORIGINAL');
+  });
+
+  it('preserves unrepresented effects, but lets explicit fidelity replace them', async () => {
+    const selected = { ...text('heading', 'SUNDAY', 2), shadow: { color: '#000000', blur: 5, offsetX: 2, offsetY: 3 }, underline: true, reconstructionGroup: 'heading_group',
+      fillGradient: { type: 'radial' as const, cx: .5, cy: .5, r: .5, stops: [{ offset: 0, color: '#ffffff' }, { offset: 1, color: '#000000' }] } };
+    const layer = reconstructionText('heading', 'SUNDAY', { x: .1, y: .1, width: .8, height: .2 }, 2);
+    const input = { elements: [selected], selectedId: selected.id, patch: plan([layer]), reference: { dataUrl: 'unused', width: 1000, height: 1000 }, canvasWidth: 1000, canvasHeight: 1000 };
+    const retained = (await applyPosterElementEdit(input)).elements[0];
+    expect(retained).toMatchObject({ shadow: selected.shadow, underline: true, fillGradient: selected.fillGradient, reconstructionGroup: 'heading_group' });
+    input.patch.elements[0]!.fidelity = { ...EMPTY_REFERENCE_FIDELITY };
+    const replaced = (await applyPosterElementEdit(input)).elements[0];
+    expect(replaced?.shadow).toBeUndefined();
+    expect(replaced).toMatchObject({ underline: false });
+    expect((replaced as PosterTextElement).fillGradient).toBeUndefined();
   });
 });
 

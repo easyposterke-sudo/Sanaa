@@ -2409,6 +2409,8 @@ async function buildPosterReconstructionCacheKey(
     purpose: 'poster-reconstruction',
     creation: request.creation ?? null,
     creationVersion: request.creation ? CREATION_VERSION : null,
+    referenceReview: request.referenceReview ?? null,
+    detailCrops: request.detailCrops ?? null,
     imageDigest,
     width: request.reference.width,
     height: request.reference.height,

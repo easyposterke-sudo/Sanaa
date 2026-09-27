@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { PosterPromptCreator } from './PosterPromptCreator';
 import { PosterAssetCropDialog } from './PosterAssetCropDialog';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
-import { MAX_RECONSTRUCTION_ELEMENTS } from '../../../shared/ai/posterReconstruction';
+import { MAX_REFERENCE_ELEMENTS as MAX_RECONSTRUCTION_ELEMENTS } from '../../../shared/ai/posterReconstruction';
+import { ReferenceTextInventory } from './ReferenceTextInventory';
+import { reviewReferenceDraft } from '../ai/reviewReferenceDraft';
+import { referenceCanvasSize } from '../ai/referenceCanvasSize';
+import { optionalReferenceTask } from '../ai/referenceTimeout';
 import type {
   PosterReconstructionPlan,
   PosterReconstructionSource,
@@ -14,7 +18,7 @@ import {
   type CompiledPosterReconstruction,
   type ReconstructionImageReplacement,
 } from '../ai/compilePosterReconstruction';
-import { prepareLogoImage, prepareTemplateReference, type PreparedPosterImage } from '../ai/preparePosterImage';
+import { prepareLogoImage, prepareTemplateReference, prepareReconstructionReference, prepareReferenceDetailCrops, type PreparedPosterImage } from '../ai/preparePosterImage';
 import { prepareReconstructionFontCatalog } from '../ai/prepareReconstructionFontCatalog';
 import {
   PosterReconstructionError,
@@ -40,7 +44,7 @@ interface CanvasSizeSelection {
 }
 
 const NEW_LOGO_CROP_KEY = '__new_logo__';
-type ReconstructionPhase = 'preparing' | 'analyzing' | 'building';
+type ReconstructionPhase = 'preparing' | 'analyzing' | 'building' | 'reviewing';
 
 interface TemplateCreatorWizardProps {
   referenceOnly?: boolean;
@@ -85,6 +89,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
   const [cropItemKey, setCropItemKey] = useState<string | null>(null);
   const [preparingReplacement, setPreparingReplacement] = useState<string | null>(null);
   const [freshGeneration, setFreshGeneration] = useState(Boolean(initialReference));
+  const [compareReference, setCompareReference] = useState(true);
 
   useEffect(() => {
     if (!processingPhase || phaseStartedAt === null) return;
@@ -112,10 +117,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
     ? recommendTemplateCanvasSize(reference.sourceWidth, reference.sourceHeight, canvasSizePresets)
     : null;
   const originalCanvasSize = reference
-    ? {
-        width: normalizeTemplateCanvasDimension(reference.sourceWidth, reference.width),
-        height: normalizeTemplateCanvasDimension(reference.sourceHeight, reference.height),
-      }
+    ? referenceCanvasSize(reference.sourceWidth, reference.sourceHeight)
     : null;
 
   const handleReference = async (file: File | undefined) => {
@@ -132,7 +134,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
     setIncludeReferenceGuide(true);
     setPreparing(true);
     try {
-      const prepared = await prepareTemplateReference(file);
+      const prepared = await prepareReconstructionReference(file);
       const recommended = recommendTemplateCanvasSize(
         prepared.sourceWidth,
         prepared.sourceHeight,
@@ -141,9 +143,8 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
       setReference(prepared);
       setReferenceFile(file);
       setCanvasSize({
-        id: recommended.id,
-        width: recommended.width,
-        height: recommended.height,
+        id: 'original',
+        ...referenceCanvasSize(prepared.sourceWidth, prepared.sourceHeight),
       });
       setCustomWidth(String(recommended.width));
       setCustomHeight(String(recommended.height));
@@ -169,16 +170,30 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
       setError(`Choose Upload, Crop from poster, or Leave out for “${undecidedLogo.label}”.`);
       return;
     }
-    const compiled = await compilePosterReconstruction({
-      plan: current.plan,
+    let families = current.fontFamilies;
+    const compile = (plan: PosterReconstructionPlan) => compilePosterReconstruction({
+      plan,
       reference,
       canvasSize,
       referenceGuideOpacity: creatingPoster && !includeReferenceGuide ? 0 : guideOpacity,
       imageReplacements: replacements,
       omittedImageKeys: omittedImages,
-      fontCatalogFamilies: current.fontFamilies,
+      fontCatalogFamilies: families,
       layoutMode: 'reference',
     });
+    let compiled = await compile(current.plan);
+    if (compareReference && current.source !== 'fallback' && current.plan.elements.some(item => item.kind === 'text' && item.textEffect === 'flat')) {
+      beginPhase('reviewing');
+      const sample = current.plan.elements.filter(item => item.kind === 'text' && item.textEffect === 'flat')
+        .sort((a, b) => b.fontSizeRatio - a.fontSizeRatio).slice(0, 3).map(item => item.text).join(' · ').slice(0, 90);
+      const catalog = await optionalReferenceTask(prepareReconstructionFontCatalog(sample));
+      if (catalog) families = { ...families, ...catalog.families };
+      compiled = await reviewReferenceDraft({
+        plan: current.plan, draft: compiled,
+        reference: { dataUrl: reference.dataUrl, width: reference.width, height: reference.height },
+        fontCatalog: catalog?.request, compile,
+      });
+    }
     onApply(compiled, { source: current.source, model: current.model });
     onClose();
   };
@@ -236,7 +251,9 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
         setSearchQueries({});
         setCropItemKey(null);
       }
-      const fontCatalog = await prepareReconstructionFontCatalog().catch(() => null);
+      const fontCatalog = await optionalReferenceTask(prepareReconstructionFontCatalog());
+      const detailCrops = reference.originalDataUrl
+        ? await optionalReferenceTask(prepareReferenceDetailCrops(reference)) ?? [] : [];
       beginPhase('analyzing');
       const response = await requestPosterReconstruction({
           reference: {
@@ -245,6 +262,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
             height: reference.height,
           },
           quality: 'quality',
+          ...(detailCrops.length ? { detailCrops } : {}),
           ...(freshGeneration || forceFresh ? { forceFresh: true } : {}),
           ...(fontCatalog ? { fontCatalog: fontCatalog.request } : {}),
         });
@@ -610,6 +628,11 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
 
         {analysis && (
           <section className="border-t border-zinc-200 bg-zinc-50 px-3 py-3 sm:px-5 sm:py-4 dark:border-zinc-700 dark:bg-zinc-950/40">
+            <ReferenceTextInventory plan={analysis.plan} disabled={submitting} onChange={plan => setAnalysis({ ...analysis, plan })} />
+            <label className="mb-3 flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
+              <input type="checkbox" checked={compareReference} disabled={submitting} onChange={event => setCompareReference(event.target.checked)} />
+              Compare and refine text and shapes (one additional AI request; photos and 3D stay unchanged)
+            </label>
             <button type="button" disabled={submitting || Boolean(preparingReplacement)} onClick={() => void handleCreate(true)} className="mb-3 rounded-lg border border-violet-400 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">
               Recreate again from scratch
             </button>
@@ -782,12 +805,12 @@ function replacementItems(plan: PosterReconstructionPlan) {
 }
 
 function ReconstructionProgress({ phase, elapsedSeconds }: { phase: ReconstructionPhase; elapsedSeconds: number }) {
-  const phases: ReconstructionPhase[] = ['preparing', 'analyzing', 'building'];
-  const labels = ['Prepare fonts', 'Reconstruct layers', 'Review images & build'];
+  const phases: ReconstructionPhase[] = ['preparing', 'analyzing', 'building', 'reviewing'];
+  const labels = ['Prepare fonts', 'Reconstruct layers', 'Build draft', 'Compare reference'];
   const activeIndex = phases.indexOf(phase);
   const title = phase === 'preparing' ? 'Preparing the reference'
     : phase === 'analyzing' ? 'Reconstructing editable layers'
-      : 'Building the editable draft';
+      : phase === 'reviewing' ? 'Comparing text and shapes with the reference' : 'Building the editable draft';
 
   return (
     <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
@@ -800,7 +823,8 @@ function ReconstructionProgress({ phase, elapsedSeconds }: { phase: Reconstructi
           Elapsed {formatElapsed(elapsedSeconds)}
         </span>
       </div>
-      <ol className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+      {phase === 'analyzing' && <p className="mt-2 text-xs">Time left in the analysis window: up to {formatElapsed(Math.max(0, 360 - elapsedSeconds))}</p>}
+      <ol className="mt-3 grid grid-cols-4 gap-2 text-[11px]">
         {labels.map((label, index) => (
           <li key={label} aria-current={index === activeIndex ? 'step' : undefined} className={`rounded-md px-2 py-1.5 ${index < activeIndex
             ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'

@@ -7,7 +7,7 @@ import {
 } from './posterReconstruction';
 
 export const POSTER_ELEMENT_EDIT_PROMPT_VERSION =
-  'poster-element-edit-v1-selected-layer-only' as const;
+  'poster-element-edit-v2-reference-fidelity' as const;
 
 const ImageInputSchema = z.object({
   dataUrl: z.string().regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),

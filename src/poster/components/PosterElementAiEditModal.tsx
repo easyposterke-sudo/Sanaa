@@ -61,7 +61,7 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
       // fresh selection array so the canvas restores the same selected layer.
       usePosterStore.setState((state) => ({ selectedIds: [...state.selectedIds] }));
       if (!snapshot) throw new Error('The current poster preview could not be prepared.');
-      const fontCatalog = await prepareReconstructionFontCatalog().catch(() => null);
+      const fontCatalog = await prepareReconstructionFontCatalog(element.type === 'text' ? element.text.slice(0, 60) : undefined).catch(() => null);
       const previewScale = Math.min(1, 960 / initial.canvasWidth);
       const response = await requestPosterElementEdit({
         reference: {

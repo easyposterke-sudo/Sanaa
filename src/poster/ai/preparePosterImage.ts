@@ -1,4 +1,6 @@
 export interface PreparedPosterImage {
+  /** Original reference pixels kept in memory for crops, never sent as the overview. */
+  originalDataUrl?: string;
   /** Small analysis copy; never used as the editable image replacement. */
   analysisDataUrl?: string;
   dataUrl: string;
@@ -23,6 +25,30 @@ export async function prepareReferencePoster(file: File): Promise<PreparedPoster
 /** Higher-detail working copy used both for AI reconstruction and as the editable tracing guide. */
 export async function prepareTemplateReference(file: File): Promise<PreparedPosterImage> {
   return resizePosterImage(file, { maxLongEdge: 1536, quality: 0.84 });
+}
+
+/** Reference-only preparation; portrait/background upload behavior is unchanged. */
+export async function prepareReconstructionReference(file: File): Promise<PreparedPosterImage> {
+  const prepared = await prepareTemplateReference(file);
+  return { ...prepared, originalDataUrl: await blobToDataUrl(file) };
+}
+
+export async function prepareReferenceDetailCrops(reference: PreparedPosterImage): Promise<Array<{
+  box: { x: number; y: number; width: number; height: number }; dataUrl: string;
+}>> {
+  const image = await loadImage(reference.originalDataUrl ?? reference.dataUrl);
+  const regions = [{ x: 0, y: 0 }, { x: 0.45, y: 0 }, { x: 0, y: 0.45 }, { x: 0.45, y: 0.45 }];
+  return regions.map(position => {
+    const box = { ...position, width: 0.55, height: 0.55 };
+    const sw = image.naturalWidth * box.width; const sh = image.naturalHeight * box.height;
+    const scale = Math.min(1, 960 / Math.max(sw, sh));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(sw * scale)); canvas.height = Math.max(1, Math.round(sh * scale));
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not prepare reference details.');
+    context.drawImage(image, box.x * image.naturalWidth, box.y * image.naturalHeight, sw, sh, 0, 0, canvas.width, canvas.height);
+    return { box, dataUrl: canvas.toDataURL('image/webp', 0.88) };
+  });
 }
 
 export async function preparePortrait(file: File): Promise<PreparedPosterImage> {

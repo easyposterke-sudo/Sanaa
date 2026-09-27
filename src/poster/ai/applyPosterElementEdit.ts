@@ -34,6 +34,26 @@ export async function applyPosterElementEdit(input: {
   occupied.delete(selected.id);
   const replacementIds: string[] = [];
   const replacements = compiled.project.elements.map((element, index) => {
+    // Preserve editor-only treatments when the response cannot represent them.
+    // Explicit fidelity effects, including null, are intentional replacements.
+    const source = input.patch.elements[index];
+    const preserved: Partial<PosterElement> = {};
+    if (compiled.project.elements.length === 1 && element.type === selected.type) {
+      if (!source?.fidelity && selected.shadow) preserved.shadow = selected.shadow;
+      preserved.reconstructionKey = selected.reconstructionKey;
+      preserved.reconstructionGroup = selected.reconstructionGroup;
+      if (element.type === 'text' && selected.type === 'text') {
+        element.fillPattern = selected.fillPattern;
+        element.taper = selected.taper;
+        if (!source?.fidelity) {
+          element.textBackground = selected.textBackground;
+          element.underline = selected.underline;
+          element.linethrough = selected.linethrough;
+          element.fillOpacity = selected.fillOpacity;
+          if (selected.fillGradient?.type === 'radial') element.fillGradient = selected.fillGradient;
+        }
+      }
+    }
     let id = index === 0 ? selected.id : `${selected.id}_ai_${index + 1}`;
     let suffix = 2;
     while (occupied.has(id)) id = `${selected.id}_ai_${index + 1}_${suffix++}`;
@@ -41,6 +61,7 @@ export async function applyPosterElementEdit(input: {
     replacementIds.push(id);
     return {
       ...element,
+      ...preserved,
       id,
       zIndex: selected.zIndex + index * 0.001,
     } as PosterElement;

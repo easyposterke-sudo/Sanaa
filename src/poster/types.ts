@@ -22,6 +22,9 @@ export interface PosterShadow {
 }
 
 export interface PosterElementBase {
+  /** Stable source associations for fidelity review and selecting attached design parts. */
+  reconstructionKey?: string;
+  reconstructionGroup?: string;
   id: string;
   type: PosterElementType;
   /** Optional custom layer name shown in the Layers panel. */

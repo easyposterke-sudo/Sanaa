@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ReferenceFidelitySchema, ReferenceGradientSchema } from './referenceFidelity';
 
 export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
 // Dense editable references can require tens of thousands of output tokens.
@@ -6,9 +7,10 @@ export const POSTER_RECONSTRUCTION_SCHEMA_VERSION = 14 as const;
 export const POSTER_REFERENCE_AI_TIMEOUT_MS = 360_000 as const;
 export const POSTER_REFERENCE_CLIENT_TIMEOUT_MS = 390_000 as const;
 export const MAX_RECONSTRUCTION_ELEMENTS = 45 as const;
+export const MAX_REFERENCE_ELEMENTS = 120 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v18-45-layer-limit' as const;
+  'poster-reconstruction-v19-measured-fidelity' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',
@@ -157,6 +159,7 @@ export const ReconstructionElementSchema = z
     suggestedFieldKey: FieldKeySchema,
     suggestedFieldLabel: z.string().max(80),
     confidence: z.number().min(0).max(1),
+    fidelity: ReferenceFidelitySchema.nullable().optional(),
   })
   .strict();
 
@@ -174,9 +177,10 @@ export const PosterReconstructionPlanSchema = z
         backgroundTop: HexColorSchema,
         backgroundBottom: HexColorSchema,
         gradientAngle: z.number().min(0).max(360),
+        gradient: ReferenceGradientSchema.nullable().optional(),
       })
       .strict(),
-    elements: z.array(ReconstructionElementSchema).max(MAX_RECONSTRUCTION_ELEMENTS),
+    elements: z.array(ReconstructionElementSchema).max(MAX_REFERENCE_ELEMENTS),
     warnings: z.array(z.string().max(180)).max(12),
     confidence: z.number().min(0).max(1),
   })
@@ -238,8 +242,18 @@ export const PosterReconstructionRequestSchema = z
       .refine(value => value.phase === 'review' || value.assets.every(asset => !!asset.dataUrl), 'Design requires asset images')
       .optional(),
     fontCatalog: ReconstructionFontCatalogSchema.optional(),
+    detailCrops: z.array(z.object({
+      box: ReconstructionBoxSchema,
+      dataUrl: z.string().regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
+    }).strict()).max(4).optional(),
+    referenceReview: z.object({
+      previousPlan: PosterReconstructionPlanSchema,
+      draftDataUrl: z.string().regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
+      feedback: z.array(z.string().max(500)).max(40),
+    }).strict().optional(),
   })
-  .strict();
+  .strict()
+  .refine(value => !(value.creation && (value.referenceReview || value.detailCrops)), 'Reference analysis cannot be mixed with creation');
 
 export type PosterReconstructionRequest = z.infer<typeof PosterReconstructionRequestSchema>;
 export type PosterReconstructionSource = 'openai' | 'cache' | 'fallback';
@@ -253,7 +267,7 @@ export interface PosterReconstructionResponse {
 
 type JsonSchema = Record<string, unknown>;
 
-function strictObject(properties: Record<string, JsonSchema>): JsonSchema {
+function strictObject<T extends Record<string, JsonSchema>>(properties: T) {
   return {
     type: 'object',
     additionalProperties: false,

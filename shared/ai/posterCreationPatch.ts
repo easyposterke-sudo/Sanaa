@@ -35,5 +35,6 @@ export function applyPosterCreationPatch(previous: PosterReconstructionPlan, val
     if (old?.kind === 'image_region' && (element.kind !== old.kind || element.imageRole !== old.imageRole)) throw new Error('Review cannot change image identity.');
     existing.set(element.key, element);
   }
+  if (existing.size > 45) throw new Error('Creation exceeds its layer limit.');
   return PosterReconstructionPlanSchema.parse({ ...previous, summary: patch.summary, canvas: patch.canvas ?? previous.canvas, elements: [...existing.values()] });
 }
