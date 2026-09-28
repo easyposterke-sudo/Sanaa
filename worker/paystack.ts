@@ -1,4 +1,5 @@
 import { creditVerifiedPayment } from './billing';
+import { paymentQuote, type PurchaseKind } from '../shared/billing';
 
 type PaystackResponse = { status?: boolean; message?: string; data?: {
   reference?: string; authorization_url?: string; status?: string; display_text?: string;
@@ -22,36 +23,31 @@ export function normalizeKenyanPhone(value: string) {
   return /^254[17]\d{8}$/.test(phone) ? `+${phone}` : null;
 }
 
-export async function beginPayment(db: D1Database, secret: string, user: { id: string; email: string }, origin: string, channel: 'card' | 'mpesa', phone?: string) {
+export async function beginPayment(db: D1Database, secret: string, user: { id: string; email: string }, origin: string, channel: 'card' | 'mpesa', phone: string | undefined, kind: PurchaseKind, amountKes?: number) {
+  const { amountMinor: amount, creditMicrousd: credit } = paymentQuote(kind, amountKes);
   const normalizedPhone = channel === 'mpesa' ? normalizeKenyanPhone(phone ?? '') : null;
   if (channel === 'mpesa' && !normalizedPhone) throw new Error('Enter a valid Kenyan M-Pesa number.');
   const reference = `ep-${crypto.randomUUID()}`;
-  const amount = 50_000; // KES 500.00 in Paystack's lower denomination.
-  const credit = 3_800_000; // $3.80 of OpenAI usage credit.
-  await db.prepare('INSERT INTO billing_payments (reference, user_id, channel, amount_minor, credit_microusd, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(reference, user.id, channel, amount, credit, new Date().toISOString()).run();
-  try {
-    const result = channel === 'card'
-      ? await paystack('/transaction/initialize', secret, {
-        email: user.email, amount, currency: 'KES', reference, channels: ['card'], callback_url: `${origin}/billing`,
-      })
-      : await paystack('/charge', secret, {
-        email: user.email, amount, currency: 'KES', reference,
-        mobile_money: { phone: normalizedPhone, provider: 'mpesa' },
-      });
-    if (result.data?.reference !== reference) throw new Error('Paystack returned an unexpected payment reference.');
-    if (channel === 'card') {
-      const checkout = result.data.authorization_url ? new URL(result.data.authorization_url) : null;
-      if (!checkout || checkout.protocol !== 'https:' || checkout.hostname !== 'checkout.paystack.com') {
-        throw new Error('Paystack returned an invalid checkout URL.');
-      }
+  await db.prepare('INSERT INTO billing_payments (reference, user_id, channel, amount_minor, credit_microusd, kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(reference, user.id, channel, amount, credit, kind, new Date().toISOString()).run();
+  // Keep the pending reference on network errors: a signed webhook can still
+  // confirm a charge that reached Paystack before the connection failed.
+  const result = channel === 'card'
+    ? await paystack('/transaction/initialize', secret, {
+      email: user.email, amount, currency: 'KES', reference, channels: ['card'], callback_url: `${origin}/billing`,
+    })
+    : await paystack('/charge', secret, {
+      email: user.email, amount, currency: 'KES', reference,
+      mobile_money: { phone: normalizedPhone, provider: 'mpesa' },
+    });
+  if (result.data?.reference !== reference) throw new Error('Paystack returned an unexpected payment reference.');
+  if (channel === 'card') {
+    const checkout = result.data.authorization_url ? new URL(result.data.authorization_url) : null;
+    if (!checkout || checkout.protocol !== 'https:' || checkout.hostname !== 'checkout.paystack.com') {
+      throw new Error('Paystack returned an invalid checkout URL.');
     }
-    return { reference, authorizationUrl: result.data.authorization_url ?? null, status: result.data.status ?? 'pending', displayText: result.data.display_text ?? null };
-  } catch (error) {
-    // The charge may have reached Paystack before a network error. Keep the
-    // reference pending so a later signed webhook can still credit it.
-    throw error;
   }
+  return { reference, authorizationUrl: result.data.authorization_url ?? null, status: result.data.status ?? 'pending', displayText: result.data.display_text ?? null };
 }
 
 export async function verifyPayment(db: D1Database, secret: string, reference: string, userId?: string) {

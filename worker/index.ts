@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { findAccount, login, loginWithAccess, logout, refreshSession, signup } from './auth';
 import { startGoogle, finishGoogle, exchangeGoogleTicket } from './googleAuth';
 import { wallet, reserveAi, settleAi } from './billing';
+import { BILLING } from '../shared/billing';
 import { beginPayment, verifyPayment, validPaystackSignature } from './paystack';
 import { accountWithAccessRole, verifiedAccessEmail } from './adminAccess';
 import {
@@ -286,9 +287,10 @@ app.post('/api/auth/google/exchange', async (context) => {
 
 app.get('/api/billing', async (context) => {
   const userId = context.get('ownerId');
-  const recentUsage = await context.env.DB.prepare(`SELECT request_id, model, input_tokens, cached_input_tokens, output_tokens, cost_microusd, created_at
+  const recentUsage = await context.env.DB.prepare(`SELECT request_id, charged_microusd / 10000.0 AS credits, created_at
     FROM ai_usage WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`).bind(userId).all();
-  return context.json({ ...(await wallet(context.env.DB, userId)), recentUsage: recentUsage.results, package: { amountKes: 500, creditUsd: 3.8 }, paymentsConfigured: Boolean(context.env.PAYSTACK_SECRET_KEY) });
+  context.header('cache-control', 'no-store');
+  return context.json({ ...(await wallet(context.env.DB, userId)), recentUsage: recentUsage.results, pricing: BILLING, paymentsConfigured: Boolean(context.env.PAYSTACK_SECRET_KEY) });
 });
 
 app.post('/api/billing/checkout', async (context) => {
@@ -296,10 +298,12 @@ app.post('/api/billing/checkout', async (context) => {
   if (!secret) return context.json({ error: 'Payments are not configured yet.' }, 503);
   const body = await authBody(context);
   if (!body || (body.channel !== 'card' && body.channel !== 'mpesa')) return context.json({ error: 'Choose card or M-Pesa.' }, 400);
+  if (body.kind !== 'credits' && body.kind !== 'monthly') return context.json({ error: 'Choose credits or the monthly plan.' }, 400);
   const user = await findAccount(context.env.DB, context.req.header('authorization'));
   if (!user) return context.json({ error: 'Authentication required.' }, 401);
   try {
-    const result = await beginPayment(context.env.DB, secret, user, new URL(context.req.url).origin, body.channel, typeof body.phone === 'string' ? body.phone : undefined);
+    const result = await beginPayment(context.env.DB, secret, user, new URL(context.req.url).origin, body.channel,
+      typeof body.phone === 'string' ? body.phone : undefined, body.kind, typeof body.amountKes === 'number' ? body.amountKes : undefined);
     return context.json(result);
   } catch (error) {
     return context.json({ error: error instanceof Error ? error.message : 'Payment could not be started.' }, 400);

@@ -48,15 +48,26 @@ Configure the Paystack webhook URL as:
 https://YOUR_DOMAIN/api/billing/paystack-webhook
 ```
 
-The current package is **KSh 500 for $3.80 of AI usage credit**. Card customers
+Pay-as-you-go top-ups accept whole-shilling amounts from **KSh 20** to KSh 100,000.
+The fixed store conversion remains $3.80 of service credit per KSh 500:
+**100 credits = $1**, so KSh 20 adds **15.2 credits**. This is a product conversion
+rate, not a live exchange-rate feed. Pricing constants live in `shared/billing.ts`.
+
+The **$5 monthly plan** costs **KSh 658** (rounded up to a whole shilling at that
+conversion rate) and grants **500 monthly credits**. It is prepaid and manually
+renewed through either payment method. No automatic recurring charges are created.
+Card customers
 are redirected to Paystack checkout. M-Pesa customers enter a Kenyan phone
 number and receive the Paystack STK prompt. The app accepts credit only after
 Paystack's server side transaction verification confirms the correct reference,
-KES currency, successful status, and KSh 500 amount. Webhook signatures use
+KES currency, successful status, and the exact amount saved for that purchase.
+The server determines the credit amount and purchase kind. Webhook signatures use
 Paystack's `x-paystack-signature` HMAC SHA-512. Browser returns and mobile
 prompts alone never credit a wallet. Payments are idempotent.
 
-Run the D1 migration before enabling these flows:
+Apply migrations through **0011_billing_plans.sql** before deploying the updated
+Worker. Existing balances and historical charges are preserved; accounts with
+successful prior payments are marked paid rather than receiving another trial:
 
 ```text
 npm run db:migrate:local
@@ -65,10 +76,27 @@ npm run db:migrate:remote
 
 ## AI usage accounting
 
-Each account starts with **$0.50 of credit**. The two OpenAI backed AI routes
+Each account starts with **50 trial credits** ($0.50 of service credit).
+Provider usage cost is multiplied by **5 during trial**, **10 for pay-as-you-go**,
+or **8 when using monthly credits**. For example, $0.02 of provider usage consumes
+10 trial credits, 20 pay-as-you-go credits, or 16 monthly credits. Buying either
+product ends trial pricing for future requests; any remaining trial balance is
+preserved in the pay-as-you-go wallet.
+
+Monthly credits are used first while the plan is active and has a positive
+balance. The expiry is one calendar month from purchase (clamped to the last day
+for short months). Early renewal extends that expiry by a month and adds 500
+credits to the remaining allowance. Renewal after expiry starts a new 500-credit
+allowance. Unused monthly credits expire; pay-as-you-go credits never expire.
+After monthly exhaustion or expiry, requests fall back to available pay-as-you-go
+credits at 10x. Configured daily generation limits still apply.
+
+The two OpenAI backed AI routes
 lock an account to one concurrent AI request, then use the Responses API's
 reported input, cached input, cache write, and output token counts to debit
-credit. Failed or incomplete generations with reported usage also debit credit,
+credit. The pricing tier is stored at reservation time so payment or expiry during
+a request does not change its rate. Settlement is atomic and idempotent, including
+late responses after a reservation lock expires. Failed or incomplete generations with reported usage also debit credit,
 because OpenAI can bill for those tokens. Cached application responses do not
 make a new OpenAI call or debit credit.
 
@@ -81,8 +109,11 @@ with a small positive balance can finish slightly past zero because OpenAI
 reports exact usage only after execution. The wallet displays zero available
 credit after such a request and blocks the next one.
 
-The browser shows balance, recent per-request token cost, and payment status
-under **Billing and AI credit**.
-The `ai_usage` table keeps per request token counts and cost, and
+The browser shows credit balances, trial/monthly usage percentages, per-request
+credit charges, monthly expiry, and payment status under **Billing and credits**.
+The billing API does not expose token counts or raw provider cost in recent usage.
+The `ai_usage` table keeps internal token counts, provider `cost_microusd`, and
+customer `charged_microusd` separately. `billing_ai_requests` keeps reservation
+pricing and settlement status, and
 `billing_payments` keeps the payment ledger. Never put the Google or Paystack
 secret in frontend build variables or source files.
