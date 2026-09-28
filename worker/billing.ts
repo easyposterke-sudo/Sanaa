@@ -42,19 +42,22 @@ export async function wallet(db: D1Database, userId: string) {
   };
 }
 
-export async function reserveAi(db: D1Database, userId: string, requestId: string) {
+export async function reserveAi(db: D1Database, userId: string, requestId: string, operation: 'generation' | 'edit' = 'generation') {
   await wallet(db, userId);
   const now = Math.floor(Date.now() / 1000);
+  // Check the balance and acquire the lock atomically. Edits only need a
+  // positive balance; full generations need the estimated starting allowance.
+  const minimum = operation === 'edit' ? 1 : BILLING.minimumGenerationCredits * BILLING.microusdPerCredit;
   const result = await db.batch([
     db.prepare(`UPDATE billing_wallets SET active_request_id = ?, active_until = ?
-      WHERE user_id = ? AND (balance_microusd > 0 OR (monthly_until > ? AND monthly_balance_microusd > 0))
+      WHERE user_id = ? AND (balance_microusd >= ? OR (monthly_until > ? AND monthly_balance_microusd >= ?))
       AND (active_request_id IS NULL OR active_until < ?)
       AND NOT EXISTS (SELECT 1 FROM billing_ai_requests WHERE request_id = ?)`)
-      .bind(requestId, now + 180, userId, now, now, requestId),
+      .bind(requestId, now + 180, userId, minimum, now, minimum, now, requestId),
     db.prepare(`INSERT OR IGNORE INTO billing_ai_requests (request_id, user_id, multiplier, monthly_period)
-      SELECT ?, user_id, CASE WHEN monthly_until > ? AND monthly_balance_microusd > 0 THEN ? WHEN has_paid = 1 THEN ? ELSE ? END, monthly_period
+      SELECT ?, user_id, CASE WHEN monthly_until > ? AND monthly_balance_microusd >= ? THEN ? WHEN has_paid = 1 THEN ? ELSE ? END, monthly_period
       FROM billing_wallets WHERE user_id = ? AND active_request_id = ?`)
-      .bind(requestId, now, BILLING.monthlyMultiplier, BILLING.paidMultiplier, BILLING.trialMultiplier, userId, requestId),
+      .bind(requestId, now, minimum, BILLING.monthlyMultiplier, BILLING.paidMultiplier, BILLING.trialMultiplier, userId, requestId),
   ]);
   return result[1]!.meta.changes > 0;
 }

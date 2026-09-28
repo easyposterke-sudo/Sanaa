@@ -49,12 +49,14 @@ https://YOUR_DOMAIN/api/billing/paystack-webhook
 ```
 
 Pay-as-you-go top-ups accept whole-shilling amounts from **KSh 20** to KSh 100,000.
-The fixed store conversion remains $3.80 of service credit per KSh 500:
-**100 credits = $1**, so KSh 20 adds **15.2 credits**. This is a product conversion
-rate, not a live exchange-rate feed. Pricing constants live in `shared/billing.ts`.
+The fixed top-up rate is **1.25 credits per shilling**, so KSh 20 adds **25 credits**
+and KSh 100 adds **125 credits**. **100 credits = $1** of service credit for usage
+accounting. This is a product rate, not a live exchange-rate feed. Pricing constants
+live in `shared/billing.ts`. Existing balances and previously quoted pending payments
+retain their stored credit amounts; the new rate applies to new checkouts.
 
-The **$5 monthly plan** costs **KSh 658** (rounded up to a whole shilling at that
-conversion rate) and grants **500 monthly credits**. It is prepaid and manually
+The **$5 monthly plan** costs **KSh 658**, priced independently from top-ups,
+and grants **500 monthly credits**. It is prepaid and manually
 renewed through either payment method. No automatic recurring charges are created.
 Card customers
 are redirected to Paystack checkout. M-Pesa customers enter a Kenyan phone
@@ -83,13 +85,20 @@ or **8 when using monthly credits**. For example, $0.02 of provider usage consum
 product ends trial pricing for future requests; any remaining trial balance is
 preserved in the pay-as-you-go wallet.
 
-Monthly credits are used first while the plan is active and has a positive
-balance. The expiry is one calendar month from purchase (clamped to the last day
+Monthly credits are used first while the plan is active and has enough credits
+for the requested operation. The expiry is one calendar month from purchase (clamped to the last day
 for short months). Early renewal extends that expiry by a month and adds 500
 credits to the remaining allowance. Renewal after expiry starts a new 500-credit
 allowance. Unused monthly credits expire; pay-as-you-go credits never expire.
-After monthly exhaustion or expiry, requests fall back to available pay-as-you-go
-credits at 10x. Configured daily generation limits still apply.
+If the monthly balance is insufficient or expired, requests fall back to sufficient
+pay-as-you-go credits at 10x. Configured daily generation limits still apply.
+
+Full poster generation and recreation require **at least 20 credits** in either
+the active monthly balance or the pay-as-you-go/trial balance before starting a
+provider call. Balances are not combined across pricing tiers. Exactly 20 credits
+qualifies; 19.9999 does not. Selected-layer AI edits only require a positive balance.
+This check is atomic with the request lock and tier selection. Cached responses,
+which incur no new provider cost, remain available without this starting minimum.
 
 The two OpenAI backed AI routes
 lock an account to one concurrent AI request, then use the Responses API's
@@ -105,7 +114,7 @@ standard token rates. Review that table whenever OpenAI pricing changes. The
 app deliberately blocks a different `OPENAI_MODEL` until its rates are added.
 These amounts are calculated from token usage and published rates; they are
 usage estimates, not a copy of OpenAI's final invoice. A request that starts
-with a small positive balance can finish slightly past zero because OpenAI
+at the starting minimum (or a small positive editing balance) can finish past zero because OpenAI
 reports exact usage only after execution. The wallet displays zero available
 credit after such a request and blocks the next one.
 

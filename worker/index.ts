@@ -767,7 +767,7 @@ app.post('/api/ai/poster-element-edit', async (context) => {
     );
   }
   if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
-  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId)) return context.json({ error: 'AI credit is exhausted or another request is still running. Add credit in Billing.', code: 'AI_CREDIT_REQUIRED', requestId }, 402);
+  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, 'edit')) return context.json({ error: 'AI credit is exhausted or another request is still running. Add credit in Billing.', code: 'AI_CREDIT_REQUIRED', requestId }, 402);
   const quota = maxAiGenerationsPerDay(context.env);
   if (!await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota)) {
     await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
@@ -907,7 +907,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
 
   const quota = maxAiGenerationsPerDay(context.env);
   if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
-  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId)) return context.json({ error: 'AI credit is exhausted or another request is still running. Add credit in Billing.', code: 'AI_CREDIT_REQUIRED', requestId }, 402);
+  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, 'generation')) return context.json({ error: `Full poster generation or recreation requires at least ${BILLING.minimumGenerationCredits} credits in your monthly allowance or pay-as-you-go balance, and no other AI request running. Add credits in Billing. AI editing is available with a smaller positive balance.`, code: 'AI_CREDIT_REQUIRED', requestId }, 402);
   const reserved = await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota);
   if (!reserved) {
     await settleAi(context.env.DB, context.get('ownerId'), requestId, model);

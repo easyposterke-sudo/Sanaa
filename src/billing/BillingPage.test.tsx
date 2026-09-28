@@ -26,7 +26,8 @@ describe('BillingPage', () => {
     expect(screen.getByText('20.0% used')).toBeInTheDocument();
     expect(screen.getByText('10 credits')).toBeInTheDocument();
     expect(screen.queryByText(/token/i)).not.toBeInTheDocument();
-    expect(screen.getByText('KSh 20 adds 15.2 credits.')).toBeInTheDocument();
+    expect(screen.getByText('KSh 20 adds 25 credits.')).toBeInTheDocument();
+    expect(screen.getByText(/Full poster generation or recreation needs at least 20 credits/)).toBeInTheDocument();
   });
 
   it('submits a custom M-Pesa top-up and prevents amounts below KSh 20', async () => {
@@ -39,6 +40,7 @@ describe('BillingPage', () => {
     fireEvent.change(screen.getByLabelText('Top-up amount (KSh)'), { target: { value: '19' } });
     expect(screen.getByRole('button', { name: 'Send M-Pesa prompt' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Top-up amount (KSh)'), { target: { value: '75' } });
+    expect(screen.getByText('KSh 75 adds 93.75 credits.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Send M-Pesa prompt' }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/billing/checkout', expect.objectContaining({
       body: JSON.stringify({ channel: 'mpesa', phone: '0722000000', kind: 'credits', amountKes: 75 }),

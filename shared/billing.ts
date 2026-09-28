@@ -1,8 +1,9 @@
-// Product conversion rate, retained from the original KSh 500 / $3.80 package.
-// This is a fixed store rate, not a live foreign-exchange quote.
+// Fixed pay-as-you-go store rate: KSh 20 buys 25 credits.
+// Monthly plan pricing is independent of this top-up rate.
 export const BILLING = {
   microusdPerCredit: 10_000,
-  microusdPerKes: 7_600,
+  microusdPerKes: 12_500,
+  minimumGenerationCredits: 20,
   trialMicrousd: 500_000,
   trialMultiplier: 5,
   paidMultiplier: 10,
