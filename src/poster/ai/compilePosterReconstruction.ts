@@ -81,7 +81,7 @@ export function hasVerifiedTextExtrusion(
 export interface CompiledPosterReconstruction {
   project: PosterProject;
   /** Transient source used by the editor's isolated selected-layer AI workflow. */
-  sourceReference?: { dataUrl: string; width: number; height: number };
+  sourceReference?: { dataUrl: string; width: number; height: number; originalDataUrl?: string };
   fieldBindings: PosterTemplateFieldBinding[];
   suggestedTemplateName: string;
   category: PosterTemplateCategory;
@@ -349,6 +349,7 @@ export async function compilePosterReconstruction(input: {
             dataUrl: input.reference.dataUrl,
             width: input.reference.width,
             height: input.reference.height,
+            ...(input.reference.originalDataUrl ? { originalDataUrl: input.reference.originalDataUrl } : {}),
           },
         }
       : {}),

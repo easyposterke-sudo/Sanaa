@@ -2,9 +2,42 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_REFERENCE_FIDELITY } from '../../../shared/ai/referenceFidelity';
 import { compilePosterReconstruction } from './compilePosterReconstruction';
 import { referenceElement, referencePlan } from './referenceTestFixtures';
+import { createFabricObject } from '../posterFabricFactory';
 
 const reference = { dataUrl: 'unused', width: 1000, height: 1000 };
 describe('measured reference effects', () => {
+  it('fits asymmetric Bezier extrema and stroke to the measured box in the editor', async () => {
+    const plan = referencePlan([referenceElement({ kind: 'path', box: { x: .1, y: .2, width: .4, height: .2 },
+      stroke: '#112233', strokeWidthRatio: .01, pathUsage: 'closed_fill', pathClosed: true,
+      fidelity: { ...EMPTY_REFERENCE_FIDELITY, geometry: 'measured', path: {
+        nodes: [
+          { x: 0, y: 0, incoming: null, outgoing: { x: .2, y: -1 } },
+          { x: 1, y: 0, incoming: { x: .7, y: -.4 }, outgoing: null },
+          { x: 1, y: 1, incoming: null, outgoing: null },
+          { x: 0, y: 1, incoming: null, outgoing: null },
+        ], holes: [], fillRule: 'nonzero',
+      } },
+    })]);
+    const compiled = await compilePosterReconstruction({ plan, reference, referenceGuideOpacity: 0 });
+    const object = await createFabricObject(compiled.project.elements[0]!, true);
+    expect(object).not.toBeNull();
+    const bounds = object!.getBoundingRect();
+    expect(bounds.left).toBeCloseTo(100, 2);
+    expect(bounds.top).toBeCloseTo(200, 2);
+    expect(bounds.width).toBeCloseTo(400, 2);
+    expect(bounds.height).toBeCloseTo(200, 2);
+    const path = compiled.project.elements[0]!;
+    if (path.type !== 'path') throw new Error('Expected path');
+    expect(path.pathPoints[0]!.outY).toBeLessThan(0);
+    expect(path.pathPoints).toHaveLength(4);
+    object!.dispose();
+  });
+
+  it('retains full-resolution reference pixels only in the transient source', async () => {
+    const compiled = await compilePosterReconstruction({ plan: referencePlan(), reference: { ...reference, originalDataUrl: 'original-pixels' }, referenceGuideOpacity: 0 });
+    expect(compiled.sourceReference?.originalDataUrl).toBe('original-pixels');
+    expect(JSON.stringify(compiled.project)).not.toContain('original-pixels');
+  });
   it('retains exact corners, separate corner radii and measured shadows', async () => {
     const fidelity = { ...EMPTY_REFERENCE_FIDELITY, geometry: 'measured' as const,
       cornerRadii: { tl: .1, tr: .2, br: .3, bl: 0 },

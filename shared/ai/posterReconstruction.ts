@@ -10,7 +10,7 @@ export const MAX_RECONSTRUCTION_ELEMENTS = 45 as const;
 export const MAX_REFERENCE_ELEMENTS = 120 as const;
 export const MAX_RECONSTRUCTION_PATH_POINTS = 24 as const;
 export const POSTER_RECONSTRUCTION_PROMPT_VERSION =
-  'poster-reconstruction-v19-measured-fidelity' as const;
+  'poster-reconstruction-v20-path-fidelity' as const;
 
 export const RECONSTRUCTION_ICON_NAMES = [
   'none',

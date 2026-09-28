@@ -79,7 +79,7 @@ export type PathToolMode = 'pen' | 'pen-straight' | 'pen-curve' | 'direct' | 'co
 export type PenCreationMode = 'shape' | 'line';
 export type PathNodeSelection = { elementId: string; nodeIndex: number; islandIndex?: number };
 export type PathHandleSelection = PathNodeSelection & { kind: 'in' | 'out' };
-export type PosterAiReference = { dataUrl: string; width: number; height: number };
+export type PosterAiReference = { dataUrl: string; width: number; height: number; originalDataUrl?: string };
 
 interface PosterStore {
   elements: PosterElement[];

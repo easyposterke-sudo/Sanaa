@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { POSTER_RECONSTRUCTION_SCHEMA_VERSION } from '../../shared/ai/posterReconstruction';
-import type { PosterElementEditRequest } from '../../shared/ai/posterElementEdit';
+import { PosterElementEditRequestSchema, type PosterElementEditRequest } from '../../shared/ai/posterElementEdit';
 import { editPosterElementWithOpenAI } from './openAiPosterElementEditor';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -24,6 +24,7 @@ describe('editPosterElementWithOpenAI', () => {
     const request: PosterElementEditRequest = {
       reference: { dataUrl: 'data:image/webp;base64,AAAA', width: 1080, height: 1350 },
       currentDraft: { dataUrl: 'data:image/webp;base64,BBBB', width: 768, height: 960 },
+      detail: { box: { x: .05, y: .15, width: .6, height: .3 }, referenceDataUrl: 'data:image/webp;base64,CCCC', currentDraftDataUrl: 'data:image/webp;base64,DDDD' },
       instruction: 'Match the original letter spacing.',
       selected: {
         id: 'headline', type: 'text', label: 'SUNDAY',
@@ -31,6 +32,7 @@ describe('editPosterElementWithOpenAI', () => {
         propertiesJson: '{"text":"SUNDAY"}',
       },
     };
+    expect(PosterElementEditRequestSchema.parse(request).detail).toEqual(request.detail);
     const result = await editPosterElementWithOpenAI({ apiKey: 'test', model: 'test', request });
     expect(result.patch.elements).toHaveLength(1);
     expect(result.openAiRequestId).toBe('req_edit');
@@ -41,12 +43,16 @@ describe('editPosterElementWithOpenAI', () => {
     expect(userContent.filter(({ type }) => type === 'input_image').map(({ image_url }) => image_url)).toEqual([
       request.reference.dataUrl,
       request.currentDraft.dataUrl,
+      request.detail!.referenceDataUrl,
+      request.detail!.currentDraftDataUrl,
     ]);
     expect(body.input[0].content[0].text).toContain('ONLY replacements for the one selected layer');
     expect(body.input[0].content[0].text).toContain('Set textWidthMode to natural unless');
     expect(body.input[0].content[0].text).toContain('immediately attached ring, oval');
     expect(body.input[0].content[0].text).toContain("copy the original's literal visible characters exactly");
     expect(body.input[0].content[0].text).toContain('reproduce its exact visible length');
+    expect(body.input[0].content[0].text).toContain('ABSOLUTE positions');
+    expect(JSON.stringify(userContent)).toContain(JSON.stringify(request.detail!.box).replaceAll('"', '\\"'));
   });
 });
 

@@ -7,7 +7,7 @@ import {
 } from './posterReconstruction';
 
 export const POSTER_ELEMENT_EDIT_PROMPT_VERSION =
-  'poster-element-edit-v2-reference-fidelity' as const;
+  'poster-element-edit-v3-path-detail' as const;
 
 const ImageInputSchema = z.object({
   dataUrl: z.string().regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/),
@@ -18,6 +18,12 @@ const ImageInputSchema = z.object({
 export const PosterElementEditRequestSchema = z.object({
   reference: ImageInputSchema,
   currentDraft: ImageInputSchema,
+  /** Matching close-ups retain the full-poster coordinate mapping. */
+  detail: z.object({
+    box: ReconstructionBoxSchema,
+    referenceDataUrl: ImageInputSchema.shape.dataUrl,
+    currentDraftDataUrl: ImageInputSchema.shape.dataUrl,
+  }).strict().optional(),
   instruction: z.string().trim().min(3).max(1500),
   selected: z.object({
     id: z.string().min(1).max(160),

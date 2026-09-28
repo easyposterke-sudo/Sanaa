@@ -1,6 +1,8 @@
 import type { ReferenceGradient, ReferencePathNode } from '../../../shared/ai/referenceFidelity';
 import type { ReconstructionElement } from '../../../shared/ai/posterReconstruction';
 import type { PosterElement, PosterPathPoint, PosterShapeFill } from '../types';
+import { Path } from 'fabric';
+import { pathPointsToPathD } from '../path/penToolMath';
 
 export function referenceGradientFill(gradient: ReferenceGradient): Extract<PosterShapeFill, { type: 'linear' | 'radial' }> {
   const stops = [...gradient.stops].sort((a, b) => a.offset - b.offset).map(stop => ({ offset: stop.offset, color: colorWithOpacity(stop.color, stop.opacity) }));
@@ -61,7 +63,29 @@ export function applyReferenceFidelity(element: PosterElement, item: Reconstruct
       result.pathPoints = referencePathPoints(fidelity.path.nodes, width, height);
       result.islands = fidelity.path.holes.map(nodes => referencePathPoints(nodes, width, height));
       result.fillRule = fidelity.path.fillRule;
+      fitReferencePathBounds(result, width, height);
     }
   }
   return result;
+}
+
+/** Fabric positions paths by their curve bounds, not their anchor/control hull.
+ * Fit explicit reference contours to the measured outside box, including stroke.
+ * This only affects newly compiled reference paths, never existing editor paths.
+ */
+function fitReferencePathBounds(path: Extract<PosterElement, { type: 'path' }>, width: number, height: number): void {
+  const geometry = new Path(pathPointsToPathD(path.pathPoints, path.closed ?? false, path.islands), { strokeWidth: 0 });
+  const minX = geometry.pathOffset.x - geometry.width / 2;
+  const minY = geometry.pathOffset.y - geometry.height / 2;
+  const stroke = path.stroke ? path.strokeWidth ?? 0 : 0;
+  const sx = geometry.width > 0.001 ? Math.max(0.001, width - stroke) / geometry.width : 1;
+  const sy = geometry.height > 0.001 ? Math.max(0.001, height - stroke) / geometry.height : 1;
+  const transform = (points: PosterPathPoint[]) => points.map(point => ({
+    x: (point.x - minX) * sx, y: (point.y - minY) * sy,
+    ...(point.inX != null && point.inY != null ? { inX: (point.inX - minX) * sx, inY: (point.inY - minY) * sy } : {}),
+    ...(point.outX != null && point.outY != null ? { outX: (point.outX - minX) * sx, outY: (point.outY - minY) * sy } : {}),
+  }));
+  path.pathPoints = transform(path.pathPoints);
+  path.islands = path.islands?.map(transform);
+  geometry.dispose();
 }

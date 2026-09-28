@@ -6,7 +6,7 @@ export async function applyPosterElementEdit(input: {
   elements: PosterElement[];
   selectedId: string;
   patch: PosterReconstructionPlan;
-  reference: { dataUrl: string; width: number; height: number };
+  reference: { dataUrl: string; width: number; height: number; originalDataUrl?: string };
   canvasWidth: number;
   canvasHeight: number;
   fontCatalogFamilies?: Readonly<Record<string, string>>;
@@ -16,6 +16,18 @@ export async function applyPosterElementEdit(input: {
   if (selected.locked) throw new Error('Unlock this layer before editing it with AI.');
   if (input.patch.elements.length < 1 || input.patch.elements.length > 8) {
     throw new Error('The AI edit must contain between 1 and 8 replacement layers.');
+  }
+  // Reject unsupported contours before the compiler's general-purpose rectangular
+  // fallback can silently turn an attempted correction into a different shape.
+  for (const item of input.patch.elements) {
+    if (item.kind !== 'path') continue;
+    const closed = item.pathUsage === 'closed_fill' ||
+      (item.pathUsage === 'not_applicable' && item.pathClosed) ||
+      (item.pathUsage === 'open_stroke' && item.fill !== null && (!item.stroke || item.strokeWidthRatio <= 0));
+    const points = item.fidelity?.path?.nodes ?? item.pathPoints;
+    if (points.length < (closed ? 3 : 2) || new Set(points.map(point => `${point.x},${point.y}`)).size < (closed ? 3 : 2)) {
+      throw new Error('The AI returned an incomplete path. Your original layer has been kept; try describing the contour more specifically.');
+    }
   }
 
   const compiled = await compilePosterReconstruction({

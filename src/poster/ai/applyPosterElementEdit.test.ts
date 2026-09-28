@@ -3,8 +3,19 @@ import { POSTER_RECONSTRUCTION_SCHEMA_VERSION, type PosterReconstructionPlan } f
 import type { PosterElement, PosterTextElement } from '../types';
 import { applyPosterElementEdit, sanitizedPosterElementProperties } from './applyPosterElementEdit';
 import { EMPTY_REFERENCE_FIDELITY } from '../../../shared/ai/referenceFidelity';
+import { referenceElement, referencePlan } from './referenceTestFixtures';
 
 describe('applyPosterElementEdit', () => {
+  it('rejects incomplete and collapsed paths without replacing the existing layer', async () => {
+    const selected = text('selected', 'Keep me', 1);
+    const node = { x: 0, y: 0, incoming: null, outgoing: null };
+    for (const nodes of [[node, { ...node, x: 1 }], [node, node, node]]) {
+      const patch = referencePlan([referenceElement({ kind: 'path', pathClosed: true, pathUsage: 'closed_fill', fidelity: { ...EMPTY_REFERENCE_FIDELITY, path: { nodes, holes: [], fillRule: 'nonzero' } } })]);
+      const elements = [selected];
+      await expect(applyPosterElementEdit({ elements, selectedId: selected.id, patch, reference: { dataUrl: 'unused', width: 1000, height: 1000 }, canvasWidth: 1000, canvasHeight: 1000 })).rejects.toThrow('incomplete path');
+      expect(elements).toEqual([selected]);
+    }
+  });
   it('atomically replaces only the selected layer and can split it into independent text', async () => {
     const background = rectangle('background', 1);
     const selected = text('date', 'SUN 10 JUNE 2026', 2);

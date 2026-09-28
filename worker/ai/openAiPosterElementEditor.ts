@@ -30,6 +30,13 @@ export async function editPosterElementWithOpenAI(input: {
     { type: 'input_text', text: 'Image 2: current editable draft before this one-layer edit.' },
     { type: 'input_image', image_url: request.currentDraft.dataUrl, detail: 'high' },
   ];
+  if (request.detail) {
+    userContent.push(
+      { type: 'input_text', text: `Matching close-ups of the selected area. Both map to this full-poster normalized box: ${JSON.stringify(request.detail.box)}. First: original reference detail. Second: current draft detail. Use the full images to identify the correct object if it has moved. Output boxes remain full-poster coordinates, never crop coordinates.` },
+      { type: 'input_image', image_url: request.detail.referenceDataUrl, detail: 'high' },
+      { type: 'input_image', image_url: request.detail.currentDraftDataUrl, detail: 'high' },
+    );
+  }
   if (request.fontCatalog && (request.fontCatalog.entries.length || request.fontCatalog.previewDataUrls.length)) {
     userContent.push({
       type: 'input_text',
@@ -151,7 +158,9 @@ Typography is geometry-critical. Whenever the selected layer is text, explicitly
 
 Set textWidthMode to natural unless the original glyph proportions unmistakably require non-uniform compression or expansion relative to the closest chosen font. A narrow font family may still be natural. Never choose condensed or expanded merely to fill the selected box, fit a badge, avoid a neighbor, or compensate for an inaccurate detection. Select the closest allowed font token or supplied custom font ID before deciding width treatment. Centre ordinary natural-width label text inside its separate badge or pill; do not stretch the letters to the badge edges.
 
-Use normalized coordinates relative to the complete poster. Use text for wording; native shapes for regular geometry; path only for irregular vector geometry; image_region only when the selected layer is actually raster artwork. If the selected layer is an intentional straight decorative rule, reproduce its exact visible length, color, thickness, angle, and position as kind line with fill null, stroke set to the visible color, and measured strokeWidthRatio; do not omit it because it is thin or non-semantic. A path may use up to 24 ordered anchors, but add points only at visible extrema, turns, inflections, or local contour changes; ordinary curves should use fewer. Do not return HTML, SVG, code, URLs, or base64 data.
+Use normalized coordinates relative to the complete poster. Use text for wording; native shapes for regular geometry; path only for irregular vector geometry; image_region only when the selected layer is actually raster artwork. If the selected layer is an intentional straight decorative rule, reproduce its exact visible length, color, thickness, angle, and position as kind line with fill null, stroke set to the visible color, and measured strokeWidthRatio; do not omit it because it is thin or non-semantic. Do not return HTML, SVG, code, URLs, or base64 data.
+
+For a selected path, compare the reference silhouette with the draft before changing it: endpoints, peaks, valleys, inflections, tangents, band thickness, holes, color on each side, and overlap with nearby layers. Correct only evidenced differences; preserve already correct geometry and style. Use fidelity.path with explicit independent Bezier controls for curved contours. Selected properties are editor pixels with scale/rotation, not normalized plan coordinates; never copy them directly into fidelity.path. Do not trace text, portraits, or neighboring bands into this path, and do not add a hole where another layer merely overlaps it. A boundary separating color regions belongs to a complete closed_fill panel, including its hidden or canvas-edge closing sides. A standalone flourish is open_stroke with fill null. If the target is ambiguous, keep the selected geometry rather than invent a different silhouette, and explain the uncertainty in summary.
 
 All schema fields are required. For unused properties use the schema's neutral values, including natural textWidthMode. Set the plan canvas to a solid white placeholder because it is ignored. Set warnings empty, confidence honestly, and the summary to a short description of this selected-layer correction.`;
 

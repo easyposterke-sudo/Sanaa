@@ -5,7 +5,11 @@ import {
   applyPosterElementEdit,
   sanitizedPosterElementProperties,
 } from '../ai/applyPosterElementEdit';
-import { capturePosterThumbnail, getFabricCanvasRef } from '../canvasRef';
+import { getFabricCanvasRef } from '../canvasRef';
+import { renderReferenceDraft } from '../ai/renderReferenceDraft';
+import { cropElementEditDetail, elementEditDetailBox } from '../ai/elementEditPreview';
+import type { PosterProject } from '../types';
+import type { PosterAiReference } from '../store/posterStore';
 import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { requestPosterElementEdit } from '../services/posterElementEditApi';
 import { usePosterStore } from '../store/posterStore';
@@ -16,19 +20,35 @@ interface Props {
   onApplied?: (replacementIds: string[]) => void;
 }
 
+interface EditPreview {
+  original: PosterProject;
+  reference: PosterAiReference;
+  result: Awaited<ReturnType<typeof applyPosterElementEdit>>;
+  images: string[];
+  summary: string;
+}
+
+function stillCurrent(preview: Pick<EditPreview, 'original' | 'reference'>): boolean {
+  const state = usePosterStore.getState();
+  return state.elements === preview.original.elements && state.aiReference === preview.reference &&
+    state.canvasWidth === preview.original.canvasWidth && state.canvasHeight === preview.original.canvasHeight &&
+    state.canvasBackground === preview.original.canvasBackground;
+}
+
 export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Props) {
   useModalScrollLock(true);
-  const [instruction, setInstruction] = useState('Make this selected layer match the original reference more closely.');
+  const [instruction, setInstruction] = useState('Match this layer to the original reference. Correct visible differences in shape, position, proportions, and styling while preserving details that already match.');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [preview, setPreview] = useState<EditPreview | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const selected = usePosterStore((state) => state.elements.find((element) => element.id === selectedId));
   const reference = usePosterStore((state) => state.aiReference);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  async function applyEdit() {
+  async function previewEdit() {
     const initial = usePosterStore.getState();
     const element = initial.elements.find((candidate) => candidate.id === selectedId);
     if (!element || !initial.aiReference) {
@@ -40,6 +60,7 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
       return;
     }
     setBusy(true);
+    setPreview(null);
     setError('');
     setStatus('Comparing this layer with the original…');
     const controller = new AbortController();
@@ -51,18 +72,18 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
         initial.canvasHeight,
         element,
       );
-      const snapshot = await capturePosterThumbnail(
-        initial.canvasWidth,
-        initial.canvasHeight,
-        initial.canvasBackground,
-        960,
-      );
-      // Thumbnail capture temporarily clears Fabric's active object. Publish a
-      // fresh selection array so the canvas restores the same selected layer.
-      usePosterStore.setState((state) => ({ selectedIds: [...state.selectedIds] }));
-      if (!snapshot) throw new Error('The current poster preview could not be prepared.');
-      const fontCatalog = await prepareReconstructionFontCatalog(element.type === 'text' ? element.text.slice(0, 60) : undefined).catch(() => null);
-      const previewScale = Math.min(1, 960 / initial.canvasWidth);
+      const original: PosterProject = { elements: initial.elements, canvasWidth: initial.canvasWidth, canvasHeight: initial.canvasHeight, canvasBackground: initial.canvasBackground };
+      const before = await renderReferenceDraft(original, 1536);
+      const snapshot = before.toDataURL('image/png');
+      const referenceImage = initial.aiReference.originalDataUrl ?? initial.aiReference.dataUrl;
+      const detailBox = elementEditDetailBox([selectedBox]);
+      const [referenceDataUrl, currentDraftDataUrl] = await Promise.all([
+        cropElementEditDetail(referenceImage, detailBox),
+        cropElementEditDetail(snapshot, detailBox),
+      ]);
+      const fontCatalog = element.type === 'text'
+        ? await prepareReconstructionFontCatalog(element.text.slice(0, 60)).catch(() => null) : null;
+      if (controller.signal.aborted) return;
       const response = await requestPosterElementEdit({
         reference: {
           dataUrl: initial.aiReference.dataUrl,
@@ -70,10 +91,11 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
           height: initial.aiReference.height,
         },
         currentDraft: {
-          dataUrl: snapshot,
-          width: Math.max(64, Math.round(initial.canvasWidth * previewScale)),
-          height: Math.max(64, Math.round(initial.canvasHeight * previewScale)),
+          dataUrl: before.toDataURL('image/webp', 0.9),
+          width: Math.max(64, before.width),
+          height: Math.max(64, before.height),
         },
+        detail: { box: detailBox, referenceDataUrl, currentDraftDataUrl },
         instruction: instruction.trim(),
         selected: {
           id: element.id,
@@ -84,24 +106,24 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
         },
         ...(fontCatalog ? { fontCatalog: fontCatalog.request } : {}),
       }, { signal: controller.signal });
-      setStatus('Applying only the selected-layer replacement…');
-      const latest = usePosterStore.getState();
+      if (controller.signal.aborted) return;
+      setStatus('Preparing the before-and-after comparison…');
       const result = await applyPosterElementEdit({
-        elements: latest.elements,
+        elements: initial.elements,
         selectedId,
         patch: response.patch,
         reference: initial.aiReference,
-        canvasWidth: latest.canvasWidth,
-        canvasHeight: latest.canvasHeight,
+        canvasWidth: initial.canvasWidth,
+        canvasHeight: initial.canvasHeight,
         fontCatalogFamilies: fontCatalog?.families,
       });
-      usePosterStore.setState({
-        elements: result.elements,
-        selectedIds: result.replacementIds,
-      });
-      usePosterStore.getState().pushHistory();
-      onApplied?.(result.replacementIds);
-      onClose();
+      const after = await renderReferenceDraft({ ...original, elements: result.elements }, 1536);
+      const comparisonBox = elementEditDetailBox([selectedBox, ...response.patch.elements.map(item => item.box)]);
+      const images = await Promise.all([referenceImage, snapshot, after.toDataURL('image/png')].map(url => cropElementEditDetail(url, comparisonBox)));
+      if (controller.signal.aborted) return;
+      const next = { original, reference: initial.aiReference, result, images, summary: response.patch.summary };
+      if (!stillCurrent(next)) throw new Error('The poster changed while this edit was being prepared. Generate a new preview for the current layer.');
+      setPreview(next);
     } catch (caught) {
       if (!controller.signal.aborted) {
         setError(caught instanceof Error ? caught.message : 'The selected layer could not be edited.');
@@ -113,9 +135,22 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
     }
   }
 
+  function applyPreview() {
+    if (!preview) return;
+    if (!stillCurrent(preview)) {
+      setPreview(null);
+      setError('The poster changed after this preview. Generate a new preview before applying.');
+      return;
+    }
+    usePosterStore.setState({ elements: preview.result.elements, selectedIds: preview.result.replacementIds });
+    usePosterStore.getState().pushHistory();
+    onApplied?.(preview.result.replacementIds);
+    onClose();
+  }
+
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="poster-ai-edit-title" className="fixed inset-0 z-[95] flex items-center justify-center bg-black/65 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 text-zinc-900 shadow-xl dark:bg-zinc-900 dark:text-white">
+      <div className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white p-6 text-zinc-900 shadow-xl dark:bg-zinc-900 dark:text-white ${preview ? 'max-w-4xl' : 'max-w-lg'}`}>
         <div className="flex items-center justify-between gap-4">
           <h2 id="poster-ai-edit-title" className="text-xl font-semibold">Edit selected layer with AI</h2>
           <button type="button" disabled={busy} onClick={onClose}>Close</button>
@@ -137,22 +172,37 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
           maxLength={1500}
           disabled={busy || !reference || !selected}
           value={instruction}
-          onChange={(event) => setInstruction(event.target.value)}
-          placeholder="For example: Match the original letter spacing, height, and width."
+          onChange={(event) => { setInstruction(event.target.value); setPreview(null); }}
+          placeholder={selected?.type === 'path' ? 'For example: Match the wave’s peaks, curve direction, and thickness to the reference.' : 'For example: Match the original letter spacing, height, and width.'}
           className="mt-2 w-full rounded-lg border border-zinc-300 bg-transparent p-3 text-sm dark:border-zinc-700"
         />
+        {preview && (
+          <div className="mt-4">
+            <p className="text-sm">Compare the contour, position, and styling before applying. Your current layer is unchanged.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {['Original reference', 'Current layer', 'Proposed edit'].map((label, index) => (
+                <figure key={label}>
+                  <figcaption className="mb-2 text-sm font-medium">{label}</figcaption>
+                  <img src={preview.images[index]} alt={label} className="max-h-80 w-full rounded border border-zinc-300 object-contain dark:border-zinc-700" />
+                </figure>
+              ))}
+            </div>
+            <p className="mt-3 text-sm text-zinc-500">{preview.summary}</p>
+          </div>
+        )}
         <p role="status" aria-live="polite" className="mt-3 min-h-5 text-sm text-zinc-500">{status}</p>
         {error && <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        <div className="mt-5 flex justify-end gap-3">
+        <div className="mt-5 flex flex-wrap justify-end gap-3">
           <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border px-4 py-2 text-sm">Cancel</button>
           <button
             type="button"
             disabled={busy || !reference || !selected || selected.locked || instruction.trim().length < 3}
-            onClick={() => void applyEdit()}
+            onClick={() => void previewEdit()}
             className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {busy ? 'Editing…' : 'Apply AI edit'}
+            {busy ? 'Editing…' : preview ? 'Try another edit' : 'Preview AI edit'}
           </button>
+          {preview && <button type="button" onClick={applyPreview} disabled={busy} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Apply this edit</button>}
         </div>
       </div>
     </div>
