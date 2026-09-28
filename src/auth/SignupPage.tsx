@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './authStore';
+import { GoogleAuthLink } from './GoogleAuthLink';
 
 export function SignupPage() {
   const user = useAuthStore((s) => s.user);
@@ -123,10 +124,7 @@ export function SignupPage() {
             {loading ? 'Creating account…' : 'Sign up'}
           </button>
         </form>
-        <a href="/api/auth/google/start" className="mt-4 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-center font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800">
-          Sign up with Google
-        </a>
-        <p className="mt-2 text-center text-xs text-zinc-500">Includes $0.50 of AI usage credit.</p>
+        <GoogleAuthLink label="Sign up with Google" />
         <p className="mt-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Already have an account?{' '}
           <Link to="/login" state={location.state} className="font-medium text-accent-600 hover:underline dark:text-accent-400">
