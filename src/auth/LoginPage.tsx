@@ -21,6 +21,17 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const login = useAuthStore((s) => s.login);
+  const exchangeGoogle = useAuthStore((s) => s.exchangeGoogle);
+
+  useEffect(() => {
+    const ticket = new URLSearchParams(window.location.search).get('google_ticket');
+    if (!ticket) return;
+    window.history.replaceState({}, '', '/login');
+    void exchangeGoogle(ticket).then((result) => {
+      if (result.error) setError(result.error);
+      else navigate('/poster', { replace: true });
+    });
+  }, [exchangeGoogle, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +104,9 @@ export function LoginPage() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        <a href="/api/auth/google/start" className="mt-4 block w-full rounded-lg border border-zinc-300 px-4 py-2.5 text-center font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800">
+          Continue with Google
+        </a>
         <p className="mt-4 text-center text-sm text-zinc-600 dark:text-zinc-400">
           Don&apos;t have an account?{' '}
           <Link to="/signup" state={location.state} className="font-medium text-accent-600 hover:underline dark:text-accent-400">

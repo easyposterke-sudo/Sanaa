@@ -8,6 +8,7 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuthStore } from './auth/authStore';
 import { AdminEntry } from './admin/AdminEntry';
 import { AdminRoute } from './admin/AdminRoute';
+import { BillingPage } from './billing/BillingPage';
 
 const AppLayout = lazy(() =>
   import('./components/layout/AppLayout').then((m) => ({ default: m.AppLayout }))
@@ -46,6 +47,7 @@ function App() {
   if (pathname === '/login') return <LoginPage />;
   if (pathname === '/signup') return <SignupPage />;
   if (pathname === '/admin') return <AdminEntry />;
+  if (pathname === '/billing') return <ProtectedRoute><BillingPage /></ProtectedRoute>;
   if (pathname === '/poster/templates') return <AdminRoute><Suspense fallback={<LoadingFallback />}><TemplateManagementPage /></Suspense></AdminRoute>;
 
   return (

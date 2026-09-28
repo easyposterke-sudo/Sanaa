@@ -1,5 +1,8 @@
 import { Hono } from 'hono';
 import { findAccount, login, loginWithAccess, logout, refreshSession, signup } from './auth';
+import { startGoogle, finishGoogle, exchangeGoogleTicket } from './googleAuth';
+import { wallet, reserveAi, settleAi } from './billing';
+import { beginPayment, verifyPayment, validPaystackSignature } from './paystack';
 import { accountWithAccessRole, verifiedAccessEmail } from './adminAccess';
 import {
   POSTER_RECONSTRUCTION_PROMPT_VERSION,
@@ -173,7 +176,7 @@ app.use('/api/*', async (context, next) => {
   const requestId = crypto.randomUUID();
   context.set('requestId', requestId);
   context.header('cache-control', 'no-store');
-  if (context.req.path.startsWith('/api/auth/')) {
+  if (context.req.path.startsWith('/api/auth/') || context.req.path === '/api/billing/paystack-webhook') {
     await next();
     return;
   }
@@ -260,6 +263,69 @@ app.post('/api/auth/logout', async (context) => {
   const body = await authBody(context);
   if (body && typeof body.refreshToken === 'string') await logout(context.env.DB, body.refreshToken);
   return context.json({ ok: true });
+});
+
+app.get('/api/auth/google/start', async (context) => {
+  if (!context.env.GOOGLE_CLIENT_ID || !context.env.GOOGLE_CLIENT_SECRET) return context.json({ error: 'Google sign-in is not configured.' }, 503);
+  const user = await findAccount(context.env.DB, context.req.header('authorization'));
+  const linking = context.req.query('link') === '1';
+  if (linking && !user) return context.json({ error: 'Sign in before linking Google.' }, 401);
+  return startGoogle(context.env.DB, new URL(context.req.url).origin, context.env.GOOGLE_CLIENT_ID, linking ? user?.id : undefined, linking);
+});
+
+app.get('/api/auth/google/callback', async (context) => {
+  if (!context.env.GOOGLE_CLIENT_ID || !context.env.GOOGLE_CLIENT_SECRET) return context.json({ error: 'Google sign-in is not configured.' }, 503);
+  return finishGoogle(context.env.DB, context.req.raw, new URL(context.req.url).origin, context.env.GOOGLE_CLIENT_ID, context.env.GOOGLE_CLIENT_SECRET);
+});
+
+app.post('/api/auth/google/exchange', async (context) => {
+  const body = await authBody(context);
+  const result = body && typeof body.ticket === 'string' ? await exchangeGoogleTicket(context.env.DB, body.ticket) : null;
+  return result && !('error' in result) ? context.json(result) : context.json({ error: 'Google sign-in expired. Please try again.' }, 401);
+});
+
+app.get('/api/billing', async (context) => {
+  const userId = context.get('ownerId');
+  const recentUsage = await context.env.DB.prepare(`SELECT request_id, model, input_tokens, cached_input_tokens, output_tokens, cost_microusd, created_at
+    FROM ai_usage WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`).bind(userId).all();
+  return context.json({ ...(await wallet(context.env.DB, userId)), recentUsage: recentUsage.results, package: { amountKes: 500, creditUsd: 3.8 }, paymentsConfigured: Boolean(context.env.PAYSTACK_SECRET_KEY) });
+});
+
+app.post('/api/billing/checkout', async (context) => {
+  const secret = context.env.PAYSTACK_SECRET_KEY;
+  if (!secret) return context.json({ error: 'Payments are not configured yet.' }, 503);
+  const body = await authBody(context);
+  if (!body || (body.channel !== 'card' && body.channel !== 'mpesa')) return context.json({ error: 'Choose card or M-Pesa.' }, 400);
+  const user = await findAccount(context.env.DB, context.req.header('authorization'));
+  if (!user) return context.json({ error: 'Authentication required.' }, 401);
+  try {
+    const result = await beginPayment(context.env.DB, secret, user, new URL(context.req.url).origin, body.channel, typeof body.phone === 'string' ? body.phone : undefined);
+    return context.json(result);
+  } catch (error) {
+    return context.json({ error: error instanceof Error ? error.message : 'Payment could not be started.' }, 400);
+  }
+});
+
+app.get('/api/billing/payments/:reference', async (context) => {
+  if (!context.env.PAYSTACK_SECRET_KEY) return context.json({ error: 'Payments are not configured yet.' }, 503);
+  try {
+    const result = await verifyPayment(context.env.DB, context.env.PAYSTACK_SECRET_KEY, context.req.param('reference'), context.get('ownerId'));
+    return result ? context.json(result) : context.json({ error: 'Payment not found.' }, 404);
+  } catch {
+    return context.json({ error: 'Payment status is temporarily unavailable.' }, 502);
+  }
+});
+
+app.post('/api/billing/paystack-webhook', async (context) => {
+  const secret = context.env.PAYSTACK_SECRET_KEY;
+  if (!secret) return context.body(null, 503);
+  const raw = await readBoundedText(context.req.raw, 65536);
+  if (!await validPaystackSignature(raw, context.req.header('x-paystack-signature'), secret)) return context.body(null, 401);
+  const event = JSON.parse(raw) as { event?: string; data?: { reference?: string } };
+  if (event.event === 'charge.success' && event.data?.reference) {
+    await verifyPayment(context.env.DB, secret, event.data.reference);
+  }
+  return context.body(null, 200);
 });
 
 app.get('/api/health', (context) =>
@@ -696,16 +762,23 @@ app.post('/api/ai/poster-element-edit', async (context) => {
       503,
     );
   }
+  if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
+  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId)) return context.json({ error: 'AI credit is exhausted or another request is still running. Add credit in Billing.', code: 'AI_CREDIT_REQUIRED', requestId }, 402);
   const quota = maxAiGenerationsPerDay(context.env);
   if (!await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota)) {
+    await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
     return context.json(
       { error: `The daily AI poster limit of ${quota} has been reached.`, code: 'AI_DAILY_LIMIT', requestId },
       429,
     );
   }
 
+  let usageSettled = false;
   try {
-    const result = await editPosterElementWithOpenAI({ apiKey, model, request });
+    const result = await editPosterElementWithOpenAI({ apiKey, model, request, onUsage: async usage => {
+      await settleAi(context.env.DB, context.get('ownerId'), requestId, model, usage);
+      usageSettled = true;
+    } });
     return context.json({ patch: result.patch, model, requestId });
   } catch (error) {
     if (error instanceof OpenAiPlannerError) {
@@ -721,6 +794,8 @@ app.post('/api/ai/poster-element-edit', async (context) => {
       );
     }
     throw error;
+  } finally {
+    if (!usageSettled) await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
   }
 });
 
@@ -827,8 +902,11 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
   }
 
   const quota = maxAiGenerationsPerDay(context.env);
+  if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
+  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId)) return context.json({ error: 'AI credit is exhausted or another request is still running. Add credit in Billing.', code: 'AI_CREDIT_REQUIRED', requestId }, 402);
   const reserved = await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota);
   if (!reserved) {
+    await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
     return context.json(
       {
         error: `The daily AI poster limit of ${quota} has been reached.`,
@@ -839,8 +917,12 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
     );
   }
 
+  let usageSettled = false;
   try {
-    const result = await reconstructPosterWithOpenAI({ apiKey, model, request });
+    const result = await reconstructPosterWithOpenAI({ apiKey, model, request, onUsage: async usage => {
+      await settleAi(context.env.DB, context.get('ownerId'), requestId, model, usage);
+      usageSettled = true;
+    } });
     const createdAt = new Date().toISOString();
     await context.env.DB.prepare(
       `INSERT INTO ai_poster_plans (
@@ -892,6 +974,8 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
       );
     }
     throw error;
+  } finally {
+    if (!usageSettled) await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
   }
 });
 

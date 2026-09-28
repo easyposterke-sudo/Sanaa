@@ -53,6 +53,7 @@ export async function reconstructPosterWithOpenAI(input: {
   model: string;
   request: PosterReconstructionRequest;
   timeoutMs?: number;
+  onUsage?: (usage: NonNullable<OpenAiResponsesPayload['usage']>) => Promise<void>;
 }): Promise<OpenAiPosterReconstructionResult> {
   const startedAt = Date.now();
   const controller = new AbortController();
@@ -131,7 +132,10 @@ export async function reconstructPosterWithOpenAI(input: {
       signal: controller.signal,
     });
     // Keep the deadline active through the response body, not only response headers.
-    if (response.ok) data = (await response.json()) as OpenAiResponsesPayload;
+    if (response.ok) {
+      data = (await response.json()) as OpenAiResponsesPayload;
+      if (data.usage) await input.onUsage?.(data.usage);
+    }
   } catch (error) {
     if (controller.signal.aborted) {
       throw new OpenAiPlannerError('The template reconstruction timed out.', 504, 'AI_TIMEOUT');
@@ -152,6 +156,10 @@ export async function reconstructPosterWithOpenAI(input: {
       imageCount: userContent.filter(item => item.type === 'input_image').length,
       timedOut: controller.signal.aborted,
     }));
+  }
+
+  if (response.ok && input.onUsage && !data?.usage) {
+    throw new OpenAiPlannerError('The AI service did not report token usage.', 502, 'AI_USAGE_MISSING');
   }
 
   const openAiRequestId = response.headers.get('x-request-id');
@@ -336,7 +344,7 @@ type OpenAiResponsesPayload = {
     type?: string;
     content?: Array<{ type?: string; text?: string; refusal?: string }>;
   }>;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } };
 };
 
 type OpenAiInputContent =

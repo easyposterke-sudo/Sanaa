@@ -38,6 +38,35 @@ async function issueSession(db: D1Database, user: { id: string; email: string; n
   return { user: account(user), token, refreshToken, expiresIn: ACCESS_AGE };
 }
 
+export async function sessionForUser(db: D1Database, userId: string) {
+  const user = await db.prepare('SELECT id, email, name FROM users WHERE id = ?').bind(userId).first<{ id: string; email: string; name: string | null }>();
+  return user ? issueSession(db, user) : null;
+}
+
+export async function googleAccount(db: D1Database, sub: string, email: string, name: string, linkingUserId?: string): Promise<{ user: Account } | { error: string }> {
+  if (!sub || !email) return { error: 'Google account details are missing.' };
+  const existingIdentity = await db.prepare('SELECT user_id FROM google_identities WHERE sub = ?').bind(sub).first<{ user_id: string }>();
+  if (existingIdentity && linkingUserId && existingIdentity.user_id !== linkingUserId) return { error: 'This Google account is linked to another user.' };
+  const userId = existingIdentity?.user_id ?? linkingUserId;
+  if (userId) {
+    const user = await db.prepare('SELECT id, email, name FROM users WHERE id = ?').bind(userId).first<{ id: string; email: string; name: string | null }>();
+    if (!user) return { error: 'Account not found.' };
+    if (!existingIdentity) await db.prepare('INSERT INTO google_identities (sub, user_id) VALUES (?, ?)').bind(sub, user.id).run();
+    return { user: account(user) };
+  }
+  const normalized = email.trim().toLowerCase();
+  if (await db.prepare('SELECT id FROM users WHERE email = ?').bind(normalized).first()) {
+    return { error: 'An account already uses this email. Sign in with your password and link Google from your account menu.' };
+  }
+  const user = { id: crypto.randomUUID(), email: normalized, name: (name ?? '').trim().slice(0, 100) || null };
+  await db.batch([
+    db.prepare('INSERT INTO users (id, email, name, password_salt, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(user.id, user.email, user.name, randomHex(), randomHex(), new Date().toISOString()),
+    db.prepare('INSERT INTO google_identities (sub, user_id) VALUES (?, ?)').bind(sub, user.id),
+  ]);
+  return { user: account(user) };
+}
+
 export async function signup(db: D1Database, email: string, password: string, name: string) {
   const normalized = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) || normalized.length > 254 || name.length > 100 || password.length > 1024 || password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {

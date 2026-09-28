@@ -15,6 +15,7 @@ export async function editPosterElementWithOpenAI(input: {
   model: string;
   request: PosterElementEditRequest;
   timeoutMs?: number;
+  onUsage?: (usage: NonNullable<OpenAiResponsesPayload['usage']>) => Promise<void>;
 }): Promise<{ patch: PosterReconstructionPlan; openAiRequestId: string | null }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs ?? DEFAULT_TIMEOUT_MS);
@@ -71,7 +72,10 @@ export async function editPosterElementWithOpenAI(input: {
       }),
       signal: controller.signal,
     });
-    if (response.ok) data = (await response.json()) as OpenAiResponsesPayload;
+    if (response.ok) {
+      data = (await response.json()) as OpenAiResponsesPayload;
+      if (data.usage) await input.onUsage?.(data.usage);
+    }
   } catch (error) {
     if (controller.signal.aborted) {
       throw new OpenAiPlannerError('The selected-layer edit timed out.', 504, 'AI_TIMEOUT');
@@ -83,6 +87,10 @@ export async function editPosterElementWithOpenAI(input: {
     );
   } finally {
     clearTimeout(timer);
+  }
+
+  if (response.ok && input.onUsage && !data?.usage) {
+    throw new OpenAiPlannerError('The AI service did not report token usage.', 502, 'AI_USAGE_MISSING');
   }
 
   const openAiRequestId = response.headers.get('x-request-id');
@@ -154,6 +162,7 @@ type OpenAiInputContent =
 type OpenAiResponsesPayload = {
   id?: string;
   status?: string;
+  usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } };
   output?: Array<{
     type?: string;
     content?: Array<{ type?: string; text?: string; refusal?: string }>;

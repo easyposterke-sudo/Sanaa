@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from './authStore';
+import { apiFetch } from '../lib/api';
 
 interface UserMenuProps {
   /** When true, shows only avatar for narrow layouts (e.g. sidebar) */
@@ -95,6 +96,14 @@ export function UserMenu({ compact = false, compactUntilMd = false }: UserMenuPr
             )}
           </div>
           <div className="py-1">
+            <Link to="/billing" onClick={() => setOpen(false)} className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700">Billing and AI credit</Link>
+            <button type="button" onClick={() => {
+              void apiFetch('/api/auth/google/start?link=1').then(async response => {
+                const data = await response.json() as { url?: string; error?: string };
+                if (data.url) window.location.assign(data.url);
+                else window.alert(data.error || 'Could not link Google.');
+              });
+            }} className="block w-full px-4 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-700">Link Google account</button>
             {isAdmin && (
               <a
                 href="/admin"

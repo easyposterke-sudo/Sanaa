@@ -2,6 +2,9 @@
 # Never commit a real API key.
 APP_ENV=development
 OPENAI_API_KEY=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+PAYSTACK_SECRET_KEY=
 PEXELS_API_KEY=
 REMOVE_BG_API_KEY=
 # Optional local admin testing with a real Cloudflare Access application token.

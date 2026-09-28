@@ -26,6 +26,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<{ error?: string }>;
   loginWithAccess: () => Promise<{ error?: string }>;
   signup: (email: string, password: string, name?: string) => Promise<{ error?: string }>;
+  exchangeGoogle: (ticket: string) => Promise<{ error?: string }>;
   logout: () => void;
   isAdmin: () => boolean;
   isCreator: () => boolean;
@@ -173,6 +174,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return {};
     } catch (e) {
       return { error: e instanceof Error ? e.message : 'Registration failed' };
+    }
+  },
+
+  exchangeGoogle: async (ticket) => {
+    try {
+      const res = await fetchWithTimeout(apiUrl('/api/auth/google/exchange'), {
+        method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ ticket }),
+      }, AUTH_TIMEOUT_MS);
+      const data = await res.json() as { error?: string; token?: string; refreshToken?: string; user?: User };
+      if (!res.ok || !data.token || !data.refreshToken || !data.user) return { error: data.error || 'Google sign-in failed.' };
+      setToken(data.token);
+      setRefreshToken(data.refreshToken);
+      set({ user: data.user, initState: 'ready', initError: null });
+      return {};
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Google sign-in failed.' };
     }
   },
 

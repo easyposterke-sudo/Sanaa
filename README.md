@@ -145,9 +145,11 @@ Cloudflare Access only on a separate admin-only hostname or narrowly scoped
 admin path, and verify that public routes are not covered by a broad Access
 application. Cloudflare Access application policies are configured in the
 Cloudflare dashboard, outside this repository. Do not expose an admin route
-based on an unverified identity header. Google sign-in, email verification,
-password reset, and account migration from earlier Access identities are not
-part of this initial email/password release.
+based on an unverified identity header. Google sign-in, the $0.50 AI trial,
+and Paystack card/M-Pesa top-ups are described in
+[docs/BILLING_AND_GOOGLE.md](docs/BILLING_AND_GOOGLE.md). Email verification,
+password reset, and account migration from earlier Access identities remain
+separate work.
 
 ## Cloudflare storage bindings
 
