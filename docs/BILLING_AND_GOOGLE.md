@@ -11,6 +11,24 @@ https://YOUR_DOMAIN/api/auth/google/callback
 ```
 
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` as encrypted Worker secrets.
+In Cloudflare's Variables and Secrets screen, select the **Secret** type for
+both values, not Text. The Worker is named `easyposter-studio`. If you prefer
+the terminal, run each command below from the project directory and enter the
+value only at Wrangler's interactive prompt:
+
+```text
+npx wrangler secret put GOOGLE_CLIENT_ID --name easyposter-studio
+npx wrangler secret put GOOGLE_CLIENT_SECRET --name easyposter-studio
+```
+
+No Git pull or copy of the secret values into `wrangler.jsonc` is needed.
+Wrangler deploys preserve encrypted Worker secrets. This project's
+`keep_vars: true` also preserves dashboard Text variables, while
+`secrets.required` stops a deployment if either Google secret or the Paystack
+secret is absent.
+Check the deployed Worker's secret names before and after a Git push with
+`npx wrangler secret list --name easyposter-studio --format pretty`. This
+command reports names and types, never secret values.
 For local testing, add `http://127.0.0.1:5173/api/auth/google/callback` to the
 Google client and place test values in `.dev.vars` (never commit this file).
 Existing password accounts can link Google after signing in through **Link
@@ -22,6 +40,8 @@ stable Google subject, not by future email changes.
 
 Set `PAYSTACK_SECRET_KEY` as an encrypted Worker secret. Use the Paystack test
 secret while testing, and switch to the live secret only for live payments.
+It can also be set interactively with
+`npx wrangler secret put PAYSTACK_SECRET_KEY --name easyposter-studio`.
 Configure the Paystack webhook URL as:
 
 ```text
