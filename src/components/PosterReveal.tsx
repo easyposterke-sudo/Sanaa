@@ -9,7 +9,7 @@ function SamplePoster({ editable = false }: { editable?: boolean }) {
       <div className="reveal-poster-title"><span>GOOD</span><span>THINGS</span><em>take shape.</em>{editable && <><i /><i /><i /><i /><small>Text · Headline</small></>}</div>
       <div className="reveal-poster-flower" aria-hidden="true">✳</div>
       <div className="reveal-poster-details"><strong>ART. MUSIC. PEOPLE.</strong><span>24 OCTOBER · 4 PM TILL LATE</span><span>THE GARDEN, NAIROBI</span></div>
-      <div className="reveal-poster-ticket">COME AS YOU ARE <span>↗</span></div>
+      <div className="reveal-poster-ticket">COME AS YOU ARE</div>
     </div>
   );
 }
@@ -50,11 +50,11 @@ export function PosterReveal() {
       <div className="reveal-window-bar"><span><span className="reveal-window-dots" aria-hidden="true">● ● ●</span> Sanaa Studio</span><span className="reveal-demo-label">INTERACTIVE DEMO</span></div>
       <div className="reveal-stage" style={{ '--reveal': `${position}%` } as CSSProperties}>
         <div className="reveal-scene reveal-editor-scene" aria-hidden="true">
-          <div className="reveal-scene-label">✦ Editable layers</div>
+          <div className="reveal-scene-label">Editable layers</div>
           <div className="reveal-tool-rail"><b>↖</b><span>T</span><span>◇</span><span>▧</span><span>◯</span></div>
           <SamplePoster editable />
           <div className="reveal-layers"><div className="reveal-panel-heading">Layers <span>6</span></div>
-            {[['T', 'Headline'], ['T', 'Event details'], ['↗', 'Ticket label'], ['✳', 'Flower'], ['◯', 'Orbit'], ['▧', 'Background']].map(([icon, label], index) => <div key={label} className={`reveal-layer ${index === 0 ? 'reveal-layer-selected' : ''}`}><span>{icon}</span><span>{label}</span><span className="reveal-layer-eye">◉</span></div>)}
+            {[['T', 'Headline'], ['T', 'Event details'], ['T', 'Ticket label'], ['✳', 'Flower'], ['◯', 'Orbit'], ['▧', 'Background']].map(([icon, label], index) => <div key={label} className={`reveal-layer ${index === 0 ? 'reveal-layer-selected' : ''}`}><span>{icon}</span><span>{label}</span><span className="reveal-layer-eye">◉</span></div>)}
             <div className="reveal-properties"><span>TEXT</span><strong>Good things</strong><div>Bold <span>96 px</span></div><div><i /> #F5EACF</div></div>
           </div>
           <span className="reveal-canvas-caption">Select a layer. Change every detail.</span>

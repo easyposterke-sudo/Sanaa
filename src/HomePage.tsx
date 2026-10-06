@@ -36,7 +36,7 @@ export function HomePage() {
           <div className="pointer-events-none absolute -left-40 top-0 h-[30rem] w-[30rem] rounded-full bg-[#155c3b]/25 blur-[110px]" />
           <div className="pointer-events-none absolute -right-40 bottom-0 h-[30rem] w-[30rem] rounded-full bg-[#a48723]/15 blur-[110px]" />
           <div className="relative mx-auto max-w-6xl text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#346448] bg-[#183325] px-4 py-2 text-xs font-medium text-[#a9ebba] sm:mb-5 sm:text-sm"><span className="h-2 w-2 rounded-full bg-[#62ca86]" /> Reference to editable design</div>
+            <div className="mb-4 text-xs font-medium text-[#a9ebba] underline underline-offset-4 sm:mb-5 sm:text-sm">Reference to editable design</div>
             <h1 className="mx-auto max-w-5xl leading-[1.1] tracking-tight"><span className="block whitespace-nowrap text-[clamp(1.4rem,6.7vw,4.5rem)] font-bold">See a poster you love?</span><span className="block bg-gradient-to-r from-[#50c985] via-[#c2e185] to-[#f9dc65] bg-clip-text pb-1 font-serif text-[clamp(2.1rem,8vw,4.5rem)] font-semibold italic text-transparent">Make it yours.</span></h1>
             <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-[#baaf9d] sm:mt-5 sm:text-lg">Upload an AI-generated design or any poster you love. Sanaa rebuilds it as editable text, shapes and image layers, ready for your own finishing touches.</p>
             <div className="mt-6 flex flex-col items-center justify-center gap-2.5 sm:mt-7 sm:flex-row sm:gap-3">
