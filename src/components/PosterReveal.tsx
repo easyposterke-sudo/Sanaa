@@ -60,7 +60,7 @@ export function PosterReveal() {
           <span className="reveal-canvas-caption">Select a layer. Change every detail.</span>
         </div>
         <div className="reveal-scene reveal-upload-scene" aria-hidden="true"><div className="reveal-scene-label">↥ Original poster</div><SamplePoster /><div className="reveal-upload-note"><span>▧</span><strong>good-things.png</strong><span>One image.<br />So many possibilities.</span></div><span className="reveal-canvas-caption">Your upload · AI-generated or any poster</span></div>
-        <div className="reveal-divider" aria-hidden="true"><span>‹ ›</span></div>
+        <div className="reveal-divider" aria-hidden="true"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m8 8-4 4 4 4m8-8 4 4-4 4" /></svg></span></div>
         <input className="reveal-slider" type="range" min="0" max="100" step="1" value={Math.round(position)} aria-label="Reveal editable poster layers" aria-valuetext={`${Math.round(position)}% editable layers revealed`} onPointerDown={() => setPlaying(false)} onKeyDown={() => setPlaying(false)} onChange={(event) => { setPlaying(false); const next = Number(event.target.value); positionRef.current = next; setPosition(next); }} />
       </div>
       <figcaption className="reveal-caption"><span><span className="reveal-caption-desktop">One poster. </span>Every layer, yours to edit.<span className="reveal-caption-hint"> Drag to explore</span></span><button type="button" onClick={() => setPlaying(!playing)} aria-label={playing ? 'Pause poster animation' : 'Play poster animation'}><span aria-hidden="true">{playing ? 'Ⅱ' : '▷'}</span> {playing ? 'Pause' : 'Play'}</button></figcaption>

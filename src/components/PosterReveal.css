@@ -48,7 +48,7 @@
 .reveal-upload-note strong { font-size: 11px; font-weight: 500; color: #d2dacb; }
 .reveal-canvas-caption { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; color: #9cac93; font-size: 10px; }
 .reveal-divider { position: absolute; z-index: 2; top: 0; bottom: 0; left: var(--reveal); width: 2px; transform: translateX(-1px); background: #daf4b6; box-shadow: 0 0 20px #c6ed9b50; pointer-events: none; }
-.reveal-divider > span { position: absolute; top: 48%; left: 50%; display: grid; place-items: center; transform: translate(-50%, -50%); width: 38px; height: 38px; border: 3px solid #243626; border-radius: 50%; background: #daf4b6; color: #263521; font-size: 22px; box-shadow: 0 3px 16px #0005; }
+.reveal-divider > span { position: absolute; top: 50%; left: 50%; display: grid; place-items: center; transform: translate(-50%, -50%); width: 38px; height: 38px; border: 3px solid #243626; border-radius: 50%; background: #daf4b6; color: #263521; box-shadow: 0 3px 16px #0005; }
 .reveal-slider { position: absolute; z-index: 3; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: ew-resize; }
 .reveal-stage:has(.reveal-slider:focus-visible) { outline: 3px solid #daf4b6; outline-offset: -4px; }
 .reveal-caption { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 8px 20px; border-top: 1px solid #ffffff12; color: #c9d2c0; font-size: 11px; }
