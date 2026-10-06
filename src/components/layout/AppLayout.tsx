@@ -6,6 +6,7 @@ import { Canvas } from '../canvas/Canvas';
 import { useEditorStore } from '../../store/editorStore';
 import { DesignRecorderPanel } from '../../recording/DesignRecorderPanel';
 import { useAuthStore } from '../../auth/authStore';
+import { CreditBalance } from '../../billing/CreditBalance';
 
 export function AppLayout() {
   const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
@@ -104,6 +105,8 @@ export function AppLayout() {
         </button>
 
         <div className="flex-1" />
+
+        <CreditBalance />
 
         {/* Right sidebar toggle — mobile only */}
         <button

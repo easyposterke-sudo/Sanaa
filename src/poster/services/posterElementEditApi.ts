@@ -5,6 +5,7 @@ import {
   type PosterElementEditResponse,
 } from '../../../shared/ai/posterElementEdit';
 import { apiFetch } from '../../lib/api';
+import { notifyBillingUpdated } from '../../billing/billingEvents';
 
 export class PosterElementEditError extends Error {
   constructor(message: string, readonly code?: string) {
@@ -16,6 +17,17 @@ export class PosterElementEditError extends Error {
 export async function requestPosterElementEdit(
   request: PosterElementEditRequest,
   options: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<PosterElementEditResponse> {
+  try {
+    return await readPosterElementEdit(request, options);
+  } finally {
+    notifyBillingUpdated();
+  }
+}
+
+async function readPosterElementEdit(
+  request: PosterElementEditRequest,
+  options: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<PosterElementEditResponse> {
   const payload = PosterElementEditRequestSchema.parse(request);
   const response = await apiFetch('/api/ai/poster-element-edit', {

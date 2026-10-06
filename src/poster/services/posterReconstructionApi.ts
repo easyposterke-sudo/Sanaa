@@ -6,6 +6,7 @@ import {
   type PosterReconstructionResponse,
 } from '../../../shared/ai/posterReconstruction';
 import { apiFetch } from '../../lib/api';
+import { notifyBillingUpdated } from '../../billing/billingEvents';
 
 export class PosterReconstructionError extends Error {
   constructor(
@@ -40,6 +41,7 @@ export async function requestPosterReconstruction(
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener('abort', abort);
+    notifyBillingUpdated();
   }
 }
 

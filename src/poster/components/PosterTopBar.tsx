@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserMenu } from '../../auth/UserMenu';
+import { CreditBalance } from '../../billing/CreditBalance';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { usePosterStore } from '../store/posterStore';
 import { getFabricCanvasRef } from '../canvasRef';
@@ -285,7 +286,7 @@ export function PosterTopBar({
       <div className="order-2 hidden h-4 w-px bg-zinc-200 dark:bg-zinc-700 lg:block xl:order-none" />
       <button
         onClick={guard(handleNewProject)}
-        className="order-1 whitespace-nowrap rounded px-1.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:text-sm lg:order-2 lg:px-2 xl:order-none"
+        className="order-1 hidden whitespace-nowrap rounded px-1.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800 sm:block sm:text-sm lg:order-2 lg:px-2 xl:order-none"
         title="Start a new blank project"
       >
         New
@@ -396,6 +397,8 @@ export function PosterTopBar({
       {/* Spacer */}
       <div className="order-1 flex-1 xl:order-none" />
 
+      <div className="order-1 shrink-0 xl:order-none"><CreditBalance /></div>
+
       <div className="order-1 xl:order-none"><ThemeToggle size="sm" /></div>
 
       <div className="relative order-1 hidden lg:block xl:order-none" ref={exportMenuRef}>
@@ -489,6 +492,7 @@ export function PosterTopBar({
               <span className="font-medium text-zinc-700 dark:text-zinc-200">Profile</span>
               <UserMenu />
             </div>
+            <button type="button" onClick={guard(() => { handleNewProject(); setMobileMenuOpen(false); })} className="mt-1 w-full rounded px-2 py-2 text-left text-zinc-700 hover:bg-zinc-100 sm:hidden dark:text-zinc-200 dark:hover:bg-zinc-800">New poster</button>
             <button
               type="button"
               onClick={() => setExportOpen((open) => !open)}
