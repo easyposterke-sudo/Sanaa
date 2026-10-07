@@ -65,7 +65,6 @@ export function CreditBalance() {
 
   return (
     <Link to="/billing" target="_blank" rel="noopener noreferrer" aria-label={`${label}. Open billing in a new tab`} title={`${label}. ${details}Open billing in a new tab.`} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-accent-300 bg-accent-50 px-2 py-1 text-[10px] font-medium text-accent-800 hover:bg-accent-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-500 sm:gap-1.5 sm:px-2.5 sm:text-xs dark:border-accent-800 dark:bg-accent-950 dark:text-accent-200">
-      <span aria-hidden="true">✦</span>
       <span role="status" aria-live="polite">{failed ? 'Credits —' : total === null ? 'Credits …' : <><span className="tabular-nums">{formatCredits(total)}</span> credits</>}</span>
     </Link>
   );

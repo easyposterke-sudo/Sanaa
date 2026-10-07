@@ -1,51 +1,14 @@
-.poster-reveal { margin: 2.5rem auto 0; max-width: 880px; overflow: hidden; border: 1px solid #4a5141; border-radius: 16px; background: #1b211b; text-align: left; box-shadow: 0 24px 80px #0005; }
+.poster-reveal { margin: 2.5rem auto 0; max-width: 640px; overflow: hidden; border: 1px solid #4a5141; border-radius: 16px; background: #1b211b; text-align: left; box-shadow: 0 24px 80px #0005; }
 .reveal-window-bar { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid #ffffff12; color: #cbcbbb; font-size: 12px; }
 .reveal-window-dots { margin-right: 16px; color: #7a8876; letter-spacing: 3px; font-size: 10px; }
 .reveal-demo-label { color: #96a58d; font-size: 9px; letter-spacing: .15em; }
-.reveal-stage { position: relative; height: 410px; container-type: inline-size; }
+.reveal-stage { position: relative; padding-top: calc(125% + 36px); }
 .reveal-scene { position: absolute; inset: 0; overflow: hidden; }
 .reveal-editor-scene { background-color: #222923; background-image: radial-gradient(#ffffff13 1px, transparent 1px); background-size: 16px 16px; }
 .reveal-upload-scene { clip-path: inset(0 0 0 var(--reveal)); background: radial-gradient(ellipse at 45% 50%, #394435, #1c241e 80%); }
 .reveal-scene-label { position: absolute; left: 20px; top: 17px; color: #c5d1bf; font-size: 11px; }
 .reveal-upload-scene .reveal-scene-label { left: auto; right: 20px; }
-.reveal-poster { position: absolute; width: 250px; height: 330px; top: 42px; left: calc(50% - 155px); overflow: hidden; background: #db552f; color: #f5eacf; box-shadow: 0 10px 30px #0004; }
-.reveal-poster-orbit { position: absolute; width: 230px; height: 230px; border: 1px solid #f5eacf55; border-radius: 50%; right: -110px; top: -140px; }
-.reveal-poster-eyebrow { position: absolute; top: 20px; left: 19px; font-size: 7px; font-weight: 600; letter-spacing: .13em; }
-.reveal-poster-title { position: absolute; top: 48px; left: 19px; width: 212px; padding: 2px 0; }
-.reveal-poster-title > span { display: block; font-family: Impact, 'Arial Black', sans-serif; font-weight: 900; font-size: 47px; letter-spacing: -2px; line-height: .98; }
-.reveal-poster-title em { display: block; margin-top: 3px; font-family: Georgia, serif; font-size: 34px; line-height: 1.1; letter-spacing: -1.5px; }
-.reveal-poster-flower { position: absolute; right: 13px; top: 183px; color: #eed872; font-family: Georgia, serif; font-size: 99px; line-height: 1; transform: rotate(-12deg); }
-.reveal-poster-details { position: absolute; left: 19px; top: 211px; display: flex; flex-direction: column; gap: 5px; font-size: 6px; letter-spacing: .05em; }
-.reveal-poster-details strong { margin-bottom: 4px; font-size: 8px; }
-.reveal-poster-ticket { position: absolute; bottom: 20px; left: 19px; right: 19px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f5eacf80; padding-top: 9px; font-size: 7px; letter-spacing: .1em; }
-.reveal-poster-editable .reveal-poster-title { outline: 1px solid #b7eaa3; }
-.reveal-poster-title i { position: absolute; width: 6px; height: 6px; background: #fff; border: 1px solid #3b8156; }
-.reveal-poster-title i:nth-of-type(1) { left: -3px; top: -3px; }
-.reveal-poster-title i:nth-of-type(2) { right: -3px; top: -3px; }
-.reveal-poster-title i:nth-of-type(3) { left: -3px; bottom: -3px; }
-.reveal-poster-title i:nth-of-type(4) { right: -3px; bottom: -3px; }
-.reveal-poster-title small { position: absolute; top: -17px; left: -1px; background: #b7eaa3; color: #193623; padding: 1px 5px; font: 8px/14px system-ui, sans-serif; }
-.reveal-poster-editable .reveal-poster-flower { outline: 1px dashed #c5edb599; }
-.reveal-poster-editable .reveal-poster-details { outline: 1px dashed #c5edb599; outline-offset: 4px; }
-.reveal-tool-rail { position: absolute; left: 14px; top: 62px; display: flex; flex-direction: column; gap: 6px; padding: 6px; background: #161d18; border: 1px solid #485241; border-radius: 8px; }
-.reveal-tool-rail > * { display: grid; place-items: center; width: 26px; height: 29px; color: #acb5a6; font-size: 17px; }
-.reveal-tool-rail b { background: #3a5540; color: #c3eea8; border-radius: 4px; }
-.reveal-layers { position: absolute; right: 14px; top: 58px; width: 174px; padding: 12px 8px; border: 1px solid #475141; border-radius: 9px; background: #1b231d; color: #c7d1bf; }
-.reveal-panel-heading { display: flex; justify-content: space-between; margin: 0 6px 13px; font-size: 11px; }
-.reveal-panel-heading > span { color: #869b7e; }
-.reveal-layer { display: flex; align-items: center; gap: 8px; padding: 5px 6px; font-size: 10px; border: 1px solid transparent; border-radius: 4px; }
-.reveal-layer > span:first-child { width: 17px; font-size: 13px; text-align: center; }
-.reveal-layer-selected { border-color: #779863; background: #354b32; color: #d6f5bf; }
-.reveal-layer-eye { margin-left: auto; color: #7f9176; font-size: 9px; }
-.reveal-properties { margin: 10px 6px 0; padding-top: 10px; border-top: 1px solid #ffffff15; font-size: 10px; }
-.reveal-properties > span { color: #879b7d; font-size: 8px; letter-spacing: .13em; }
-.reveal-properties strong { display: block; margin: 6px 0; font-weight: 500; }
-.reveal-properties > div { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: #a8b49e; }
-.reveal-properties > div > span { margin-left: auto; }
-.reveal-properties i { width: 11px; height: 11px; border-radius: 2px; background: #f5eacf; }
-.reveal-upload-note { position: absolute; right: 20px; top: 151px; width: 160px; display: flex; flex-direction: column; align-items: center; gap: 10px; color: #9eac96; text-align: center; font-size: 11px; }
-.reveal-upload-note > span:first-child { font-size: 30px; color: #c6d3bd; }
-.reveal-upload-note strong { font-size: 11px; font-weight: 500; color: #d2dacb; }
+.reveal-poster { position: absolute; inset: 44px 16px 32px; width: calc(100% - 32px); height: calc(100% - 76px); object-fit: contain; user-select: none; }
 .reveal-canvas-caption { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; color: #9cac93; font-size: 10px; }
 .reveal-divider { position: absolute; z-index: 2; top: 0; bottom: 0; left: var(--reveal); width: 2px; transform: translateX(-1px); background: #daf4b6; box-shadow: 0 0 20px #c6ed9b50; pointer-events: none; }
 .reveal-divider > span { position: absolute; top: 50%; left: 50%; display: grid; place-items: center; transform: translate(-50%, -50%); width: 38px; height: 38px; border: 3px solid #243626; border-radius: 50%; background: #daf4b6; color: #263521; box-shadow: 0 3px 16px #0005; }
@@ -56,26 +19,12 @@
 .reveal-caption button { flex-shrink: 0; padding: 5px 10px; border-radius: 5px; border: 1px solid #526049; color: #d8e5ca; font-size: 11px; }
 .reveal-caption button:hover { background: #33412d; }
 .reveal-caption button:focus-visible { outline: 2px solid #daf4b6; outline-offset: 3px; }
-@media (max-width: 700px) {
-  .reveal-layers { right: 10px; width: 130px; }
-  .reveal-upload-note { right: 10px; width: 130px; }
-  .reveal-poster { left: calc(50% - 170px); }
-  .reveal-tool-rail { display: none; }
-}
 @media (max-width: 480px) {
   .poster-reveal { margin-top: 2rem; border-radius: 12px; }
-  .reveal-stage { height: 330px; }
-  .reveal-poster { transform: scale(.76); transform-origin: top left; left: calc(50% - 139px); top: 42px; }
-  .reveal-layers { width: 102px; right: 7px; top: 58px; padding: 10px 3px; }
-  .reveal-layer { gap: 4px; padding: 5px 3px; font-size: 8px; }
-  .reveal-layer-eye, .reveal-properties, .reveal-caption-hint, .reveal-window-dots, .reveal-caption-desktop { display: none; }
-  .reveal-upload-note { width: 93px; right: 9px; top: 137px; font-size: 9px; }
-  .reveal-upload-note strong { font-size: 8px; }
+  .reveal-stage { padding-top: calc(125% + 46px); }
+  .reveal-poster { left: 12px; right: 12px; width: calc(100% - 24px); }
+  .reveal-caption-hint, .reveal-window-dots, .reveal-caption-desktop { display: none; }
   .reveal-window-bar, .reveal-caption { padding-left: 12px; padding-right: 12px; }
   .reveal-scene-label { font-size: 10px; left: 12px; }
   .reveal-upload-scene .reveal-scene-label { right: 12px; }
-}
-@media (max-width: 360px) {
-  .reveal-poster { transform: scale(.58); left: 8px; top: 60px; }
-  .reveal-layers { width: 90px; }
 }
