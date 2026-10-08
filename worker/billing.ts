@@ -51,7 +51,9 @@ export async function wallet(db: D1Database, userId: string) {
 
 export type AiBudget = { inputTokens: number; maxOutputTokens: number; reservedMicrousd: number; maximumCredits: number; multiplier: number; tier: 'trial' | 'paid' | 'monthly'; limited: boolean };
 
-export async function reserveAi(db: D1Database, userId: string, requestId: string, operation: 'generation' | 'edit' = 'generation', budget?: AiBudget) {
+export type AiOperation = 'generation' | 'reference' | 'edit';
+
+export async function reserveAi(db: D1Database, userId: string, requestId: string, operation: AiOperation = 'generation', budget?: AiBudget) {
   await wallet(db, userId);
   const now = Math.floor(Date.now() / 1000);
   const expiry = now + BILLING.aiReservationSeconds;
@@ -100,20 +102,38 @@ export function budgetForTokens(inputTokens: number, outputLimit: number, availa
     tier: multiplier === BILLING.monthlyMultiplier ? 'monthly' : multiplier === BILLING.paidMultiplier ? 'paid' : 'trial', limited: maxOutputTokens < outputLimit };
 }
 
-export async function quoteAi(db: D1Database, userId: string, inputTokens: number, outputLimit: number, operation: 'generation' | 'edit', maximumCredits?: number): Promise<AiBudget> {
+export async function quoteAi(db: D1Database, userId: string, inputTokens: number, outputLimit: number, operation: AiOperation, maximumCredits?: number): Promise<AiBudget> {
   const balance = await wallet(db, userId);
   if (balance.busy) throw new OpenAiPlannerError('Another AI request is still running.', 409, 'AI_BUSY');
-  const minimum = operation === 'generation' ? BILLING.minimumGenerationCredits * BILLING.microusdPerCredit : 1;
+  const minimum = operation === 'edit' ? 1 : BILLING.minimumGenerationCredits * BILLING.microusdPerCredit;
   const monthlyAvailable = Math.round(balance.monthly.balanceCredits * BILLING.microusdPerCredit);
   const cap = (available: number) => maximumCredits === undefined ? available : Math.min(available, Math.floor(maximumCredits * BILLING.microusdPerCredit));
+  const budgetForTier = (available: number, multiplier: number): AiBudget => {
+    if (operation !== 'reference') return budgetForTokens(inputTokens, outputLimit, cap(available), multiplier);
+    const referenceCap = BILLING.referenceMaximumPaidCredits * BILLING.microusdPerCredit * multiplier / BILLING.paidMultiplier;
+    // Bound input costs before subsidizing output. Oversized inputs must not
+    // turn a fixed customer price into an unbounded provider expense.
+    try { budgetForTokens(inputTokens, outputLimit, referenceCap, multiplier); }
+    catch (error) {
+      if (!(error instanceof OpenAiPlannerError)) throw error;
+      throw new OpenAiPlannerError('This reference is too large for the reconstruction credit cap. Try a smaller reference image.', 422, 'AI_REFERENCE_TOO_LARGE');
+    }
+    const availableBudget = budgetForTokens(inputTokens, outputLimit, Math.min(cap(available), referenceCap), multiplier);
+    // Keep the full structured-plan output allowance. Settlement collects at
+    // most this hold and records any excess as covered by Sanaa.
+    const fullBudget = budgetForTokens(inputTokens, outputLimit, Number.MAX_SAFE_INTEGER, multiplier);
+    const reservedMicrousd = Math.min(cap(available), referenceCap, fullBudget.reservedMicrousd);
+    return { ...availableBudget, maxOutputTokens: fullBudget.maxOutputTokens, limited: fullBudget.limited,
+      reservedMicrousd, maximumCredits: toCredits(reservedMicrousd) };
+  };
   if (balance.monthly.active && monthlyAvailable >= minimum) {
-    try { return budgetForTokens(inputTokens, outputLimit, cap(monthlyAvailable), BILLING.monthlyMultiplier); }
-    catch (error) { if (!(error instanceof OpenAiPlannerError)) throw error; }
+    try { return budgetForTier(monthlyAvailable, BILLING.monthlyMultiplier); }
+    catch (error) { if (!(error instanceof OpenAiPlannerError) || error.code !== 'AI_CREDIT_REQUIRED') throw error; }
   }
   if (balance.balanceMicrousd < minimum) throw new OpenAiPlannerError('Add credits to cover this AI request.', 402, 'AI_CREDIT_REQUIRED');
   // An expired monthly plan still belongs to a paying account.
   const paid = await db.prepare('SELECT has_paid FROM billing_wallets WHERE user_id = ?').bind(userId).first<{ has_paid: number }>();
-  return budgetForTokens(inputTokens, outputLimit, cap(balance.balanceMicrousd), paid?.has_paid ? BILLING.paidMultiplier : BILLING.trialMultiplier);
+  return budgetForTier(balance.balanceMicrousd, paid?.has_paid ? BILLING.paidMultiplier : BILLING.trialMultiplier);
 }
 
 async function releaseExpiredReservations(db: D1Database, userId: string) {

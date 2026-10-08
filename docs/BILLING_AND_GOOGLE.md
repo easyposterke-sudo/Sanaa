@@ -115,10 +115,24 @@ standard token rates. Review that table whenever OpenAI pricing changes. The
 app deliberately blocks a different `OPENAI_MODEL` until its rates are added.
 These amounts are estimates based on reported usage, not a copy of OpenAI's final invoice.
 
+Initial reference reconstructions (including a fresh retry, excluding prompt creation
+and optional reference review) have a **22 pay-as-you-go credit maximum**. Trial
+and monthly caps are **11** and **17.6** credits respectively. Lower actual usage
+costs less. The cap limits both the reservation and the final charge, while keeping
+the full 25,000-token output allowance so detailed plans are not shortened just to
+meet that price. Sanaa covers calculated charges above the cap in the existing
+absorbed-usage ledger. Inputs that cannot fit input plus a useful minimum response
+within this cap are rejected before generation, even on larger balances.
+A KSh 20 top-up therefore leaves at least 3 credits after one capped reconstruction;
+small edits may fit that remainder, but larger edits need more credits. Extra AI
+reference review is off by default and explicitly labeled as an additional charge.
+The existing 20-credit starting minimum and all concurrency checks remain in place.
+
 Before each provider generation, the server counts the complete Responses API input
 (including images and structured-output schema). It budgets input at the cache-write
-rate with 5% input headroom, and reduces the output ceiling to fit the selected
-balance and the displayed credit cap. Requests that cannot afford at least 1,024
+rate with 5% input headroom. For prompt generation and edits it reduces the output
+ceiling to fit the selected balance and the displayed credit cap; initial reference
+reconstruction instead uses the capped collection policy above. Requests that cannot afford at least 1,024
 output tokens are rejected before generation. Both calls explicitly use Standard
 processing. Quotes do not reserve money or consume the daily generation quota.
 

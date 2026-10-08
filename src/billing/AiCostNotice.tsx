@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AI_COST_EVENT, type AiCostNotice as Notice } from './aiBillingFetch';
+import { BILLING } from '../../shared/billing';
 
 export function AiCostNotice() {
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -17,6 +18,7 @@ export function AiCostNotice() {
 
 /** An explicitly illustrative estimate is visible before the user starts.
  * The server previews and caps each actual AI step using its complete input. */
-export function AiPricingHint() {
+export function AiPricingHint({ reference = false }: { reference?: boolean }) {
+  if (reference) return <p className="mt-3 text-xs text-zinc-500">Reference reconstruction: up to {BILLING.referenceMaximumPaidCredits} pay-as-you-go credits; you pay less when usage is lower. KSh 20 adds 25 credits, leaving at least 3 after this step for further work. AI edits and optional review cost extra. Failed or incomplete AI responses can still use credits.</p>;
   return <p className="mt-3 text-xs text-zinc-500">Example AI step: about 4 trial, 8 pay-as-you-go, or 6.4 monthly credits for a medium response. Larger requests cost more; automatic review is a separate step. A maximum credit estimate appears before each step starts. Failed or incomplete responses can still use credits.</p>;
 }

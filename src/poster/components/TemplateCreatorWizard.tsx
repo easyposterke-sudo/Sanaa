@@ -90,7 +90,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
   const [cropItemKey, setCropItemKey] = useState<string | null>(null);
   const [preparingReplacement, setPreparingReplacement] = useState<string | null>(null);
   const [freshGeneration, setFreshGeneration] = useState(Boolean(initialReference));
-  const [compareReference, setCompareReference] = useState(true);
+  const [compareReference, setCompareReference] = useState(false);
 
   useEffect(() => {
     if (!processingPhase || phaseStartedAt === null) return;
@@ -389,7 +389,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
             <h2 id="poster-reconstruction-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
               {creatingPoster ? 'Create an editable poster' : 'Create a template from a flat poster'}
             </h2>
-            <AiPricingHint />
+            <AiPricingHint reference />
           </div>
           <button
             type="button"
@@ -633,7 +633,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
             <ReferenceTextInventory plan={analysis.plan} disabled={submitting} onChange={plan => setAnalysis({ ...analysis, plan })} />
             <label className="mb-3 flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-300">
               <input type="checkbox" checked={compareReference} disabled={submitting} onChange={event => setCompareReference(event.target.checked)} />
-              Compare and refine text and shapes (one additional AI request; photos and 3D stay unchanged)
+              Optional AI review: compare and refine text and shapes (costs extra; photos and 3D stay unchanged)
             </label>
             <button type="button" disabled={submitting || Boolean(preparingReplacement)} onClick={() => void handleCreate(true)} className="mb-3 rounded-lg border border-violet-400 px-3 py-2 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:text-violet-300">
               Recreate again from scratch

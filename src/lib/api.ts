@@ -124,11 +124,9 @@ export async function apiFetch(
     ...requestOptions
   } = options;
   const token = getToken();
-  const headers: HeadersInit = {
-    ...(requestOptions.headers as Record<string, string>),
-  };
+  const headers = new Headers(requestOptions.headers);
   if (token) {
-    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const res = await fetchWithTimeout(
@@ -141,11 +139,9 @@ export async function apiFetch(
     const refreshed = await tryRefreshAccessToken();
     if (refreshed) {
       const newToken = getToken();
-      const retryHeaders: HeadersInit = {
-        ...(requestOptions.headers as Record<string, string>),
-      };
+      const retryHeaders = new Headers(requestOptions.headers);
       if (newToken) {
-        (retryHeaders as Record<string, string>)['Authorization'] = `Bearer ${newToken}`;
+        retryHeaders.set('Authorization', `Bearer ${newToken}`);
       }
       return fetchWithTimeout(
         apiUrl(url),

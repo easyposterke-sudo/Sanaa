@@ -38,3 +38,16 @@ it('keeps free cache previews capped at zero and does not generate after cancell
   await expect(aiBillingFetch('/api/ai/poster-reconstruction', { method: 'POST', signal: controller.signal })).rejects.toThrow();
   expect(apiFetch).toHaveBeenCalledOnce();
 });
+
+
+it('reports no charge for the pre-generation JSON content-type rejection', async () => {
+  const listener = vi.fn();
+  window.addEventListener(AI_COST_EVENT, listener);
+  vi.mocked(apiFetch)
+    .mockResolvedValueOnce(Response.json({ estimate: { maximumCredits: 22, tier: 'paid', limited: false } }))
+    .mockResolvedValueOnce(Response.json({ error: 'Content-Type must be application/json.', code: 'INVALID_CONTENT_TYPE' }, { status: 415 }));
+  try {
+    expect((await aiBillingFetch('/api/ai/poster-reconstruction', { method: 'POST' })).status).toBe(415);
+    expect((listener.mock.calls.at(-1)![0] as CustomEvent).detail).toEqual({ message: 'Request rejected before generation · 0 credits used.', running: false });
+  } finally { window.removeEventListener(AI_COST_EVENT, listener); }
+});

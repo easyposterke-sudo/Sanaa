@@ -18,7 +18,8 @@ describe('getMyPosterThumbnail', () => {
     expect(await getMyPosterThumbnail('poster 1')).toEqual(image);
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/my-poster-projects/poster%201/thumbnail',
-      expect.objectContaining({ headers: { Authorization: 'Bearer test-token' } }),
+      expect.objectContaining({ headers: expect.any(Headers) }),
     );
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Authorization')).toBe('Bearer test-token');
   });
 });

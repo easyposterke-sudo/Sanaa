@@ -4,6 +4,7 @@ export const BILLING = {
   microusdPerCredit: 10_000,
   microusdPerKes: 12_500,
   minimumGenerationCredits: 20,
+  referenceMaximumPaidCredits: 22,
   trialMicrousd: 500_000,
   trialMultiplier: 5,
   paidMultiplier: 10,

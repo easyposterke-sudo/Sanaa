@@ -923,9 +923,10 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
   const capHeader = context.req.header('x-ai-max-credits');
   const maximumCredits = capHeader === undefined ? undefined : Number(capHeader);
   if (maximumCredits !== undefined && (!Number.isFinite(maximumCredits) || maximumCredits < 0)) return context.json({ error: 'Invalid AI credit limit.', requestId }, 400);
-  const budget = await quoteAi(context.env.DB, context.get('ownerId'), await countInputTokens(apiKey!, payload), payload.max_output_tokens, 'generation', maximumCredits);
+  const operation = !request.creation && !request.referenceReview ? 'reference' : 'generation';
+  const budget = await quoteAi(context.env.DB, context.get('ownerId'), await countInputTokens(apiKey!, payload), payload.max_output_tokens, operation, maximumCredits);
   if (context.req.query('estimate') === '1') return context.json({ estimate: { maximumCredits: budget.maximumCredits, tier: budget.tier, limited: budget.limited }, requestId });
-  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, 'generation', budget)) return context.json({ error: `Full poster generation or recreation requires at least ${BILLING.minimumGenerationCredits} credits in your monthly allowance or pay-as-you-go balance, and no other AI request running. Add credits in Billing. AI editing is available with a smaller balance when it covers the request.`, code: 'AI_CREDIT_REQUIRED', requestId }, 402);
+  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, operation, budget)) return context.json({ error: `Full poster generation or recreation requires at least ${BILLING.minimumGenerationCredits} credits in your monthly allowance or pay-as-you-go balance, and no other AI request running. Add credits in Billing. AI editing is available with a smaller balance when it covers the request.`, code: 'AI_CREDIT_REQUIRED', requestId }, 402);
   const reserved = await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota);
   if (!reserved) {
     await settleAi(context.env.DB, context.get('ownerId'), requestId, model);

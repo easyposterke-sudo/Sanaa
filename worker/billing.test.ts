@@ -413,3 +413,64 @@ describe('AI credit and Paystack settlement', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 });
+
+
+describe('reference reconstruction price cap', () => {
+  it.each([20, 22, 25, 42.392])('keeps full output with a %s-credit balance and never charges more than 22', async startingCredits => {
+    const id = await newWallet();
+    await db.prepare('UPDATE billing_wallets SET has_paid = 1, balance_microusd = ? WHERE user_id = ?').bind(Math.round(startingCredits * 10000), id).run();
+    const budget = await quoteAi(db, id, 21400, 25000, 'reference');
+    const maximum = Math.min(startingCredits, 22);
+    expect(budget).toMatchObject({ maximumCredits: maximum, maxOutputTokens: 25000, tier: 'paid', limited: false });
+    expect(await reserveAi(db, id, id, 'reference', budget)).toBe(true);
+    expect((await wallet(db, id)).reservedCredits).toBe(maximum);
+    const usage = { input_tokens: 21400, output_tokens: 25000 };
+    const receipt = await settleAi(db, id, id, 'gpt-5.6-luna', usage);
+    expect(receipt).toMatchObject({ credits: maximum, calculatedCredits: 34.28 });
+    expect(receipt!.coveredCredits).toBeCloseTo(34.28 - maximum);
+    await settleAi(db, id, id, 'gpt-5.6-luna', usage);
+    expect((await wallet(db, id)).balanceCredits).toBeCloseTo(startingCredits - maximum);
+    expect((await wallet(db, id)).spentCredits).toBe(maximum);
+  });
+
+  it('lets a KSh 20 top-up fund a 21-credit reference and a small edit afterward', async () => {
+    const id = await newWallet();
+    await db.prepare('UPDATE billing_wallets SET balance_microusd = 0 WHERE user_id = ?').bind(id).run();
+    await payFor(id, 'credits', 20);
+    const budget = await quoteAi(db, id, 21400, 25000, 'reference');
+    expect(budget.maximumCredits).toBe(22);
+    expect(await reserveAi(db, id, id, 'reference', budget)).toBe(true);
+    expect(await settleAi(db, id, id, 'gpt-5.6-luna', { input_tokens: 15000, output_tokens: 15000 })).toMatchObject({ credits: 21, coveredCredits: 0 });
+    expect((await wallet(db, id)).balanceCredits).toBe(4);
+    const editBudget = await quoteAi(db, id, 1000, 7000, 'edit');
+    expect(await reserveAi(db, id, id + '-edit', 'edit', editBudget)).toBe(true);
+    await settleAi(db, id, id + '-edit', 'gpt-5.6-luna', { input_tokens: 1000, output_tokens: 1000 });
+    expect((await wallet(db, id)).balanceCredits).toBe(2.6);
+  });
+
+  it('scales the cap for trial and monthly pricing without changing general generation', async () => {
+    const id = await newWallet();
+    expect(await quoteAi(db, id, 21400, 25000, 'reference')).toMatchObject({ maximumCredits: 11, maxOutputTokens: 25000, tier: 'trial' });
+    await payFor(id, 'monthly');
+    const budget = await quoteAi(db, id, 21400, 25000, 'reference');
+    expect(budget).toMatchObject({ maximumCredits: 17.6, maxOutputTokens: 25000, tier: 'monthly' });
+    expect((await quoteAi(db, id, 21400, 25000, 'generation')).maximumCredits).toBeGreaterThan(22);
+    expect(await reserveAi(db, id, id, 'reference', budget)).toBe(true);
+    await settleAi(db, id, id, 'gpt-5.6-luna', { input_tokens: 21400, output_tokens: 25000 });
+    expect((await wallet(db, id)).monthly.balanceCredits).toBe(782.4);
+    expect((await wallet(db, id)).balanceCredits).toBe(50);
+  });
+
+  it('honors a preview through a trial-to-paid top-up and rejects oversized inputs before holding money', async () => {
+    const id = await newWallet();
+    const preview = await quoteAi(db, id, 21400, 25000, 'reference');
+    await payFor(id, 'credits');
+    expect(await quoteAi(db, id, 21400, 25000, 'reference', preview.maximumCredits)).toMatchObject({ maximumCredits: 11, tier: 'paid', maxOutputTokens: 25000 });
+    expect((await quoteAi(db, id, 21400, 25000, 'reference', 100)).maximumCredits).toBe(22);
+    await expect(quoteAi(db, id, 100000, 25000, 'reference')).rejects.toMatchObject({ code: 'AI_REFERENCE_TOO_LARGE', status: 422 });
+    await expect(quoteAi(db, id, 21400, 25000, 'reference', 0)).rejects.toMatchObject({ code: 'AI_CREDIT_REQUIRED' });
+    expect(await wallet(db, id)).toMatchObject({ balanceCredits: 75, reservedCredits: 0, busy: false });
+    await db.prepare('UPDATE billing_wallets SET balance_microusd = 199999 WHERE user_id = ?').bind(id).run();
+    await expect(quoteAi(db, id, 21400, 25000, 'reference')).rejects.toMatchObject({ code: 'AI_CREDIT_REQUIRED' });
+  });
+});
