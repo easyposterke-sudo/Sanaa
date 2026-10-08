@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
+import { AiCostNotice } from './billing/AiCostNotice'
 import { applyThemeToDocument, getInitialTheme } from './hooks/useTheme'
 
 // Suppress known Three.js HDR loader uncaught rejection when an HDR file is invalid
@@ -20,5 +21,6 @@ applyThemeToDocument(getInitialTheme())
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
+    <AiCostNotice />
   </StrictMode>,
 )

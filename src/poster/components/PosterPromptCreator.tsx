@@ -1,3 +1,4 @@
+import { AiPricingHint } from '../../billing/AiCostNotice';
 import { useState } from 'react';
 import { brandIdentityBackgroundIssues, missingPosterFacts, posterCreationLayoutIssues, prepareCreatedPoster, reconcileUploadedCreationAssets, uploadedBackgroundIssues, portraitSizingIssues, posterCompositionIssues, speakerIdentityLayoutIssues } from '../../../shared/ai/posterCreationChecks';
 import { createPosterGenerationBudget } from '../ai/posterGenerationBudget';
@@ -181,6 +182,7 @@ export function PosterPromptCreator({ onApply, onClose, onImport }: Props) {
       {error && <p role="alert" className="mt-3 text-red-600">{error}</p>}
       {preview && <img src={preview} alt="Generated poster preview" className="mx-auto mt-4 max-h-80 rounded border" />}
       {result && result.warnings.length > 0 && <ul className="mt-3 list-disc pl-5 text-sm">{result.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
+      <AiPricingHint />
       <div className="mt-5 flex flex-wrap gap-3"><button disabled={busy || preparing || prompt.trim().length < 10} onClick={() => void generate()} className="rounded-lg bg-violet-600 px-4 py-2 text-white disabled:opacity-50">{busy ? 'Creating…' : result ? 'Generate another version' : 'Generate editable poster'}</button>{result && <button disabled={busy} onClick={onClose} className="rounded-lg border px-4 py-2">Continue editing</button>}<button disabled={busy || preparing} onClick={onImport} className="px-2 text-sm underline">Recreate an existing poster instead</button></div>
     </div>
   </div>;

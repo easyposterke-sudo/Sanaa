@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { findAccount, login, loginWithAccess, logout, refreshSession, signup } from './auth';
 import { startGoogle, finishGoogle, exchangeGoogleTicket } from './googleAuth';
-import { wallet, reserveAi, settleAi } from './billing';
+import { wallet, reserveAi, settleAi, quoteAi, aiReceipt, type AiUsage } from './billing';
+import { countInputTokens } from './ai/inputTokenCount';
 import { BILLING } from '../shared/billing';
 import { beginPayment, verifyPayment, validPaystackSignature } from './paystack';
 import { accountWithAccessRole, verifiedAccessEmail } from './adminAccess';
@@ -20,8 +21,9 @@ import {
   OpenAiPosterReconstructionError,
   POSTER_RECONSTRUCTION_REASONING_EFFORT,
   reconstructPosterWithOpenAI,
+  buildReconstructionPayload,
 } from './ai/openAiPosterReconstructor';
-import { editPosterElementWithOpenAI } from './ai/openAiPosterElementEditor';
+import { editPosterElementWithOpenAI, buildElementEditPayload } from './ai/openAiPosterElementEditor';
 import {
   MAX_POSTER_BACKGROUND_BYTES,
   cleanPosterBackgroundLabel,
@@ -287,7 +289,7 @@ app.post('/api/auth/google/exchange', async (context) => {
 
 app.get('/api/billing', async (context) => {
   const userId = context.get('ownerId');
-  const recentUsage = await context.env.DB.prepare(`SELECT request_id, charged_microusd / 10000.0 AS credits, created_at
+  const recentUsage = await context.env.DB.prepare(`SELECT request_id, COALESCE(collected_microusd, charged_microusd) / 10000.0 AS credits, collected_microusd IS NULL AS historical, created_at
     FROM ai_usage WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`).bind(userId).all();
   context.header('cache-control', 'no-store');
   return context.json({ ...(await wallet(context.env.DB, userId)), recentUsage: recentUsage.results, pricing: BILLING, paymentsConfigured: Boolean(context.env.PAYSTACK_SECRET_KEY) });
@@ -767,7 +769,13 @@ app.post('/api/ai/poster-element-edit', async (context) => {
     );
   }
   if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
-  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, 'edit')) return context.json({ error: 'AI credit is exhausted or another request is still running. Add credit in Billing.', code: 'AI_CREDIT_REQUIRED', requestId }, 402);
+  const payload = buildElementEditPayload({ model, request });
+  const capHeader = context.req.header('x-ai-max-credits');
+  const maximumCredits = capHeader === undefined ? undefined : Number(capHeader);
+  if (maximumCredits !== undefined && (!Number.isFinite(maximumCredits) || maximumCredits < 0)) return context.json({ error: 'Invalid AI credit limit.', requestId }, 400);
+  const budget = await quoteAi(context.env.DB, context.get('ownerId'), await countInputTokens(apiKey!, payload), payload.max_output_tokens, 'edit', maximumCredits);
+  if (context.req.query('estimate') === '1') return context.json({ estimate: { maximumCredits: budget.maximumCredits, tier: budget.tier, limited: budget.limited }, requestId });
+  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, 'edit', budget)) return context.json({ error: 'AI credit is exhausted or another request is still running. Add credit in Billing.', code: 'AI_CREDIT_REQUIRED', requestId }, 402);
   const quota = maxAiGenerationsPerDay(context.env);
   if (!await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota)) {
     await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
@@ -778,12 +786,14 @@ app.post('/api/ai/poster-element-edit', async (context) => {
   }
 
   let usageSettled = false;
+  let reportedUsage: AiUsage | undefined;
   try {
-    const result = await editPosterElementWithOpenAI({ apiKey, model, request, onUsage: async usage => {
+    const result = await editPosterElementWithOpenAI({ apiKey, model, request, beforeRequest: async () => budget.maxOutputTokens, onUsage: async usage => {
+      reportedUsage = usage;
       await settleAi(context.env.DB, context.get('ownerId'), requestId, model, usage);
       usageSettled = true;
     } });
-    return context.json({ patch: result.patch, model, requestId });
+    return context.json({ patch: result.patch, model, requestId, billing: await aiReceipt(context.env.DB, context.get('ownerId'), requestId) });
   } catch (error) {
     if (error instanceof OpenAiPlannerError) {
       console.warn(JSON.stringify({
@@ -793,13 +803,13 @@ app.post('/api/ai/poster-element-edit', async (context) => {
         requestId,
       }));
       return context.json(
-        { error: error.message, code: error.code, requestId },
+        { error: error.message, code: error.code, requestId, billing: await aiReceipt(context.env.DB, context.get('ownerId'), requestId) },
         error.status as 422 | 429 | 502 | 503 | 504,
       );
     }
     throw error;
   } finally {
-    if (!usageSettled) await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
+    if (!usageSettled) await settleAi(context.env.DB, context.get('ownerId'), requestId, model, reportedUsage);
   }
 });
 
@@ -848,6 +858,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
         503,
       );
     }
+    if (context.req.query('estimate') === '1') return context.json({ estimate: { maximumCredits: 0, tier: 'free', limited: false }, requestId });
     return context.json({
       plan: createFallbackReconstructionPlan(),
       source: 'fallback',
@@ -890,6 +901,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
   if (cached) {
     const cachedPlan = PosterReconstructionPlanSchema.safeParse(JSON.parse(cached.spec_json));
     if (cachedPlan.success) {
+      if (context.req.query('estimate') === '1') return context.json({ estimate: { maximumCredits: 0, tier: 'free', limited: false }, requestId });
       await context.env.DB.prepare(
         `UPDATE ai_poster_plans SET last_used_at = ?
          WHERE owner_id = ? AND cache_key = ?`,
@@ -907,7 +919,13 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
 
   const quota = maxAiGenerationsPerDay(context.env);
   if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
-  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, 'generation')) return context.json({ error: `Full poster generation or recreation requires at least ${BILLING.minimumGenerationCredits} credits in your monthly allowance or pay-as-you-go balance, and no other AI request running. Add credits in Billing. AI editing is available with a smaller positive balance.`, code: 'AI_CREDIT_REQUIRED', requestId }, 402);
+  const payload = buildReconstructionPayload({ model, request });
+  const capHeader = context.req.header('x-ai-max-credits');
+  const maximumCredits = capHeader === undefined ? undefined : Number(capHeader);
+  if (maximumCredits !== undefined && (!Number.isFinite(maximumCredits) || maximumCredits < 0)) return context.json({ error: 'Invalid AI credit limit.', requestId }, 400);
+  const budget = await quoteAi(context.env.DB, context.get('ownerId'), await countInputTokens(apiKey!, payload), payload.max_output_tokens, 'generation', maximumCredits);
+  if (context.req.query('estimate') === '1') return context.json({ estimate: { maximumCredits: budget.maximumCredits, tier: budget.tier, limited: budget.limited }, requestId });
+  if (!await reserveAi(context.env.DB, context.get('ownerId'), requestId, 'generation', budget)) return context.json({ error: `Full poster generation or recreation requires at least ${BILLING.minimumGenerationCredits} credits in your monthly allowance or pay-as-you-go balance, and no other AI request running. Add credits in Billing. AI editing is available with a smaller balance when it covers the request.`, code: 'AI_CREDIT_REQUIRED', requestId }, 402);
   const reserved = await reserveAiGeneration(context.env.DB, context.get('ownerId'), quota);
   if (!reserved) {
     await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
@@ -922,8 +940,10 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
   }
 
   let usageSettled = false;
+  let reportedUsage: AiUsage | undefined;
   try {
-    const result = await reconstructPosterWithOpenAI({ apiKey, model, request, onUsage: async usage => {
+    const result = await reconstructPosterWithOpenAI({ apiKey, model, request, beforeRequest: async () => budget.maxOutputTokens, onUsage: async usage => {
+      reportedUsage = usage;
       await settleAi(context.env.DB, context.get('ownerId'), requestId, model, usage);
       usageSettled = true;
     } });
@@ -955,7 +975,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
         createdAt,
       )
       .run();
-    return context.json({ plan: result.plan, source: 'openai', model, requestId });
+    return context.json({ plan: result.plan, source: 'openai', model, requestId, billing: await aiReceipt(context.env.DB, context.get('ownerId'), requestId) });
   } catch (error) {
     if (error instanceof OpenAiPlannerError) {
       const reconstructionDetails =
@@ -973,13 +993,13 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
         }),
       );
       return context.json(
-        { error: error.message, code: error.code, requestId },
+        { error: error.message, code: error.code, requestId, billing: await aiReceipt(context.env.DB, context.get('ownerId'), requestId) },
         error.status as 422 | 429 | 502 | 503 | 504,
       );
     }
     throw error;
   } finally {
-    if (!usageSettled) await settleAi(context.env.DB, context.get('ownerId'), requestId, model);
+    if (!usageSettled) await settleAi(context.env.DB, context.get('ownerId'), requestId, model, reportedUsage);
   }
 });
 
@@ -1179,7 +1199,7 @@ app.post('/api/images/remove-background', async (context) => {
       );
       if (error.retryAfter) context.header('retry-after', error.retryAfter);
       return context.json(
-        { error: error.message, code: error.code, requestId },
+        { error: error.message, code: error.code, requestId, billing: await aiReceipt(context.env.DB, context.get('ownerId'), requestId) },
         error.status,
       );
     }
@@ -2088,6 +2108,7 @@ app.get('/api/assets/:id', async (context) => {
 });
 
 app.onError((error, context) => {
+  if (error instanceof OpenAiPlannerError) return context.json({ error: error.message, code: error.code, requestId: context.get('requestId') }, error.status as 402 | 409 | 503);
   const requestId = context.get('requestId') || crypto.randomUUID();
   console.error(
     JSON.stringify({

@@ -1,3 +1,4 @@
+import { AiPricingHint } from '../../billing/AiCostNotice';
 import { useEffect, useRef, useState } from 'react';
 import type { Object as FabricObject } from 'fabric';
 import { prepareReconstructionFontCatalog } from '../ai/prepareReconstructionFontCatalog';
@@ -155,6 +156,7 @@ export function PosterElementAiEditModal({ selectedId, onClose, onApplied }: Pro
           <h2 id="poster-ai-edit-title" className="text-xl font-semibold">Edit selected layer with AI</h2>
           <button type="button" disabled={busy} onClick={onClose}>Close</button>
         </div>
+        <AiPricingHint />
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
           {selected ? `Selected: ${selectedLayerLabel(selected)}` : 'The selected layer is unavailable.'}
         </p>

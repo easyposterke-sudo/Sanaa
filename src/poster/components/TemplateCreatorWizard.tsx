@@ -1,3 +1,4 @@
+import { AiPricingHint } from '../../billing/AiCostNotice';
 import { useEffect, useState } from 'react';
 import { PosterPromptCreator } from './PosterPromptCreator';
 import { PosterAssetCropDialog } from './PosterAssetCropDialog';
@@ -388,6 +389,7 @@ export function TemplateCreatorWizard({ open, onClose, mode = 'template', refere
             <h2 id="poster-reconstruction-title" className="text-lg font-semibold text-zinc-900 sm:text-xl dark:text-white">
               {creatingPoster ? 'Create an editable poster' : 'Create a template from a flat poster'}
             </h2>
+            <AiPricingHint />
           </div>
           <button
             type="button"

@@ -29,6 +29,17 @@ afterEach(() => {
 });
 
 describe('reconstructPosterWithOpenAI incomplete responses', () => {
+  it('applies the affordable output ceiling and reports usage even for incomplete generations', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [], usage: { input_tokens: 1000, output_tokens: 1500 } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onUsage = vi.fn(async () => {});
+    await expect(reconstructPosterWithOpenAI({ apiKey: 'test', model: 'gpt-5.6-luna', request,
+      beforeRequest: async () => 1500, onUsage })).rejects.toMatchObject({ code: 'AI_OUTPUT_LIMIT' });
+    expect(onUsage).toHaveBeenCalledWith({ input_tokens: 1000, output_tokens: 1500 });
+    const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(options.body))).toMatchObject({ max_output_tokens: 1500, service_tier: 'default' });
+  });
+
   it('allows a dense reference request to run past the old 110 second deadline', async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn((_url: string, options?: RequestInit) => new Promise<Response>((_resolve, reject) => {

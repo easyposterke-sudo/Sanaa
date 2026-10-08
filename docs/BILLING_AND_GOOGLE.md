@@ -55,8 +55,8 @@ accounting. This is a product rate, not a live exchange-rate feed. Pricing const
 live in `shared/billing.ts`. Existing balances and previously quoted pending payments
 retain their stored credit amounts; the new rate applies to new checkouts.
 
-The **$5 monthly plan** costs **KSh 658**, priced independently from top-ups,
-and grants **500 monthly credits**. It is prepaid and manually
+The **monthly plan** costs **KSh 658**, priced independently from top-ups,
+and grants **800 monthly credits**. It is prepaid and manually
 renewed through either payment method. No automatic recurring charges are created.
 Card customers
 are redirected to Paystack checkout. M-Pesa customers enter a Kenyan phone
@@ -67,7 +67,7 @@ The server determines the credit amount and purchase kind. Webhook signatures us
 Paystack's `x-paystack-signature` HMAC SHA-512. Browser returns and mobile
 prompts alone never credit a wallet. Payments are idempotent.
 
-Apply migrations through **0011_billing_plans.sql** before deploying the updated
+Apply migrations through **0012_ai_budget_reservations.sql** before deploying the updated
 Worker. Existing balances and historical charges are preserved; accounts with
 successful prior payments are marked paid rather than receiving another trial:
 
@@ -87,8 +87,8 @@ preserved in the pay-as-you-go wallet.
 
 Monthly credits are used first while the plan is active and has enough credits
 for the requested operation. The expiry is one calendar month from purchase (clamped to the last day
-for short months). Early renewal extends that expiry by a month and adds 500
-credits to the remaining allowance. Renewal after expiry starts a new 500-credit
+for short months). Early renewal extends that expiry by a month and adds 800
+credits to the remaining allowance. Renewal after expiry starts a new 800-credit
 allowance. Unused monthly credits expire; pay-as-you-go credits never expire.
 If the monthly balance is insufficient or expired, requests fall back to sufficient
 pay-as-you-go credits at 10x. Configured daily generation limits still apply.
@@ -96,7 +96,8 @@ pay-as-you-go credits at 10x. Configured daily generation limits still apply.
 Full poster generation and recreation require **at least 20 credits** in either
 the active monthly balance or the pay-as-you-go/trial balance before starting a
 provider call. Balances are not combined across pricing tiers. Exactly 20 credits
-qualifies; 19.9999 does not. Selected-layer AI edits only require a positive balance.
+meets that starting minimum; 19.9999 does not. Both generation and selected-layer
+edits must also afford their counted input and at least 1,024 output tokens.
 This check is atomic with the request lock and tier selection. Cached responses,
 which incur no new provider cost, remain available without this starting minimum.
 
@@ -112,11 +113,32 @@ make a new OpenAI call or debit credit.
 The default `gpt-5.6-luna` model is priced in `worker/billing.ts` at the current
 standard token rates. Review that table whenever OpenAI pricing changes. The
 app deliberately blocks a different `OPENAI_MODEL` until its rates are added.
-These amounts are calculated from token usage and published rates; they are
-usage estimates, not a copy of OpenAI's final invoice. A request that starts
-at the starting minimum (or a small positive editing balance) can finish past zero because OpenAI
-reports exact usage only after execution. The wallet displays zero available
-credit after such a request and blocks the next one.
+These amounts are estimates based on reported usage, not a copy of OpenAI's final invoice.
+
+Before each provider generation, the server counts the complete Responses API input
+(including images and structured-output schema). It budgets input at the cache-write
+rate with 5% input headroom, and reduces the output ceiling to fit the selected
+balance and the displayed credit cap. Requests that cannot afford at least 1,024
+output tokens are rejected before generation. Both calls explicitly use Standard
+processing. Quotes do not reserve money or consume the daily generation quota.
+
+The server atomically deducts the reserved maximum and locks the wallet for eight
+minutes, covering the six-minute reconstruction deadline. Settlement returns unused
+credits to the original balance; monthly refunds never enter a newer billing period.
+Abandoned holds are released on the next wallet read or reservation after expiry.
+Late responses after release record provider cost and absorbed charges without
+debiting another request's funds. Payments arriving during a hold remain available.
+
+New usage rows record provider cost, calculated customer charge, actual collection,
+and absorbed excess separately. Absorbed amounts are service-credit shortfalls,
+not provider-dollar losses. Historical collected/absorbed columns remain NULL
+because the old ledger cannot reliably reconstruct them. Historical spending totals
+are preserved; new spending totals increase only by actual collection. A timeout
+without reported usage releases its hold; any provider cost for that interrupted
+request still requires invoice reconciliation.
+
+New monthly purchases grant 800 credits for KSh 658; existing allowances keep their
+stored balances. At full utilization this is 17.75% cheaper than equivalent top-ups.
 
 The browser shows credit balances, trial/monthly usage percentages, per-request
 credit charges, monthly expiry, and payment status under **Billing and credits**.

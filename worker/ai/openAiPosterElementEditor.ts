@@ -10,15 +10,7 @@ const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const DEFAULT_TIMEOUT_MS = 110_000;
 export const POSTER_ELEMENT_EDIT_MAX_OUTPUT_TOKENS = 7_000;
 
-export async function editPosterElementWithOpenAI(input: {
-  apiKey: string;
-  model: string;
-  request: PosterElementEditRequest;
-  timeoutMs?: number;
-  onUsage?: (usage: NonNullable<OpenAiResponsesPayload['usage']>) => Promise<void>;
-}): Promise<{ patch: PosterReconstructionPlan; openAiRequestId: string | null }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), input.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+export function buildElementEditPayload(input: { model: string; request: PosterElementEditRequest }) {
   const request = input.request;
   const userContent: OpenAiInputContent[] = [
     {
@@ -47,18 +39,10 @@ export async function editPosterElementWithOpenAI(input: {
     }
   }
 
-  let response: Response;
-  let data: OpenAiResponsesPayload | undefined;
-  try {
-    response = await fetch(OPENAI_RESPONSES_URL, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${input.apiKey}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
+  return {
         model: input.model,
         store: false,
+        service_tier: 'default',
         reasoning: { effort: 'none' },
         max_output_tokens: POSTER_ELEMENT_EDIT_MAX_OUTPUT_TOKENS,
         input: [
@@ -76,7 +60,33 @@ export async function editPosterElementWithOpenAI(input: {
             } },
           },
         },
-      }),
+      };
+}
+
+export async function editPosterElementWithOpenAI(input: {
+  apiKey: string;
+  model: string;
+  request: PosterElementEditRequest;
+  timeoutMs?: number;
+  beforeRequest?: (payload: Record<string, unknown>) => Promise<number>;
+  onUsage?: (usage: NonNullable<OpenAiResponsesPayload['usage']>) => Promise<void>;
+}): Promise<{ patch: PosterReconstructionPlan; openAiRequestId: string | null }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), input.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const request = input.request;
+  const payload = buildElementEditPayload(input);
+  let response: Response;
+  let data: OpenAiResponsesPayload | undefined;
+  try {
+    if (input.beforeRequest) payload.max_output_tokens = await input.beforeRequest(payload);
+    controller.signal.throwIfAborted();
+    response = await fetch(OPENAI_RESPONSES_URL, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${input.apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
     if (response.ok) {
@@ -84,6 +94,7 @@ export async function editPosterElementWithOpenAI(input: {
       if (data.usage) await input.onUsage?.(data.usage);
     }
   } catch (error) {
+    if (error instanceof OpenAiPlannerError) throw error;
     if (controller.signal.aborted) {
       throw new OpenAiPlannerError('The selected-layer edit timed out.', 504, 'AI_TIMEOUT');
     }

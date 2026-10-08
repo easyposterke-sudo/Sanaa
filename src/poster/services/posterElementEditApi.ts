@@ -4,7 +4,7 @@ import {
   type PosterElementEditRequest,
   type PosterElementEditResponse,
 } from '../../../shared/ai/posterElementEdit';
-import { apiFetch } from '../../lib/api';
+import { aiBillingFetch } from '../../billing/aiBillingFetch';
 import { notifyBillingUpdated } from '../../billing/billingEvents';
 
 export class PosterElementEditError extends Error {
@@ -30,11 +30,11 @@ async function readPosterElementEdit(
   options: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<PosterElementEditResponse> {
   const payload = PosterElementEditRequestSchema.parse(request);
-  const response = await apiFetch('/api/ai/poster-element-edit', {
+  const response = await aiBillingFetch('/api/ai/poster-element-edit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-    timeoutMs: options.timeoutMs ?? 135_000,
+    timeoutMs: options.timeoutMs ?? 210_000,
     signal: options.signal,
   });
   const data = await response.json().catch(() => null) as {

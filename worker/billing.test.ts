@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { Miniflare } from 'miniflare';
-import { creditVerifiedPayment, reserveAi, settleAi, usageCost, wallet } from './billing';
+import { creditVerifiedPayment, reserveAi, settleAi, usageCost, wallet, budgetForTokens, quoteAi } from './billing';
 import { beginPayment, normalizeKenyanPhone, validPaystackSignature, verifyPayment } from './paystack';
 import { BILLING, paymentQuote } from '../shared/billing';
 import { googleAccount, sessionForUser } from './auth';
@@ -18,7 +18,7 @@ const userId = 'billing-user';
 
 beforeAll(async () => {
   db = await mf.getD1Database('DB', 'billing-test');
-  for (const migration of ['0009_user_auth.sql', '0010_billing_google.sql', '0011_billing_plans.sql']) {
+  for (const migration of ['0009_user_auth.sql', '0010_billing_google.sql', '0011_billing_plans.sql', '0012_ai_budget_reservations.sql']) {
     const sql = readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8');
     for (const statement of sql.split(';').map(part => part.trim()).filter(Boolean)) await db.prepare(statement).run();
   }
@@ -68,20 +68,20 @@ describe('credit pricing and monthly allowances', () => {
     expect(await wallet(db, id)).toMatchObject({ balanceCredits: 65, spentCredits: 10 });
   });
 
-  it('grants 500 monthly credits once and charges 16 credits for $0.02', async () => {
+  it('grants 800 monthly credits once and charges 16 credits for $0.02', async () => {
     const id = await newWallet();
     const ref = await payFor(id, 'monthly');
     const first = await wallet(db, id);
-    expect(first).toMatchObject({ plan: 'monthly', balanceCredits: 50, monthly: { active: true, balanceCredits: 500 } });
+    expect(first).toMatchObject({ plan: 'monthly', balanceCredits: 50, monthly: { active: true, balanceCredits: 800 } });
     expect(await creditVerifiedPayment(db, ref, BILLING.monthlyKes * 100, 'KES', 'success')).toBe(true);
     expect((await wallet(db, id)).monthly).toEqual(first.monthly);
     await reserveAi(db, id, 'monthly-priced');
     await settleAi(db, id, 'monthly-priced', 'gpt-5.6-luna', twoCents);
-    expect(await wallet(db, id)).toMatchObject({ balanceCredits: 50, spentCredits: 16, monthly: { balanceCredits: 484 } });
+    expect(await wallet(db, id)).toMatchObject({ balanceCredits: 50, spentCredits: 16, monthly: { balanceCredits: 784 } });
     await payFor(id, 'monthly');
     const renewed = await wallet(db, id);
-    expect(renewed.monthly.balanceCredits).toBe(984);
-    expect(renewed.monthly.allowanceCredits).toBe(1000);
+    expect(renewed.monthly.balanceCredits).toBe(1584);
+    expect(renewed.monthly.allowanceCredits).toBe(1600);
     expect(Date.parse(renewed.monthly.expiresAt!)).toBeGreaterThan(Date.parse(first.monthly.expiresAt!));
   });
 
@@ -103,7 +103,7 @@ describe('credit pricing and monthly allowances', () => {
     await settleAi(db, id, 'monthly-expired', 'gpt-5.6-luna', twoCents);
     expect((await wallet(db, id)).balanceCredits).toBe(85);
     await payFor(id, 'monthly');
-    expect((await wallet(db, id)).monthly.balanceCredits).toBe(500);
+    expect((await wallet(db, id)).monthly.balanceCredits).toBe(800);
   });
 
   it('settles a delayed request without clearing a newer reservation', async () => {
@@ -158,12 +158,12 @@ describe('credit pricing and monthly allowances', () => {
     await db.prepare('INSERT INTO billing_payments (reference, user_id, channel, amount_minor, credit_microusd, kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(reference, id, 'card', 65800, 0, 'monthly', new Date().toISOString()).run();
     await Promise.all([creditVerifiedPayment(db, reference, 65800, 'KES', 'success'), creditVerifiedPayment(db, reference, 65800, 'KES', 'success')]);
-    expect((await wallet(db, id)).monthly.balanceCredits).toBe(500);
+    expect((await wallet(db, id)).monthly.balanceCredits).toBe(800);
     const reserved = await Promise.all([reserveAi(db, id, 'concurrent-1'), reserveAi(db, id, 'concurrent-2')]);
     expect(reserved.filter(Boolean)).toHaveLength(1);
     const requestId = reserved[0] ? 'concurrent-1' : 'concurrent-2';
     await Promise.all([settleAi(db, id, requestId, 'gpt-5.6-luna', twoCents), settleAi(db, id, requestId, 'gpt-5.6-luna', twoCents)]);
-    expect(await wallet(db, id)).toMatchObject({ spentCredits: 16, monthly: { balanceCredits: 484 } });
+    expect(await wallet(db, id)).toMatchObject({ spentCredits: 16, monthly: { balanceCredits: 784 } });
   });
 
   it('does not debit cancelled reservations and blocks an exhausted trial', async () => {
@@ -185,7 +185,7 @@ describe('credit pricing and monthly allowances', () => {
     await db.prepare('UPDATE billing_wallets SET monthly_until = 1 WHERE user_id = ?').bind(id).run();
     await payFor(id, 'monthly');
     await settleAi(db, id, 'old-period', 'gpt-5.6-luna', twoCents);
-    expect(await wallet(db, id)).toMatchObject({ balanceCredits: 50, monthly: { balanceCredits: 500 } });
+    expect(await wallet(db, id)).toMatchObject({ balanceCredits: 50, monthly: { balanceCredits: 800 } });
   });
 
   it.each([0, 6, 19.9999, 20, 21, 22])('checks the generation minimum at %s credits while keeping editing available', async (credits) => {
@@ -238,6 +238,97 @@ describe('credit pricing and monthly allowances', () => {
 });
 
 describe('AI credit and Paystack settlement', () => {
+  it('reserves an affordable output budget, refunds unused credits, and settles exactly once', async () => {
+    const id = await newWallet();
+    await db.prepare('UPDATE billing_wallets SET has_paid = 1, balance_microusd = 250000 WHERE user_id = ?').bind(id).run();
+    const budget = await quoteAi(db, id, 1000, 25000, 'generation');
+    expect(budget.limited).toBe(true);
+    expect(budget.maxOutputTokens).toBeLessThan(25000);
+    expect(budget.reservedMicrousd).toBeLessThanOrEqual(250000);
+    expect(await reserveAi(db, id, 'budgeted', 'generation', budget)).toBe(true);
+    const held = (await wallet(db, id)).balanceMicrousd;
+    expect(held).toBe(250000 - budget.reservedMicrousd);
+    expect(await reserveAi(db, id, 'budgeted', 'generation', budget)).toBe(false);
+    expect((await wallet(db, id)).balanceMicrousd).toBe(held);
+    expect(await reserveAi(db, id, 'overlap', 'edit')).toBe(false);
+    const usage = { input_tokens: 1000, output_tokens: 1000 };
+    expect(await settleAi(db, id, 'budgeted', 'gpt-5.6-luna', usage)).toMatchObject({ credits: 1.4, coveredCredits: 0 });
+    await settleAi(db, id, 'budgeted', 'gpt-5.6-luna', usage);
+    expect(await wallet(db, id)).toMatchObject({ balanceCredits: 23.6, spentCredits: 1.4, busy: false });
+  });
+
+  it('keeps the lock through six minutes and refunds cancelled or expired holds only once', async () => {
+    const id = await newWallet();
+    const start = Date.now();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      const budget = await quoteAi(db, id, 1000, 25000, 'generation');
+      await reserveAi(db, id, 'long-running', 'generation', budget);
+      now.mockReturnValue(start + 361000);
+      expect((await wallet(db, id)).busy).toBe(true);
+      expect(await reserveAi(db, id, 'overlapping-long', 'edit')).toBe(false);
+      now.mockReturnValue(start + 481000);
+      expect(await wallet(db, id)).toMatchObject({ busy: false, balanceCredits: 50 });
+      expect((await wallet(db, id)).balanceCredits).toBe(50);
+      const receipt = await settleAi(db, id, 'long-running', 'gpt-5.6-luna', { input_tokens: 1000, output_tokens: 1000 });
+      expect(receipt).toMatchObject({ credits: 0, coveredCredits: 0.7 });
+      expect((await wallet(db, id)).balanceCredits).toBe(50);
+      await reserveAi(db, id, 'cancelled-hold', 'generation', budget);
+      await settleAi(db, id, 'cancelled-hold', 'gpt-5.6-luna');
+      await settleAi(db, id, 'cancelled-hold', 'gpt-5.6-luna');
+      expect((await wallet(db, id)).balanceCredits).toBe(50);
+    } finally { now.mockRestore(); }
+  });
+
+  it('records unexpected overage separately without spending beyond the reserved amount', async () => {
+    const id = await newWallet();
+    const budget = budgetForTokens(1000, 1024, 500000, 5);
+    await reserveAi(db, id, 'over-budget', 'generation', budget);
+    await settleAi(db, id, 'over-budget', 'gpt-5.6-luna', { input_tokens: 1000, output_tokens: 100000 });
+    const ledger = await db.prepare('SELECT * FROM ai_usage WHERE request_id = ?').bind('over-budget').first<{ cost_microusd: number; charged_microusd: number; collected_microusd: number; absorbed_microusd: number }>();
+    expect(ledger).toMatchObject({ cost_microusd: 120200, charged_microusd: 601000, collected_microusd: budget.reservedMicrousd, absorbed_microusd: 601000 - budget.reservedMicrousd });
+    expect((await wallet(db, id)).spentMicrousd).toBe(budget.reservedMicrousd);
+  });
+
+  it('funds only one concurrent request and preserves the displayed cap after a top-up', async () => {
+    const id = await newWallet();
+    await db.prepare('UPDATE billing_wallets SET has_paid = 1, balance_microusd = 200000 WHERE user_id = ?').bind(id).run();
+    const preview = await quoteAi(db, id, 1000, 25000, 'generation');
+    await payFor(id, 'credits', 100);
+    const capped = await quoteAi(db, id, 1000, 25000, 'generation', preview.maximumCredits);
+    expect(capped.reservedMicrousd).toBeLessThanOrEqual(preview.reservedMicrousd);
+    const results = await Promise.all([
+      reserveAi(db, id, 'fund-concurrent-a', 'generation', capped),
+      reserveAi(db, id, 'fund-concurrent-b', 'generation', capped),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await wallet(db, id)).balanceMicrousd).toBe(1450000 - capped.reservedMicrousd);
+    await settleAi(db, id, results[0] ? 'fund-concurrent-a' : 'fund-concurrent-b', 'gpt-5.6-luna');
+    expect((await wallet(db, id)).balanceCredits).toBe(145);
+  });
+
+  it('does not refund an old monthly hold into a renewed period', async () => {
+    const id = await newWallet();
+    await payFor(id, 'monthly');
+    const budget = await quoteAi(db, id, 1000, 25000, 'generation');
+    await reserveAi(db, id, 'monthly-held', 'generation', budget);
+    await db.prepare('UPDATE billing_wallets SET monthly_until = 1 WHERE user_id = ?').bind(id).run();
+    await payFor(id, 'monthly');
+    await settleAi(db, id, 'monthly-held', 'gpt-5.6-luna', { input_tokens: 1000, output_tokens: 1000 });
+    expect((await wallet(db, id)).monthly.balanceCredits).toBe(800);
+  });
+
+  it('budgets cache writes and the long-context boundary, and rejects unaffordable inputs', () => {
+    for (const input of [1000, 272000, 273000]) {
+      const budget = budgetForTokens(input, 25000, 5000000, 10);
+      const worstCase = usageCost({ input_tokens: Math.ceil(input * 1.05), output_tokens: budget.maxOutputTokens,
+        input_tokens_details: { cache_write_tokens: Math.ceil(input * 1.05) } }, 'gpt-5.6-luna').cost * 10;
+      expect(budget.reservedMicrousd).toBe(worstCase);
+    }
+    expect(() => budgetForTokens(100000, 25000, 200000, 10)).toThrow(/Add credits/);
+    expect(() => budgetForTokens(1000, 7000, 1, 10)).toThrow(/Add credits/);
+  });
+
   it('calculates cached and uncached token cost in micro USD', () => {
     expect(usageCost({ input_tokens: 1000, output_tokens: 500, input_tokens_details: { cached_tokens: 200 } }, 'gpt-5.6-luna'))
       .toMatchObject({ input: 1000, cached: 200, output: 500, cost: 764 });

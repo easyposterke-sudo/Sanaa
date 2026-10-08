@@ -48,22 +48,7 @@ export interface OpenAiPosterReconstructionResult {
   outputTokens: number | null;
 }
 
-export async function reconstructPosterWithOpenAI(input: {
-  apiKey: string;
-  model: string;
-  request: PosterReconstructionRequest;
-  timeoutMs?: number;
-  onUsage?: (usage: NonNullable<OpenAiResponsesPayload['usage']>) => Promise<void>;
-}): Promise<OpenAiPosterReconstructionResult> {
-  const startedAt = Date.now();
-  const controller = new AbortController();
-  const timeoutMs = input.timeoutMs ?? input.request.creation?.timeoutMs ??
-    (input.request.referenceReview ? 90_000 : input.request.creation ? POSTER_CREATION_TIMEOUT_MS : POSTER_REFERENCE_AI_TIMEOUT_MS);
-  const timer = setTimeout(
-    () => controller.abort(),
-    timeoutMs,
-  );
-  let response: Response;
+export function buildReconstructionPayload(input: { model: string; request: PosterReconstructionRequest }) {
   const userContent: OpenAiInputContent[] = [
     {
       type: 'input_text',
@@ -95,17 +80,10 @@ export async function reconstructPosterWithOpenAI(input: {
       userContent.push({ type: 'input_image', image_url: imageUrl, detail: 'high' });
     }
   }
-  let data: OpenAiResponsesPayload | undefined;
-  try {
-    response = await fetch(OPENAI_RESPONSES_URL, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${input.apiKey}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
+  return {
         model: input.model,
         store: false,
+        service_tier: 'default',
         reasoning: { effort: POSTER_RECONSTRUCTION_REASONING_EFFORT },
         max_output_tokens: POSTER_RECONSTRUCTION_MAX_OUTPUT_TOKENS,
         input: [
@@ -128,7 +106,38 @@ export async function reconstructPosterWithOpenAI(input: {
               : input.request.creation ? POSTER_RECONSTRUCTION_JSON_SCHEMA : POSTER_REFERENCE_JSON_SCHEMA,
           },
         },
-      }),
+      };
+}
+
+export async function reconstructPosterWithOpenAI(input: {
+  apiKey: string;
+  model: string;
+  request: PosterReconstructionRequest;
+  timeoutMs?: number;
+  beforeRequest?: (payload: Record<string, unknown>) => Promise<number>;
+  onUsage?: (usage: NonNullable<OpenAiResponsesPayload['usage']>) => Promise<void>;
+}): Promise<OpenAiPosterReconstructionResult> {
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeoutMs = input.timeoutMs ?? input.request.creation?.timeoutMs ??
+    (input.request.referenceReview ? 90_000 : input.request.creation ? POSTER_CREATION_TIMEOUT_MS : POSTER_REFERENCE_AI_TIMEOUT_MS);
+  const timer = setTimeout(
+    () => controller.abort(),
+    timeoutMs,
+  );
+  let response: Response;
+  const payload = buildReconstructionPayload(input);
+  let data: OpenAiResponsesPayload | undefined;
+  try {
+    if (input.beforeRequest) payload.max_output_tokens = await input.beforeRequest(payload);
+    controller.signal.throwIfAborted();
+    response = await fetch(OPENAI_RESPONSES_URL, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${input.apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(payload),
       signal: controller.signal,
     });
     // Keep the deadline active through the response body, not only response headers.
@@ -137,6 +146,7 @@ export async function reconstructPosterWithOpenAI(input: {
       if (data.usage) await input.onUsage?.(data.usage);
     }
   } catch (error) {
+    if (error instanceof OpenAiPlannerError) throw error;
     if (controller.signal.aborted) {
       throw new OpenAiPlannerError('The template reconstruction timed out.', 504, 'AI_TIMEOUT');
     }
@@ -153,7 +163,7 @@ export async function reconstructPosterWithOpenAI(input: {
       responseMode: input.request.creation?.responseMode ?? 'plan',
       elapsedMs: Date.now() - startedAt,
       timeoutMs,
-      imageCount: userContent.filter(item => item.type === 'input_image').length,
+      imageCount: payload.input.reduce((count, item) => count + item.content.filter(part => part.type === 'input_image').length, 0),
       timedOut: controller.signal.aborted,
     }));
   }

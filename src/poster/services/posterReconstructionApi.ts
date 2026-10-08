@@ -5,7 +5,7 @@ import {
   type PosterReconstructionRequest,
   type PosterReconstructionResponse,
 } from '../../../shared/ai/posterReconstruction';
-import { apiFetch } from '../../lib/api';
+import { aiBillingFetch } from '../../billing/aiBillingFetch';
 import { notifyBillingUpdated } from '../../billing/billingEvents';
 
 export class PosterReconstructionError extends Error {
@@ -51,7 +51,7 @@ async function readPosterReconstruction(
   signal: AbortSignal,
 ): Promise<PosterReconstructionResponse> {
   const payload = PosterReconstructionRequestSchema.parse(request);
-  const response = await apiFetch('/api/ai/poster-reconstruction', {
+  const response = await aiBillingFetch('/api/ai/poster-reconstruction', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
