@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BillingPage } from './BillingPage';
 import { apiFetch } from '../lib/api';
-import { BILLING } from '../../shared/billing';
+import { BILLING, toCredits } from '../../shared/billing';
 
 vi.mock('../lib/api', () => ({ apiFetch: vi.fn() }));
 const balance = {
@@ -27,7 +27,6 @@ describe('BillingPage', () => {
     expect(screen.getByText('10 credits')).toBeInTheDocument();
     expect(screen.queryByText(/token/i)).not.toBeInTheDocument();
     expect(screen.getByText('KSh 20 adds 25 credits.')).toBeInTheDocument();
-    expect(screen.getByText(/Full poster generation or recreation needs at least 20 credits/)).toBeInTheDocument();
   });
 
   it('submits a custom M-Pesa top-up and prevents amounts below KSh 20', async () => {
@@ -56,7 +55,7 @@ describe('BillingPage', () => {
     expect(screen.getByText('3.2% used')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: /Monthly/ }));
     expect(screen.queryByLabelText('Top-up amount (KSh)')).not.toBeInTheDocument();
-    expect(screen.getByText(/Renew manually; no automatic charges/)).toBeInTheDocument();
+    expect(screen.getByText(`${toCredits(BILLING.monthlyMicrousd)} credits / month`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Pay by card' }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/billing/checkout', expect.objectContaining({
       body: JSON.stringify({ channel: 'card', phone: '', kind: 'monthly', amountKes: 20 }),

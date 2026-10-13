@@ -84,13 +84,12 @@ export function BillingPage() {
     <div className="mx-auto max-w-2xl rounded-xl bg-white p-6 shadow dark:bg-zinc-900">
       <Link to="/poster" className="text-sm text-accent-600">← Back to editor</Link>
       <h1 className="mt-4 text-2xl font-semibold">Billing and credits</h1>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">Start with 50 free trial credits. Add credits whenever you need them, or choose a monthly allowance.</p>
       <div className="mt-5 rounded-lg bg-zinc-100 p-4 dark:bg-zinc-800">
         <p className="text-sm">{balance?.plan === 'trial' ? 'Trial credits remaining' : 'Pay-as-you-go credits remaining'}</p>
         <p className="text-3xl font-semibold">{balance ? `${credits(balance.balanceCredits)} credits` : 'Loading…'}</p>
         {balance?.plan === 'trial' && <UsageMeter percent={balance.trialUsedPercent} label="Trial usage" />}
         {balance && <p className="mt-2 text-xs text-zinc-500">Total used: {credits(balance.spentCredits)} credits{balance.busy ? ' · AI request running' : ''}</p>}
-        {!!balance?.reservedCredits && <p className="mt-2 text-xs">{credits(balance.reservedCredits)} credits reserved for an AI request. Unused credits return afterward.</p>}
+        {!!balance?.reservedCredits && <p className="mt-2 text-xs">Reserved: {credits(balance.reservedCredits)} credits</p>}
       </div>
       {balance?.monthly.active && <div className="mt-3 rounded-lg border border-accent-300 p-4">
         <h2 className="font-semibold">Your monthly allowance</h2>
@@ -98,7 +97,7 @@ export function BillingPage() {
         <UsageMeter percent={balance.monthly.usedPercent} label="Monthly usage" />
         <p className="mt-2 text-xs">Allowance: {credits(balance.monthly.allowanceCredits)} credits · Expires {new Date(balance.monthly.expiresAt!).toLocaleString()}</p>
       </div>}
-      {balance?.monthly.expiresAt && !balance.monthly.active && <p className="mt-3 text-sm">Your monthly plan expired on {new Date(balance.monthly.expiresAt).toLocaleDateString()}. Renew below or use your pay-as-you-go credits.</p>}
+      {balance?.monthly.expiresAt && !balance.monthly.active && <p className="mt-3 text-sm">Monthly plan expired: {new Date(balance.monthly.expiresAt).toLocaleDateString()}</p>}
 
       <fieldset className="mt-6">
         <legend className="font-semibold">Choose how you pay</legend>
@@ -106,12 +105,12 @@ export function BillingPage() {
           <label className={`cursor-pointer rounded-lg border p-4 ${kind === 'credits' ? 'border-accent-500 bg-accent-50 dark:bg-zinc-800' : 'border-zinc-300 dark:border-zinc-700'}`}>
             <input type="radio" name="purchase" value="credits" checked={kind === 'credits'} onChange={() => setKind('credits')} />
             <span className="ml-2 font-semibold">Pay as you go</span>
-            <span className="mt-2 block text-sm">From KSh {pricing.minimumTopupKes}. Credits never expire.</span>
+            <span className="mt-2 block text-sm">From KSh {pricing.minimumTopupKes}</span>
           </label>
           <label className={`cursor-pointer rounded-lg border p-4 ${kind === 'monthly' ? 'border-accent-500 bg-accent-50 dark:bg-zinc-800' : 'border-zinc-300 dark:border-zinc-700'}`}>
             <input type="radio" name="purchase" value="monthly" checked={kind === 'monthly'} onChange={() => setKind('monthly')} />
             <span className="ml-2 font-semibold">Monthly · KSh {pricing.monthlyKes}</span>
-            <span className="mt-2 block text-sm">{toCredits(pricing.monthlyMicrousd)} credits for one month. About 18% lower cost than pay as you go when you use the full allowance.</span>
+            <span className="mt-2 block text-sm">{toCredits(pricing.monthlyMicrousd)} credits / month</span>
           </label>
         </div>
       </fieldset>
@@ -119,8 +118,7 @@ export function BillingPage() {
         <label className="mt-5 block text-sm font-medium" htmlFor="topup-amount">Top-up amount (KSh)</label>
         <input id="topup-amount" type="number" min={pricing.minimumTopupKes} max={pricing.maximumTopupKes} step="1" value={amountKes} onChange={event => setAmountKes(event.target.value)} className={inputClass} />
         <p className="mt-2 text-sm">{validAmount ? `KSh ${Number(amountKes).toLocaleString()} adds ${credits(Number(amountKes) * pricing.microusdPerKes / pricing.microusdPerCredit)} credits.` : `Enter a whole-shilling amount from KSh ${pricing.minimumTopupKes} to ${pricing.maximumTopupKes.toLocaleString()}.`}</p>
-      </> : <p className="mt-4 text-sm">Pay KSh {pricing.monthlyKes} for one month. Renew manually; no automatic charges. Renewing early adds another month and {toCredits(pricing.monthlyMicrousd)} credits. Unused monthly credits expire with the plan.</p>}
-      <p className="mt-3 text-xs text-zinc-500">100 credits = $1 of service credit. Each AI request uses credits based on its size. Full poster generation or recreation needs at least {pricing.minimumGenerationCredits} credits in one balance. AI editing can use a smaller balance when it covers the request. Credits are reserved before each AI step and unused credits are returned. Failed or incomplete responses can still use credits. Monthly credits are used first when sufficient; otherwise, pay-as-you-go credits apply at the standard rate. Existing daily request limits apply.</p>
+      </> : null}
       <button disabled={disabled} onClick={() => void pay('card')} className="mt-4 w-full rounded-lg bg-accent-600 px-4 py-2.5 font-medium text-white disabled:opacity-50">Pay by card</button>
       <label className="mt-5 block text-sm font-medium" htmlFor="mpesa-phone">M-Pesa phone number</label>
       <input id="mpesa-phone" type="tel" value={phone} onChange={event => setPhone(event.target.value)} placeholder="07… or +254…" className={inputClass} />
