@@ -761,14 +761,14 @@ app.post('/api/ai/poster-element-edit', async (context) => {
   }
 
   const apiKey = context.env.OPENAI_API_KEY?.trim();
-  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-5.6-luna';
+  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-6-luna';
   if (!apiKey) {
     return context.json(
       { error: 'Set OPENAI_API_KEY to edit a poster layer with AI.', code: 'AI_NOT_CONFIGURED', requestId },
       503,
     );
   }
-  if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
+  if (model !== 'gpt-6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
   const payload = buildElementEditPayload({ model, request });
   const capHeader = context.req.header('x-ai-max-credits');
   const maximumCredits = capHeader === undefined ? undefined : Number(capHeader);
@@ -843,7 +843,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
 
   const developmentMode = String(context.env.APP_ENV) === 'development';
   const apiKey = context.env.OPENAI_API_KEY?.trim();
-  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-5.6-luna';
+  const model = context.env.OPENAI_MODEL?.trim() || 'gpt-6-luna';
   if (!apiKey) {
     if (request.creation) {
       return context.json({ error: 'Set OPENAI_API_KEY to generate a poster from a prompt.', code: 'AI_NOT_CONFIGURED', requestId }, 503);
@@ -918,7 +918,7 @@ app.post('/api/ai/poster-reconstruction', async (context) => {
   }
 
   const quota = maxAiGenerationsPerDay(context.env);
-  if (model !== 'gpt-5.6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
+  if (model !== 'gpt-6-luna') return context.json({ error: 'Billing rates are not configured for this AI model.', code: 'AI_BILLING_MODEL', requestId }, 503);
   const payload = buildReconstructionPayload({ model, request });
   const capHeader = context.req.header('x-ai-max-credits');
   const maximumCredits = capHeader === undefined ? undefined : Number(capHeader);

@@ -110,9 +110,12 @@ late responses after a reservation lock expires. Failed or incomplete generation
 because OpenAI can bill for those tokens. Cached application responses do not
 make a new OpenAI call or debit credit.
 
-The default `gpt-5.6-luna` model is priced in `worker/billing.ts` at the current
+The default `gpt-6-luna` model is priced in `worker/billing.ts` at the current
 standard token rates. Review that table whenever OpenAI pricing changes. The
 app deliberately blocks a different `OPENAI_MODEL` until its rates are added.
+Per million tokens, the rates are $0.10 input, $0.01 cached input, $0.125 cache
+writes, and $0.50 output. Requests above 272,000 input tokens use 2x input/cache
+rates and 1.5x output rates. See the [official OpenAI documentation](https://developers.openai.com/api/docs/models/gpt-6-luna).
 These amounts are estimates based on reported usage, not a copy of OpenAI's final invoice.
 
 Initial reference reconstructions (including a fresh retry, excluding prompt creation

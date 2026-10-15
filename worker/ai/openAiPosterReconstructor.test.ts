@@ -33,7 +33,7 @@ describe('reconstructPosterWithOpenAI incomplete responses', () => {
     const fetchMock = vi.fn(async () => Response.json({ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [], usage: { input_tokens: 1000, output_tokens: 1500 } }));
     vi.stubGlobal('fetch', fetchMock);
     const onUsage = vi.fn(async () => {});
-    await expect(reconstructPosterWithOpenAI({ apiKey: 'test', model: 'gpt-5.6-luna', request,
+    await expect(reconstructPosterWithOpenAI({ apiKey: 'test', model: 'gpt-6-luna', request,
       beforeRequest: async () => 1500, onUsage })).rejects.toMatchObject({ code: 'AI_OUTPUT_LIMIT' });
     expect(onUsage).toHaveBeenCalledWith({ input_tokens: 1000, output_tokens: 1500 });
     const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];

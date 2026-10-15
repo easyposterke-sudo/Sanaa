@@ -2,10 +2,13 @@ import { BILLING, toCredits } from '../shared/billing';
 import { OpenAiPlannerError } from './ai/openAiPosterPlanner';
 
 export type AiUsage = { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } };
-const LUNA_RATES = { input: 0.20, cached: 0.02, output: 1.20, cacheWrite: 0.25 };
+const LUNA_RATES = { input: 0.10, cached: 0.01, output: 0.50, cacheWrite: 0.125 };
+// Retain the previous rates for requests already in flight during an upgrade.
+const LEGACY_LUNA_RATES = { input: 0.20, cached: 0.02, output: 1.20, cacheWrite: 0.25 };
 
 export function usageCost(usage: AiUsage, model: string): { input: number; cached: number; output: number; cost: number } {
-  if (model !== 'gpt-5.6-luna') throw new Error('Billing rates are not configured for this OpenAI model.');
+  const rates = model === 'gpt-6-luna' ? LUNA_RATES : model === 'gpt-5.6-luna' ? LEGACY_LUNA_RATES : null;
+  if (!rates) throw new Error('Billing rates are not configured for this OpenAI model.');
   const input = usage.input_tokens;
   const output = usage.output_tokens;
   const cached = usage.input_tokens_details?.cached_tokens ?? 0;
@@ -14,11 +17,11 @@ export function usageCost(usage: AiUsage, model: string): { input: number; cache
     throw new Error('OpenAI did not return valid token usage.');
   }
   const longContext = input > 272_000;
-  // Integer hundredths of a microdollar avoid floating-point rounding overcharges.
+  // Integer thousandths of a microdollar cover fractional cache-write rates.
   const cost = Math.ceil((
-    ((input - cached - cacheWrite) * (LUNA_RATES.input * 100) + cached * (LUNA_RATES.cached * 100) + cacheWrite * (LUNA_RATES.cacheWrite * 100)) * (longContext ? 2 : 1)
-    + output * (LUNA_RATES.output * 100) * (longContext ? 1.5 : 1)
-  ) / 100);
+    ((input - cached - cacheWrite) * (rates.input * 1000) + cached * (rates.cached * 1000) + cacheWrite * (rates.cacheWrite * 1000)) * (longContext ? 2 : 1)
+    + output * (rates.output * 1000) * (longContext ? 1.5 : 1)
+  ) / 1000);
   return { input, cached, output, cost };
 }
 
